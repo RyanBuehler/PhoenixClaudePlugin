@@ -1,6 +1,8 @@
 {
   "name": "phoenix-engine-marketplace",
-  "description": "Phoenix Engine C++ development toolkit for Claude Code",
+  "metadata": {
+    "description": "Phoenix Engine C++ development toolkit for Claude Code"
+  },
   "owner": {
     "name": "Ryan Buehler"
   },
