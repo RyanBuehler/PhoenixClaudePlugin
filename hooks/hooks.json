@@ -1,15 +1,15 @@
-[
-  {
-    "event": "PreToolUse",
-    "hooks": [
+{
+  "hooks": {
+    "PreToolUse": [
       {
-        "type": "prompt",
-        "prompt": "The user is about to run a git commit. Before allowing it, run formatting and linting:\n\n1. Run `python Tools/format.py --files=staged` to format staged C++ files\n2. Run `python Tools/format.py --files=staged -error` to verify formatting\n3. Run `python Tools/tidy.py` to check for clang-tidy warnings\n\nIf formatting or linting fails, block the commit and report the issues. If both pass, allow the commit to proceed.",
-        "matcher": {
-          "tool_name": "Bash",
-          "command_pattern": "git commit"
-        }
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "If this Bash command contains 'git commit', run formatting and linting first:\n\n1. Run `python Tools/format.py --files=staged` to format staged C++ files\n2. Run `python Tools/format.py --files=staged -error` to verify formatting\n3. Run `python Tools/tidy.py` to check for clang-tidy warnings\n\nIf formatting or linting fails, block the commit and report the issues. If both pass, allow the commit to proceed.\n\nIf this command does NOT contain 'git commit', do nothing."
+          }
+        ]
       }
     ]
   }
-]
+}
