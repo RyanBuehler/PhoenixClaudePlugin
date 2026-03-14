@@ -1,0 +1,19 @@
+{
+  "name": "phoenix-engine-marketplace",
+  "description": "Phoenix Engine C++ development toolkit for Claude Code",
+  "owner": {
+    "name": "Ryan Buehler"
+  },
+  "plugins": [
+    {
+      "name": "phoenix-engine",
+      "description": "Phoenix Engine C++ development toolkit — agents, commands, hooks, and references for cross-platform game engine development.",
+      "version": "1.0.0",
+      "source": "./",
+      "author": {
+        "name": "Ryan Buehler"
+      },
+      "category": "development"
+    }
+  ]
+}
