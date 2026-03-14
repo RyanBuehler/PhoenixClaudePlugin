@@ -6,7 +6,7 @@
   },
   "plugins": [
     {
-      "name": "phoenix-engine",
+      "name": "phoe",
       "description": "Phoenix Engine C++ development toolkit — agents, commands, hooks, and references for cross-platform game engine development.",
       "version": "1.0.0",
       "source": "./",
