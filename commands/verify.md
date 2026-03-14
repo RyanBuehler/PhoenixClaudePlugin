@@ -1,5 +1,4 @@
 ---
-name: verify
 description: Full CI-mirror verification sequence — configure, build, format check, and test. The mandatory pre-commit check.
 ---
 

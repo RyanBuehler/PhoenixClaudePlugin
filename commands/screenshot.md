@@ -1,5 +1,4 @@
 ---
-name: screenshot
 description: Capture a screenshot from the Phoenix engine, either via console pipe or one-shot launch.
 ---
 

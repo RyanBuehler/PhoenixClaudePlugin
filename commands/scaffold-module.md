@@ -1,5 +1,4 @@
 ---
-name: scaffold-module
 description: Create a new Phoenix engine module using the project's create_module.py scaffolding tool.
 ---
 

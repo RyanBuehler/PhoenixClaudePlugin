@@ -1,5 +1,4 @@
 ---
-name: build
 description: Build the project in Release configuration. Runs cmake --build with parallel jobs.
 ---
 

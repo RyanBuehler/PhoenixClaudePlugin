@@ -1,5 +1,4 @@
 ---
-name: format
 description: Format staged C++ files with clang-format and verify formatting is correct.
 ---
 

@@ -1,5 +1,4 @@
 ---
-name: lint
 description: Run clang-tidy on changed files. Generates compilation database if needed.
 ---
 

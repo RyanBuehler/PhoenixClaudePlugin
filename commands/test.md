@@ -1,5 +1,4 @@
 ---
-name: test
 description: Run the project's test suite via CTest. Shows output on failure.
 ---
 
