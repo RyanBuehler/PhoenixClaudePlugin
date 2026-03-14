@@ -1,0 +1,12 @@
+{
+  "name": "phoenix-engine",
+  "version": "1.0.0",
+  "description": "Phoenix Engine C++ development toolkit — agents, commands, hooks, and references for cross-platform game engine development.",
+  "author": "Ryan Buehler",
+  "license": "MIT",
+  "repository": "git@github.com:RyanBuehler/PhoenixClaudePlugin.git",
+  "agents": "agents/",
+  "commands": "commands/",
+  "hooks": "hooks/hooks.json",
+  "references": "references/"
+}
