@@ -98,6 +98,21 @@ For all code style and design practices, follow `Docs/StyleGuide.md`.
 
 ### C++
 - Use traditional return type syntax (`T Foo()`), not trailing return types (`auto Foo() -> T`).
+- When a variable is declared only to be immediately null/validity-checked, prefer combining
+  the declaration and check into a single `if`-init-statement:
+  ```cpp
+  // Prefer:
+  if (auto* Subscriber = Registry.Find(id); !Subscriber)
+  {
+      return;
+  }
+
+  // Instead of:
+  auto* Subscriber = Registry.Find(id);
+  if (!Subscriber) { return; }
+  ```
+  If the initializer expression is long or complex enough that the combined line becomes hard
+  to read, break it into a separate declaration and `if` instead. Readability wins over brevity.
 
 ### Python
 - Use single tabs for indentation.
