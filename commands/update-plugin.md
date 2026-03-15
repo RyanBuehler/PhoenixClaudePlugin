@@ -34,7 +34,7 @@ Present the current version and ask the user whether this is a:
 - **Minor** (new features, new agents/commands, non-breaking changes) — bump `x.Y.0`
 - **Major** (breaking changes, significant restructuring) — bump `X.0.0`
 
-If the change is clearly a patch or minor update, suggest the appropriate level but still confirm. Apply the chosen version bump to `.claude-plugin/plugin.json`.
+Do NOT assume the bump level — always ask the user to choose. Apply the chosen version bump to both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`.
 
 ## Step 4: Summary
 
