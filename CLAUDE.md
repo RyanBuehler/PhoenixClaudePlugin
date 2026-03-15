@@ -71,6 +71,7 @@ Jobs run in order; failure in any job skips subsequent jobs.
 - Avoid introducing lint bypass directives (e.g. `// NOLINT`, `// clang-format off`,
   `# noqa`) unless explicitly instructed otherwise.
 - Do not use C++ exceptions. The keywords `try`, `catch`, `throw`, and `noexcept` are forbidden.
+- RTTI is disabled. Do not use `dynamic_cast`, `typeid`, or `reinterpret_cast`.
 - Do not use deprecated attributes or mark code as deprecated. The `[[deprecated]]` attribute is forbidden.
 - Do not introduce platform guards (`#if`, `#ifdef`, and similar). Platform-specific
   behavior must live in platform-specific modules instead of being mixed into
@@ -92,6 +93,9 @@ Jobs run in order; failure in any job skips subsequent jobs.
 
 ### C++
 - Use single tabs for indentation.
+- Use traditional return type syntax (`T Foo()`), not trailing return types (`auto Foo() -> T`).
+- Use fixed-width integer types (`uint64_t`, `int32_t`, etc.) instead of
+  platform-width types (`unsigned long long`, `long`, etc.).
 - Format C and C++ sources using `python Tools/format.py --files=staged`
   followed by `python Tools/format.py --files=staged -error`. Install
   clang-format 20 beforehand with `pip install clang-format` or let the tool
@@ -204,3 +208,10 @@ The `references/` directory contains quick-reference guides that agents can cons
 - `modern-python.md` — Python 3.12+ features, pathlib, type hints, CLI patterns
 - `modern-vulkan.md` — Dynamic rendering, descriptor buffers, synchronization2, timeline semaphores
 - `cpp-portability.md` — Cross-platform pitfalls, fixed-width types, alignment, char signedness
+
+## Permissions
+
+Add new tool permissions to the **user-level** settings (`~/.claude/settings.json`), not the
+project-local file (`.claude/settings.local.json`). Project-local permissions override (not merge
+with) user-level permissions, so maintaining a separate project allow list causes the user-level
+rules to be silently ignored.
