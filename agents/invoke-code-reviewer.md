@@ -147,6 +147,20 @@ When reviewing, also check the project's CLAUDE.md or style guide for:
 
 **Platform Isolation**: Platform-specific code belongs in dedicated liaison modules, not mixed with shared sources. No `#ifdef _WIN32` or `#ifdef __linux__` in shared code.
 
+**No Raw Owning Pointers**: Flag new/delete. Suggest unique_ptr/make_unique. Non-owning raw pointers OK when nullable/reseatable with guaranteed lifetime.
+
+**No Singletons**: Flag private-constructor + static-Get patterns. Suggest subsystem registration via Subsystem::RegisterInterface<>().
+
+**No Macros**: Flag new #define. Suggest constexpr/consteval/concepts/templates. Exempt: test registration macros, third-party C API interop.
+
+**No Preprocessor Guards**: Flag #ifdef/#if in shared code. Suggest if constexpr with CMake-generated Build:: constants.
+
+**No Lint Bypass Without Comment**: Flag NOLINT/clang-format-off without adjacent explanatory comment.
+
+**Labels Over Strings**: Flag string comparisons used for identity checks. Suggest Label types for O(1) integer comparison.
+
+**Descriptive Names**: Flag abbreviations (except AABB, ID), single-letter variables outside loop counters.
+
 ## Example Review Snippet
 
 ### CRITICAL: Use-After-Move

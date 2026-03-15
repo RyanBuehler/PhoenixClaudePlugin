@@ -62,20 +62,17 @@ Jobs run in order; failure in any job skips subsequent jobs.
 
 ## Code Guidelines
 
+For all code style and design practices, follow `Docs/StyleGuide.md`.
+
 - Only make cosmetic changes to code you explicitly modify or add.
-- Never reformat code unless you're already modifying it. When reformatting, treat
-  this file as the single source of truth for style.
+- Never reformat code unless you're already modifying it. When reformatting, follow
+  `Docs/StyleGuide.md` for style.
 - Follow the style of surrounding code.
 - Always give namespaces explicit names; anonymous namespaces break our unity builds.
 - Never introduce namespaces whose names contain the word "Detail".
-- Avoid introducing lint bypass directives (e.g. `// NOLINT`, `// clang-format off`,
-  `# noqa`) unless explicitly instructed otherwise.
 - Do not use C++ exceptions. The keywords `try`, `catch`, `throw`, and `noexcept` are forbidden.
 - RTTI is disabled. Do not use `dynamic_cast`, `typeid`, or `reinterpret_cast`.
 - Do not use deprecated attributes or mark code as deprecated. The `[[deprecated]]` attribute is forbidden.
-- Do not introduce platform guards (`#if`, `#ifdef`, and similar). Platform-specific
-  behavior must live in platform-specific modules instead of being mixed into
-  shared sources.
 - Keep platform-specific logic (for example, Linux-only behavior) confined to
   the corresponding platform liaison sources so code for other platforms remains
   encapsulated and unaffected.
@@ -100,15 +97,7 @@ Jobs run in order; failure in any job skips subsequent jobs.
 ## Code Style
 
 ### C++
-- Use single tabs for indentation.
 - Use traditional return type syntax (`T Foo()`), not trailing return types (`auto Foo() -> T`).
-- Use fixed-width integer types (`uint64_t`, `int32_t`, etc.) instead of
-  platform-width types (`unsigned long long`, `long`, etc.).
-- Format C and C++ sources using `python Tools/format.py --files=staged`
-  followed by `python Tools/format.py --files=staged -error`. Install
-  clang-format 20 beforehand with `pip install clang-format` or let the tool
-  do so automatically. The first command formats files; the second checks with
-  `-error` to match CI's formatting check.
 
 ### Python
 - Use single tabs for indentation.
