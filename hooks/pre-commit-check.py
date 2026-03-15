@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PreToolUse hook: blocks git commit commands until formatting/linting is run."""
+"""PreToolUse hook: blocks git commit commands until formatting, linting, and tests are run."""
 
 import sys
 import json
@@ -12,10 +12,12 @@ def main():
 		result = {
 			"decision": "block",
 			"reason": (
-				"Run formatting and linting before committing:\n"
-				"1. python Tools/format.py --files=staged\n"
-				"2. python Tools/format.py --files=staged -error\n"
-				"3. python Tools/tidy.py\n"
+				"Run the full verification sequence before committing:\n"
+				"1. cmake --build build --config Release --parallel\n"
+				"2. python Tools/format.py --files=staged\n"
+				"3. python Tools/format.py --files=staged -error\n"
+				"4. python Tools/tidy.py\n"
+				"5. ctest --test-dir build -C Release --output-on-failure\n"
 				"\n"
 				"If all pass, proceed with the commit."
 			),

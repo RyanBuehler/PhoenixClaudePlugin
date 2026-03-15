@@ -89,6 +89,14 @@ Jobs run in order; failure in any job skips subsequent jobs.
   in place for subsequent tidy runs. Test sources matching `*Trials.cpp` may
   be skipped by passing `--filter *Trials.cpp`.
 
+## Color Values
+
+- All floating-point color types (`Color::Red`, `Colors::RGBA`, `Colors::RGB`, etc.) use
+  the **0.0–1.0** normalized range, NOT 0.0–255.0. A pure red is `Color::Red` = `{1.0f, 0.0f, 0.0f, 1.0f}`,
+  not `{255.0f, 0.0f, 0.0f, 255.0f}`.
+- When constructing colors from 8-bit inputs (e.g., hex codes, UI pickers), divide each
+  channel by 255.0f before storing.
+
 ## Code Style
 
 ### C++
@@ -113,9 +121,13 @@ Jobs run in order; failure in any job skips subsequent jobs.
 
 ## Build & Test Verification
 
+- Do NOT run builds or tests after every code change. Only run the full
+  verification sequence **immediately before committing** (i.e., when the user
+  asks to commit or you are about to create a commit). This overrides any
+  TDD or verification-before-completion guidance from other skills.
 - To verify compilation and run all tests locally, mirror the CI pipeline.
 - It is mandatory to configure the build with tests enabled and execute the
-  full suite before submitting changes:
+  full suite before committing:
         cmake -S . -B build -DTESTS=ON -DCMAKE_BUILD_TYPE=Release
         cmake --build build --config Release --parallel
         python Tools/format.py --files=staged
