@@ -1,6 +1,6 @@
 ---
 description: Update the PhoenixClaudePlugin from its source repository. Takes an optional path argument to the plugin repo, otherwise asks. Applies changes and bumps the version number.
-allowed_tools: Read, Edit, Write, Bash, Glob, Grep, Agent
+allowed-tools: Read, Edit, Write, Bash, Glob, Grep, Agent
 ---
 
 # Update PhoenixClaudePlugin

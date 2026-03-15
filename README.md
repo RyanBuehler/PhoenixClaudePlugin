@@ -12,7 +12,7 @@ git clone git@github.com:RyanBuehler/PhoenixClaudePlugin.git
 claude plugin add ./PhoenixClaudePlugin
 ```
 
-## Agents (21)
+## Agents (22)
 
 Specialized subagents for different aspects of engine development.
 
@@ -66,7 +66,7 @@ Specialized subagents for different aspects of engine development.
 |-------|-------------|
 | `invoke-screenshot-agent` | Engine screenshot capture and analysis |
 
-## Commands (7)
+## Commands (10)
 
 Slash commands for common workflows.
 
@@ -79,6 +79,17 @@ Slash commands for common workflows.
 | `/screenshot` | Capture a screenshot from the engine |
 | `/verify` | Full CI-mirror: build + format + lint + test |
 | `/scaffold-module` | Create a new module using `Tools/create_module.py` |
+| `/trace-debug` | Instrument code with Scribe breadcrumb traces, rebuild, read logs, diagnose |
+| `/frontend-design` | Generate interactive HTML playground for iterating on UI layout and styling |
+| `/update-plugin` | Update the PhoenixClaudePlugin from its source repository |
+
+## Skills (1)
+
+Auto-activating skills that trigger based on context.
+
+| Skill | Description |
+|-------|-------------|
+| `frontend-validate` | Auto-captures and evaluates screenshots after UI code changes; annotation playground for marking issues |
 
 ## Hooks
 
