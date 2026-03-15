@@ -29,10 +29,12 @@ Review existing files for style and formatting conventions before writing new on
 
 Read the current version from `.claude-plugin/plugin.json`.
 
+The project uses calendar versioning: `YYYY.MINOR.PATCH` (e.g., `2026.0.0`).
+
 Present the current version and ask the user whether this is a:
-- **Patch** (bug fixes, minor wording changes) — bump `x.y.Z`
-- **Minor** (new features, new agents/commands, non-breaking changes) — bump `x.Y.0`
-- **Major** (breaking changes, significant restructuring) — bump `X.0.0`
+- **Patch** (bug fixes, minor wording changes) — bump `YYYY.minor.PATCH`
+- **Minor** (new features, new agents/commands, non-breaking changes) — bump `YYYY.MINOR.0`
+- **New year** (first release of a new calendar year) — bump `YYYY.0.0`
 
 Do NOT assume the bump level — always ask the user to choose. Apply the chosen version bump to both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`.
 
