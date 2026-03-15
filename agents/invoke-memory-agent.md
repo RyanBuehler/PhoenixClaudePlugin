@@ -42,7 +42,7 @@ cmake -S . -B build-asan \
     -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address" \
     -DTESTS=ON
 
-cmake --build build-asan -j$(nproc)
+cmake --build build-asan --parallel
 
 # Run with ASan
 ./build-asan/Plugins/Trials/Engine_EngineTrials
@@ -476,7 +476,7 @@ jobs:
             -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
             -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
             -DTESTS=ON
-          cmake --build build-asan -j$(nproc)
+          cmake --build build-asan --parallel
       - name: Run tests with ASan
         env:
           ASAN_OPTIONS: "halt_on_error=1:detect_leaks=1"
@@ -495,7 +495,7 @@ jobs:
       - name: Build
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DTESTS=ON
-          cmake --build build -j$(nproc)
+          cmake --build build --parallel
       - name: Run under Valgrind
         run: |
           valgrind --leak-check=full --error-exitcode=1 \

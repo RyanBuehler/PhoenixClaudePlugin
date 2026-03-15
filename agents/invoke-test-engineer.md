@@ -37,7 +37,7 @@ Modules/
 ```bash
 # Full build with tests
 cmake -S . -B build -DTESTS=ON -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release -j$(nproc)
+cmake --build build --config Release --parallel
 
 # Run all tests
 ctest --test-dir build -C Release --output-on-failure
@@ -502,6 +502,6 @@ void TestFilePermissions()
 ```bash
 # Standard CI test command
 cmake -S . -B build -DTESTS=ON -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release -j$(nproc)
+cmake --build build --config Release --parallel
 ctest --test-dir build -C Release --output-on-failure
 ```

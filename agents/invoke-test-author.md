@@ -39,7 +39,7 @@ Modules/
 ```bash
 # Build with tests enabled
 cmake -S . -B build -DTESTS=ON -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release -j$(nproc)
+cmake --build build --config Release --parallel
 
 # Run all tests
 ctest --test-dir build -C Release --output-on-failure
@@ -164,7 +164,7 @@ target_sources(Trials PRIVATE
 
 ```bash
 # Rebuild
-cmake --build build --config Release -j$(nproc)
+cmake --build build --config Release --parallel
 
 # Run tests
 ctest --test-dir build -C Release --output-on-failure
@@ -244,7 +244,7 @@ When setting up a new test:
 
 ### Verification
 ```bash
-cmake --build build --config Release -j$(nproc)
+cmake --build build --config Release --parallel
 ctest --test-dir build -C Release -R "MyComponent" --output-on-failure
 ```
 

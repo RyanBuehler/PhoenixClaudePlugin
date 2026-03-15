@@ -64,16 +64,16 @@ Phoenix/
 ```bash
 # Full clean build with tests (Linux)
 cmake -S . -B build -DTESTS=ON -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release -j$(nproc)
+cmake --build build --config Release --parallel
 ctest --test-dir build -C Release --output-on-failure
 
 # Headless build (no GUI dependencies)
 cmake -S . -B build -DTESTS=ON -DCMAKE_BUILD_TYPE=Headless
-cmake --build build --config Headless -j$(nproc)
+cmake --build build --config Headless --parallel
 
 # Debug build with symbols
 cmake -S . -B build -DTESTS=ON -DCMAKE_BUILD_TYPE=Debug
-cmake --build build --config Debug -j$(nproc)
+cmake --build build --config Debug --parallel
 
 # Windows (Visual Studio)
 cmake -S . -B build -DTESTS=ON -DCMAKE_BUILD_TYPE=Release
@@ -536,7 +536,7 @@ target_link_libraries(MyTarget PRIVATE
 set(CMAKE_BUILD_PARALLEL_LEVEL $ENV{NPROC})
 
 # Or via command line
-cmake --build build -j$(nproc)
+cmake --build build --parallel
 ```
 
 ### Precompiled Headers

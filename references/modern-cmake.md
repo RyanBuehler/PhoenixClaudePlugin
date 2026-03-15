@@ -415,7 +415,7 @@ ${PROJECT_SOURCE_DIR}/include
 | Command | Purpose |
 |---------|---------|
 | `cmake -S . -B build` | Configure out-of-source |
-| `cmake --build build -j$(nproc)` | Build with parallelism |
+| `cmake --build build --parallel` | Build with parallelism |
 | `cmake --build build --target MyTarget` | Build single target |
 | `cmake -L build` | List cache variables |
 | `cmake --install build --prefix /usr/local` | Install |

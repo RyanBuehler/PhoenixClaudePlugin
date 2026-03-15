@@ -39,7 +39,7 @@ cmake -S . -B build-tsan \
     -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread" \
     -DTESTS=ON
 
-cmake --build build-tsan -j$(nproc)
+cmake --build build-tsan --parallel
 ./build-tsan/Plugins/Trials/Engine_EngineTrials
 ```
 

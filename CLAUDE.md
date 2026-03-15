@@ -3,6 +3,7 @@
 ## Hard Requirements
 
 - **NEVER mention Claude Code in commit messages.** No "Generated with Claude Code", no Co-Authored-By Claude, nothing. Commit messages should look like they were written by a human developer.
+- **Never combine `cd` and `git` in a compound command** (e.g. `cd /some/dir && git status`). Changing into an untrusted directory before running git exposes you to bare repository attacks where a malicious `.git` config can execute arbitrary code. Always run git commands using absolute paths or from the known working directory.
 
 ## Modules vs Subsystems
 
@@ -112,7 +113,7 @@ Jobs run in order; failure in any job skips subsequent jobs.
 - It is mandatory to configure the build with tests enabled and execute the
   full suite before submitting changes:
         cmake -S . -B build -DTESTS=ON -DCMAKE_BUILD_TYPE=Release
-        cmake --build build --config Release -j$(nproc)
+        cmake --build build --config Release --parallel
         python Tools/format.py --files=staged
         python Tools/format.py --files=staged -error
         ctest --test-dir build -C Release --output-on-failure

@@ -359,7 +359,7 @@ cmake -S . -B build-debug \
     -DCMAKE_BUILD_TYPE=Debug \
     -DTESTS=ON
 
-cmake --build build-debug -j$(nproc)
+cmake --build build-debug --parallel
 
 # Release with debug info (for production crash analysis)
 cmake -S . -B build-relwithdebinfo \
