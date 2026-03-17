@@ -2,13 +2,26 @@
 description: Format staged C++ files with clang-format and verify formatting is correct.
 ---
 
-Format staged files and verify:
+Format staged C++ files and verify the result matches CI expectations.
+
+## 1. Format
+
+Apply formatting to staged files:
 
 ```bash
 python Tools/format.py --files=staged
+```
+
+## 2. Verify
+
+Check that formatting passes (mirrors CI behavior):
+
+```bash
 python Tools/format.py --files=staged -error
 ```
 
-The first command applies formatting. The second verifies it passes (matches CI behavior).
+If verification fails after formatting, investigate the issue. If there are no staged files, inform the user.
 
-If verification fails after formatting, report the issue. If there are no staged files, inform the user.
+## 3. Report
+
+Tell the user whether formatting passed or what issues remain.

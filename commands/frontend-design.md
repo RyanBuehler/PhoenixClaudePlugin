@@ -4,9 +4,7 @@ description: Generate an interactive HTML playground approximating engine UI for
 
 Create an interactive HTML playground that approximates the target engine UI, letting the user iterate on layout and styling visually before changes are applied to engine code.
 
-## Workflow
-
-### 1. Identify UI scope
+## 1. Identify UI Scope
 
 Read the relevant widget/panel code to understand:
 - Current layout structure (panels, containers, element hierarchy)
@@ -15,7 +13,7 @@ Read the relevant widget/panel code to understand:
 - Spatial relationships between elements
 - The engine's current window size and aspect ratio
 
-### 2. Generate the playground
+## 2. Generate the Playground
 
 Create `.claude/frontend-design.html` — a self-contained HTML/CSS/JS page:
 
@@ -33,39 +31,17 @@ Create `.claude/frontend-design.html` — a self-contained HTML/CSS/JS page:
 - A property panel showing the selected element's current values
 
 **State management:**
-- A "Save" button that writes the current state to `.claude/design-state.json`:
+- A "Save" button that writes the current state to `.claude/design-state.json`
+- A "Copy JSON" button as an alternative (since direct file writes from HTML require a server)
 
-```json
-{
-  "elements": [
-    {
-      "id": "sidebar",
-      "x": 0,
-      "y": 0,
-      "width": 280,
-      "height": "100%",
-      "backgroundColor": "#1a1a2e",
-      "fontSize": 14,
-      "padding": "8px"
-    }
-  ],
-  "canvas": {
-    "width": 1920,
-    "height": 1080
-  }
-}
-```
-
-The Save button should use the `fetch` API or prompt the user to copy the JSON (since direct file writes from HTML require a server). Provide a "Copy JSON" button as an alternative.
-
-### 3. Present to user
+## 3. Present to User
 
 Tell the user to open `.claude/frontend-design.html` in their browser. Explain:
 - How to drag/resize/recolor elements
 - Where to find the property panel
 - How to save their design when satisfied
 
-### 4. Apply design to engine code
+## 4. Apply Design to Engine Code
 
 Once the user has saved their design (or shares the JSON):
 - Read `.claude/design-state.json`
@@ -73,7 +49,7 @@ Once the user has saved their design (or shares the JSON):
 - Apply the layout, color, and sizing values to the engine source
 - Translate pixel values to engine units as needed (note any coordinate system differences)
 
-### 5. Verify
+## 5. Verify
 
 Rebuild and capture a screenshot to compare against the playground mockup:
 
@@ -81,4 +57,8 @@ Rebuild and capture a screenshot to compare against the playground mockup:
 cmake --build build --config Release --parallel
 ```
 
-Use `/screenshot` to capture the result and visually compare against the playground layout.
+Use `/phoe:screenshot` to capture the result and visually compare against the playground layout.
+
+## 6. Report
+
+Tell the user what values were applied to which engine components, and whether the screenshot matches the playground design.

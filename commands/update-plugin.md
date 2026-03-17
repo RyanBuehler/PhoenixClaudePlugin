@@ -3,17 +3,19 @@ description: Update the PhoenixClaudePlugin from its source repository. Takes an
 allowed-tools: Read, Edit, Write, Bash, Glob, Grep, Agent
 ---
 
-# Update PhoenixClaudePlugin
+Update the PhoenixClaudePlugin (the "phoe" plugin for Claude Code).
 
-You are updating the PhoenixClaudePlugin (the "phoe" plugin for Claude Code).
+## Arguments
 
-## Step 1: Locate the plugin repo
+- **`<path>`** — *(optional)* path to the plugin source repository (default: `~/Agents/PhoenixClaudePlugin`)
 
-The user may provide the path to the plugin source repository as an argument. If not provided, ask for it. The default location is `~/Agents/PhoenixClaudePlugin`.
+## 1. Locate the Plugin Repo
+
+If a path argument was provided, use it. Otherwise, ask the user. The default location is `~/Agents/PhoenixClaudePlugin`.
 
 Verify the path exists and contains `.claude-plugin/plugin.json` with `"name": "phoe"`.
 
-## Step 2: Make requested edits
+## 2. Make Requested Edits
 
 The user will describe what changes to make (new agents, commands, CLAUDE.md updates, reference docs, hooks, etc.). Apply those changes following the plugin's existing conventions:
 
@@ -25,7 +27,7 @@ The user will describe what changes to make (new agents, commands, CLAUDE.md upd
 
 Review existing files for style and formatting conventions before writing new ones.
 
-## Step 3: Bump the version
+## 3. Bump the Version
 
 Read the current version from `.claude-plugin/plugin.json`.
 
@@ -38,6 +40,6 @@ Present the current version and ask the user whether this is a:
 
 Do NOT assume the bump level — always ask the user to choose. Apply the chosen version bump to both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`.
 
-## Step 4: Summary
+## 4. Report
 
-Report what was changed and the new version number. Do NOT commit or push — leave that to the user.
+Tell the user what was changed and the new version number. Do NOT commit or push — leave that to the user.

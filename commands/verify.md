@@ -1,20 +1,35 @@
 ---
-description: Full CI-mirror verification sequence — configure, build, format check, and test. The mandatory pre-commit check.
+description: Full CI-mirror verification sequence — configure, build, format check, lint, and test. The mandatory pre-commit check.
 ---
 
-Run the full CI-mirror verification sequence by executing these commands in order. Stop on the first failure:
+Run the full CI-mirror verification sequence. Stop on the first failure.
 
-1. `/build` — configure and build the project
-2. `/format` — format staged files and verify
-3. `/lint` — run clang-tidy on changed files
-4. `/test` — run the test suite
+## 1. Build
 
-All four must pass before changes should be committed. This mirrors the CI pipeline.
+Run `/phoe:build` — configure and build the project.
 
-If all four pass, write the verification marker so the pre-commit hook allows the commit:
+## 2. Format
+
+Run `/phoe:format` — format staged files and verify.
+
+## 3. Lint
+
+Run `/phoe:lint` — run clang-tidy on changed files.
+
+## 4. Test
+
+Run `/phoe:test` — run the test suite.
+
+## 5. Write Verification Marker
+
+If all four steps pass, write the marker so the pre-commit hook allows the commit:
 
 ```bash
 mkdir -p ~/.claude/tmp && date +%s > ~/.claude/tmp/verification-passed
 ```
 
 This file is consumed (deleted) by the pre-commit hook after a successful commit.
+
+## 6. Report
+
+Tell the user whether all checks passed or which step failed.

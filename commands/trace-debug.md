@@ -4,13 +4,11 @@ description: Instrument code with Scribe breadcrumb traces, rebuild, reproduce, 
 
 Debug an issue by instrumenting code with Scribe trace breadcrumbs, then reading the resulting logs to understand runtime behavior.
 
-## Workflow
-
-### 1. Identify the expected path
+## 1. Identify the Expected Path
 
 Read the relevant code and map out the functions and branches you expect to execute during the scenario. Note decision points, early returns, and conditional branches — these are your instrumentation targets.
 
-### 2. Instrument with breadcrumb traces
+## 2. Instrument with Breadcrumb Traces
 
 Add `Scribe::LogF()` calls at key points along the expected path. Wrap every instrumentation block in region markers for cleanup:
 
@@ -28,7 +26,7 @@ Guidelines:
 - Instrument at: function entry, branch decisions, loop iterations (with counts), early returns, error paths
 - Place traces to distinguish which branches execute and which are skipped
 
-### 3. Rebuild
+## 3. Rebuild
 
 ```bash
 cmake --build build --config Release --parallel
@@ -36,7 +34,7 @@ cmake --build build --config Release --parallel
 
 Fix any compilation errors in the instrumentation before proceeding.
 
-### 4. Reproduce
+## 4. Reproduce
 
 Run the engine or test to trigger the scenario:
 
@@ -50,7 +48,7 @@ ctest --test-dir build -C Release -R "TestName" --output-on-failure
 
 Ask the user only if you cannot trigger the scenario independently (e.g., it requires specific user interaction).
 
-### 5. Read logs
+## 5. Read Logs
 
 Read `Logs/Claude.log` and correlate:
 - Which breadcrumbs appeared — confirms that code path executed
@@ -58,19 +56,18 @@ Read `Logs/Claude.log` and correlate:
 - The order of breadcrumbs — reveals unexpected execution flow
 - Variable values in messages — shows runtime state
 
-### 6. Diagnose or re-instrument
+## 6. Diagnose or Re-instrument
 
 If the root cause is clear from the log analysis, fix it. Otherwise:
 - Add more granular traces in the narrowed-down area
 - Repeat from step 3 (rebuild, reproduce, read)
 - Each iteration should narrow the search space
 
-### 7. Clean up
+## 7. Clean Up
 
 After fixing the issue, remove all instrumentation and the debug log:
 
 ```bash
-# Find all files with debug markers
 grep -rl "#region CLAUDE_DEBUG" .
 ```
 
@@ -85,3 +82,7 @@ Verify no markers remain:
 ```bash
 grep -r "CLAUDE_DEBUG" . --include="*.cpp" --include="*.cppm" --include="*.h"
 ```
+
+## 8. Report
+
+Tell the user the root cause, the fix applied, and confirm all debug instrumentation has been removed.

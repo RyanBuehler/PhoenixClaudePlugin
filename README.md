@@ -66,12 +66,14 @@ Specialized subagents for different aspects of engine development.
 |-------|-------------|
 | `invoke-screenshot-agent` | Engine screenshot capture and analysis |
 
-## Commands (10)
+## Commands (13)
 
 Slash commands for common workflows.
 
 | Command | Description |
 |---------|-------------|
+| `/plan` | Brainstorm, design, and decompose a feature into a Crucible Saga with ordered, commit-sized Challenges |
+| `/implement` | Pick up a Crucible Challenge by label and implement it end-to-end with verification |
 | `/build` | Build the project in Release configuration |
 | `/test` | Run the test suite via CTest |
 | `/format` | Format staged C++ files and verify |
@@ -81,6 +83,7 @@ Slash commands for common workflows.
 | `/scaffold-module` | Create a new module using `Tools/create_module.py` |
 | `/trace-debug` | Instrument code with Scribe breadcrumb traces, rebuild, read logs, diagnose |
 | `/frontend-design` | Generate interactive HTML playground for iterating on UI layout and styling |
+| `/reset-workspace` | Clean up the workspace — resolve unstaged files, switch to main, pull latest, prune branches |
 | `/update-plugin` | Update the PhoenixClaudePlugin from its source repository |
 
 ## Skills (1)

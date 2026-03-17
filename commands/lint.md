@@ -2,17 +2,24 @@
 description: Run clang-tidy on changed files. Generates compilation database if needed.
 ---
 
-Run clang-tidy:
+Run clang-tidy on changed files, generating the compilation database first if missing.
 
-```bash
-python Tools/tidy.py
-```
+## 1. Check Compilation Database
 
-If the compilation database is missing (`build/compile_commands.json` not found), generate it first:
+If `build/compile_commands.json` is missing, generate it:
 
 ```bash
 python Tools/tidy.py --compdb
+```
+
+## 2. Lint
+
+```bash
 python Tools/tidy.py
 ```
 
-Report any warnings or errors found. Test files (`*Trials.cpp`) may be skipped with `--filter '*Trials.cpp'` if the user requests.
+Test files (`*Trials.cpp`) may be skipped with `--filter '*Trials.cpp'` if the user requests.
+
+## 3. Report
+
+Tell the user about any warnings or errors found, or confirm a clean run.

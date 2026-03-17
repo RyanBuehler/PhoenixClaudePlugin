@@ -2,25 +2,31 @@
 description: Create a new Phoenix engine module using the project's create_module.py scaffolding tool.
 ---
 
-Use the project's existing module scaffolding tool:
+Create a new module using the project's scaffolding tool. Supports interactive and non-interactive modes.
+
+## Arguments
+
+- **`<name>`** — *(optional)* module name for non-interactive mode
+- **`<type>`** — *(optional)* module type: `Module`, `Plugin`, `External`, or `Submodule`
+
+## 1. Run Scaffolding Tool
+
+**Interactive mode** (no arguments):
 
 ```bash
 python Tools/create_module.py
 ```
 
-This runs in interactive mode and prompts for module name, type (Module, Plugin, External, Submodule), parent module (for submodules), and dependencies.
-
-For non-interactive usage:
+**Non-interactive mode** (arguments provided):
 
 ```bash
-# Create a module
-python Tools/create_module.py --name MyModule --type Module
-
-# Create a plugin
-python Tools/create_module.py --name MyPlugin --type Plugin --deps Core,Engine
-
-# Create a submodule under an existing module
-python Tools/create_module.py --name MySub --type Submodule --parent Engine --parent-type Module
+python Tools/create_module.py --name <NAME> --type <TYPE>
 ```
 
-The tool creates the full directory structure, CMakeLists.txt, description JSON, and initial source/header/trial files following project conventions.
+Additional flags for non-interactive mode:
+- `--deps Core,Engine` — specify dependencies
+- `--parent <MODULE> --parent-type Module` — for submodules
+
+## 2. Report
+
+Tell the user what was created — the directory structure, CMakeLists.txt, description JSON, and initial source/header/trial files.
