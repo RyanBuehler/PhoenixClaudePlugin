@@ -60,7 +60,7 @@ Draft a saga and break the work into commit-sized, ordered Challenges.
 - **Title** — concise action phrase (drives the auto-generated label)
 - **Description** — what needs to happen, with enough context for implementation
 - **Priority** — `critical` > `high` > `medium` > `low` (based on dependency order and importance)
-- **Labels** — comma-separated tags (e.g., `cpp,rendering`, `plugin,commands`, `tests`)
+- **Tags** — comma-separated tags (e.g., `cpp,rendering`, `plugin,commands`, `tests`)
 - **Acceptance criteria** — what "done" looks like
 - **Verification steps** — commands to verify the work
 - **Affected files** — files likely to be touched
@@ -86,7 +86,7 @@ If extending an existing saga, show its current challenges first for context.
 
 **Challenges:**
 
-| # | Title (→ label) | Priority | Labels | Key acceptance criteria |
+| # | Title (→ label) | Priority | Tags | Key acceptance criteria |
 |---|-----------------|----------|--------|------------------------|
 | 1 | ... | ... | ... | ... |
 
@@ -101,14 +101,14 @@ After approval, create the challenges and saga using the CLI.
 **Create each challenge:**
 
 ```bash
-build/bin/PhoenixCrucible 'crucible.challenge.create title="<TITLE>" description="<DESC>" priority="<PRIORITY>" labels="<LABELS>" acceptance_criteria="<CRITERION1>,<CRITERION2>" verification="<DESC1>|<CMD1>,<DESC2>|<CMD2>" affected_files="<FILE1>,<FILE2>" references="<REF1>,<REF2>"'
+build/bin/PhoenixCrucible 'crucible.challenge.create title="<TITLE>" description="<DESC>" priority="<PRIORITY>" tags="<TAGS>" acceptance_criteria="<CRITERION1>,<CRITERION2>" verification="<DESC1>|<CMD1>,<DESC2>|<CMD2>" affected_files="<FILE1>,<FILE2>" references="<REF1>,<REF2>"'
 build/bin/PhoenixCrucible 'crucible.challenge.move label="<LABEL>" status="todo"'
 ```
 
 **Create a new saga** (if not extending):
 
 ```bash
-build/bin/PhoenixCrucible 'crucible.saga.create title="<TITLE>" description="<DESC>" challenges="label1,label2,..."'
+build/bin/PhoenixCrucible 'crucible.saga.create title="<TITLE>" description="<DESC>" challenges="label1,label2,..." label="<OPTIONAL_LABEL>"'
 ```
 
 **Extend an existing saga** (if `<saga_label>` was provided):
@@ -129,8 +129,8 @@ If `build/bin/PhoenixCrucible` is missing, tell the user to build Crucible first
 
 Present a summary table:
 
-| # | Label | Title | Priority | Labels |
-|---|-------|-------|----------|--------|
+| # | Label | Title | Priority | Tags |
+|---|-------|-------|----------|------|
 | 1 | `add-viewport-resize` | Add viewport resize | high | cpp,rendering |
 
 Include:
