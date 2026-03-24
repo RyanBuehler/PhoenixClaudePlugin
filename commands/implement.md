@@ -14,10 +14,10 @@ Implement a Crucible Challenge end-to-end. Accepts a label or `next` to auto-pic
 Verify the Crucible binary exists:
 
 ```bash
-build/bin/PhoenixCrucible 'crucible.status'
+./Crucible status
 ```
 
-If this fails, tell the user to build Crucible first (`/phoe:build`) and stop.
+If this fails, build it from source with `/phoe:build` and copy the binary to the project root.
 
 ## 2. Resolve the Challenge
 
@@ -26,13 +26,13 @@ If this fails, tell the user to build Crucible first (`/phoe:build`) and stop.
 1. List all sagas and their progress:
 
 ```bash
-build/bin/PhoenixCrucible 'crucible.saga.list'
+./Crucible --json saga list
 ```
 
 2. List all todo challenges:
 
 ```bash
-build/bin/PhoenixCrucible 'crucible.challenge.list status="todo"'
+./Crucible --json challenge list --status=todo
 ```
 
 3. Pick the best challenge using this priority order:
@@ -45,7 +45,7 @@ build/bin/PhoenixCrucible 'crucible.challenge.list status="todo"'
 **If argument is a label**, fetch by label:
 
 ```bash
-build/bin/PhoenixCrucible 'crucible.challenge.show label="<LABEL>"'
+./Crucible challenge show --label=<LABEL>
 ```
 
 ## 3. Show Context
@@ -55,7 +55,7 @@ Display the challenge details: title, description, acceptance criteria, and veri
 **Check for saga membership** — search the saga list for the resolved challenge ID. If it belongs to a saga:
 
 ```bash
-build/bin/PhoenixCrucible 'crucible.saga.show label="<SAGA_LABEL>"'
+./Crucible saga show --label=<SAGA_LABEL>
 ```
 
 Show the saga name, where this challenge sits in the ordering, and overall saga progress. This gives full feature context for the implementation.
@@ -69,7 +69,7 @@ git checkout -b challenge/<label>
 ## 5. Move to In Progress
 
 ```bash
-build/bin/PhoenixCrucible 'crucible.challenge.move label="<LABEL>" status="in_progress"'
+./Crucible challenge move --label=<LABEL> in_progress
 ```
 
 ## 6. Explore and Understand
@@ -99,13 +99,13 @@ Commit all changes on the challenge branch with a descriptive message referencin
 Move the challenge to review status:
 
 ```bash
-build/bin/PhoenixCrucible 'crucible.challenge.move label="<LABEL>" status="review"'
+./Crucible challenge move --label=<LABEL> review
 ```
 
 If the challenge belongs to a saga, show updated saga progress:
 
 ```bash
-build/bin/PhoenixCrucible 'crucible.saga.show label="<SAGA_LABEL>"'
+./Crucible saga show --label=<SAGA_LABEL>
 ```
 
 Tell the user:
@@ -119,4 +119,4 @@ Tell the user:
 
 Use `/phoe:plan` to create new challenges or extend an existing saga.
 
-> **Note:** When the user moves a challenge to `done`, it is automatically archived to `.crucible/archive/`. If work needs to be revisited, use `crucible.challenge.unarchive label="<LABEL>"` to restore it to `todo` status.
+> **Note:** When the user moves a challenge to `done`, it is automatically archived to `.crucible/archive/`. If work needs to be revisited, use `./Crucible challenge unarchive --label=<LABEL>` to restore it to `todo` status.

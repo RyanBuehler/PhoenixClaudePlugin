@@ -13,19 +13,19 @@ Plan a feature from idea to actionable Crucible Challenges grouped under a Saga.
 Ensure Crucible is initialized:
 
 ```bash
-build/bin/PhoenixCrucible 'crucible.status'
+./Crucible status
 ```
 
 If this fails, ask the user for the project name and initialize:
 
 ```bash
-build/bin/PhoenixCrucible 'crucible.init project="<NAME>"'
+./Crucible init --project="<NAME>"
 ```
 
 If a `<saga_label>` argument was provided, verify it exists:
 
 ```bash
-build/bin/PhoenixCrucible 'crucible.saga.show label="<SAGA_LABEL>"'
+./Crucible saga show --label=<SAGA_LABEL>
 ```
 
 If the saga is not found, stop and tell the user.
@@ -101,29 +101,29 @@ After approval, create the challenges and saga using the CLI.
 **Create each challenge:**
 
 ```bash
-build/bin/PhoenixCrucible 'crucible.challenge.create title="<TITLE>" description="<DESC>" priority="<PRIORITY>" tags="<TAGS>" acceptance_criteria="<CRITERION1>,<CRITERION2>" verification="<DESC1>|<CMD1>,<DESC2>|<CMD2>" affected_files="<FILE1>,<FILE2>" references="<REF1>,<REF2>"'
-build/bin/PhoenixCrucible 'crucible.challenge.move label="<LABEL>" status="todo"'
+./Crucible challenge create --title="<TITLE>" --description="<DESC>" --priority="<PRIORITY>" --tags="<TAGS>" --acceptance-criteria="<CRITERION1>,<CRITERION2>" --verification="<DESC1>|<CMD1>,<DESC2>|<CMD2>" --affected-files="<FILE1>,<FILE2>" --references="<REF1>,<REF2>"
+./Crucible challenge move --label=<LABEL> todo
 ```
 
 **Create a new saga** (if not extending):
 
 ```bash
-build/bin/PhoenixCrucible 'crucible.saga.create title="<TITLE>" description="<DESC>" challenges="label1,label2,..." label="<OPTIONAL_LABEL>"'
+./Crucible saga create --title="<TITLE>" --description="<DESC>" --challenges="label1,label2,..." --label="<OPTIONAL_LABEL>"
 ```
 
 **Extend an existing saga** (if `<saga_label>` was provided):
 
 ```bash
-build/bin/PhoenixCrucible 'crucible.saga.add saga_label="<SAGA_LABEL>" challenge_label="<LABEL>"'
+./Crucible saga add <SAGA_LABEL> <CHALLENGE_LABEL>
 ```
 
 **Verify the result:**
 
 ```bash
-build/bin/PhoenixCrucible 'crucible.saga.show label="<SAGA_LABEL>"'
+./Crucible saga show --label=<SAGA_LABEL>
 ```
 
-If `build/bin/PhoenixCrucible` is missing, tell the user to build Crucible first.
+If `./Crucible` is missing, build it from source with `/phoe:build` and copy the binary to the project root.
 
 ## 7. Report
 
