@@ -124,6 +124,10 @@ For all code style and design practices, follow `Docs/StyleGuide.md`.
 ### YAML
 - Use two spaces for indentation.
 
+## Build Commands
+
+- **NEVER** use `-j$(nproc)` or `-j` with cmake. Always use `cmake --build <dir> --parallel`. The `$()` subshell triggers permission prompts and `-j` is generator-specific.
+
 ## Build & Test Verification
 
 - Do NOT run builds or tests after every code change. Only run the full
