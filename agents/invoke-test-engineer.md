@@ -55,6 +55,95 @@ ctest --test-dir build -C Release -R "Engine"
 ctest --test-dir build -N
 ```
 
+## Creating a New Test File
+
+### Step 1: Create the Test Source File
+
+Test files should be named `<Component>Trials.cpp` and placed in `Plugins/Trials/Source/`:
+
+```cpp
+// Plugins/Trials/Source/MyComponentTrials.cpp
+
+#include "Trials/TestFramework.h"  // Include test framework
+#include "MyComponent/MyComponent.h"  // Include code under test
+
+namespace MyComponentTrials
+{
+
+// Test fixture for shared setup (optional)
+class MyComponentFixture
+{
+public:
+	void SetUp()
+	{
+		// Initialize test resources
+		m_Component = CreateComponent();
+	}
+
+	void TearDown()
+	{
+		// Clean up test resources
+		DestroyComponent(m_Component);
+	}
+
+protected:
+	MyComponent* m_Component = nullptr;
+};
+
+// Basic test case
+void TestMyComponent_BasicOperation_Succeeds()
+{
+	// Arrange
+	MyComponent component;
+
+	// Act
+	auto result = component.DoSomething();
+
+	// Assert
+	ASSERT_TRUE(result.IsSuccess());
+	ASSERT_EQ(result.GetValue(), 42);
+}
+
+// Test case with fixture
+void TestMyComponent_WithFixture_WorksCorrectly(MyComponentFixture& fixture)
+{
+	// Arrange - fixture.m_Component already set up
+
+	// Act
+	auto result = fixture.m_Component->Process();
+
+	// Assert
+	ASSERT_TRUE(result.IsValid());
+}
+
+}  // namespace MyComponentTrials
+```
+
+### Step 2: Register with CMake
+
+Add the test file to `Plugins/Trials/CMakeLists.txt`:
+
+```cmake
+# In Plugins/Trials/CMakeLists.txt
+target_sources(Trials PRIVATE
+	Source/ExistingTrials.cpp
+	Source/MyComponentTrials.cpp  # Add new test file
+)
+```
+
+### Step 3: Build and Run
+
+```bash
+# Rebuild
+cmake --build build --config Release --parallel
+
+# Run tests
+ctest --test-dir build -C Release --output-on-failure
+
+# Or run specific test executable
+./build/Plugins/Trials/Module_ModuleTrials
+```
+
 ## Test Design Patterns
 
 ### Arrange-Act-Assert (AAA)

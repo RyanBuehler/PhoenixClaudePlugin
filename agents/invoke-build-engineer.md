@@ -616,7 +616,7 @@ Before submitting build changes:
 - `invoke-include-analyzer` - IWYU analysis and include optimization to reduce build times
 - `invoke-linux-agent` - Linux platform-specific build and development issues
 - `invoke-windows-agent` - Windows platform-specific build and development issues
-- `invoke-style-agent` - Formatting and linting tool configuration
+- `references/code-style.md` - Formatting and linting tool configuration
 
 ## Resources
 

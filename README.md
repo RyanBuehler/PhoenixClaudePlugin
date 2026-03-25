@@ -12,19 +12,15 @@ git clone git@github.com:RyanBuehler/PhoenixClaudePlugin.git
 claude plugin add ./PhoenixClaudePlugin
 ```
 
-## Agents (22)
+## Agents (16)
 
 Specialized subagents for different aspects of engine development.
 
 ### Core Development
 | Agent | Description |
 |-------|-------------|
-| `invoke-code-reviewer` | C++ code review — bugs, UB, style, modern C++23 |
-| `invoke-const-agent` | Const correctness fixes |
-| `invoke-format-agent` | clang-format wrapper |
+| `invoke-code-reviewer` | C++ code review — bugs, UB, style, portability, modern C++23 |
 | `invoke-lint-agent` | clang-tidy static analysis |
-| `invoke-style-agent` | Formatting/linting tool maintenance |
-| `invoke-python-reviewer` | Python code review |
 | `invoke-include-analyzer` | IWYU, circular includes, PCH optimization |
 
 ### Architecture & Design
@@ -45,13 +41,11 @@ Specialized subagents for different aspects of engine development.
 |-------|-------------|
 | `invoke-linux-agent` | Linux/POSIX development |
 | `invoke-windows-agent` | Windows/Win32 development |
-| `invoke-portability-agent` | Cross-platform portability scanning |
 
 ### Testing & Debugging
 | Agent | Description |
 |-------|-------------|
-| `invoke-test-author` | Test setup with Trials framework |
-| `invoke-test-engineer` | Test strategy and debugging |
+| `invoke-test-engineer` | Test setup, strategy, coverage, and debugging |
 | `invoke-debugger-agent` | GDB/LLDB, core dumps, breakpoints |
 | `invoke-memory-agent` | Memory debugging, sanitizers, Valgrind |
 
@@ -100,7 +94,7 @@ Auto-activating skills that trigger based on context.
 |------|-------|-------------|
 | Commit guard | PreToolUse (git commit) | Runs format and lint checks before allowing a commit |
 
-## References (5)
+## References (6)
 
 Quick-reference documents for agents to consult.
 
@@ -111,6 +105,7 @@ Quick-reference documents for agents to consult.
 | `modern-python.md` | Python 3.12+ features for build tooling |
 | `modern-vulkan.md` | Dynamic rendering, descriptor buffers, sync2 |
 | `cpp-portability.md` | Cross-platform pitfalls and portable solutions |
+| `code-style.md` | Formatting stack, clang-format/clang-tidy config, tool architecture |
 
 ## Project Conventions
 

@@ -174,4 +174,4 @@ Relies on transitive include through `Core/Timer.h`.
 - `invoke-build-engineer` - For build system changes needed after include refactoring
 - `invoke-code-reviewer` - For broader code quality review
 - `invoke-perf-agent` - For build time profiling and optimization
-- `invoke-format-agent` - To reformat include ordering after changes
+- `/phoe:format` - To reformat include ordering after changes

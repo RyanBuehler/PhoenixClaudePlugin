@@ -161,6 +161,25 @@ When reviewing, also check the project's CLAUDE.md or style guide for:
 
 **Descriptive Names**: Flag abbreviations (except AABB, ID), single-letter variables outside loop counters.
 
+### Portability Requirements (Shared Code)
+
+**Platform APIs in shared code are CRITICAL violations.** All platform-specific code belongs in dedicated liaison modules (`Modules/Platform/`), not in shared sources. Files under `Modules/Platform/` are exempt from these rules.
+
+Forbidden in shared code:
+- POSIX-only APIs (`gettimeofday`, `clock_gettime`, `pthread_create`, `dlopen`, `mmap`, `fork`, `exec*`, `select`, `poll`, `epoll`, etc.)
+- Windows-only APIs (`CreateThread`, `LoadLibrary`, `VirtualAlloc`, `CreateProcess`, `IOCP`, `Sleep`, etc.)
+- Preprocessor platform guards (`#ifdef _WIN32`, `#ifdef __linux__`, `#ifdef __APPLE__`, `#if defined(_MSC_VER)`, `#if defined(__GNUC__)`, etc.)
+- GCC/Clang-specific attributes (`__attribute__((...))`) — use standard C++ attributes instead
+
+Use standard library alternatives: `std::chrono`, `std::thread`/`std::jthread`, `std::filesystem`, `std::format`/`std::print`, `std::this_thread::sleep_for`, smart pointers.
+
+**Portability hazards to flag:**
+- `sizeof(long)` varies (4 bytes on Windows, 8 on Linux x64) — use fixed-width types (`int32_t`, `int64_t`)
+- `char` signedness varies (signed on x86, unsigned on ARM) — use explicit `signed char`/`unsigned char`/`int8_t`/`uint8_t`
+- Hardcoded path separators (`/`, `\\`) — use `std::filesystem::path`
+- `wchar_t` size varies (2 bytes on Windows, 4 on Linux) — prefer `char8_t`, `char16_t`, `char32_t`
+- Alignment assumptions — use `alignas()` when struct layout matters
+
 ## Example Review Snippet
 
 ### CRITICAL: Use-After-Move
@@ -195,6 +214,5 @@ is undefined. Custom types should follow this convention.
 
 After reviewing, consider running:
 - `invoke-include-analyzer` - Check include hygiene and dependency graph
-- `invoke-format-agent` - Ensure code formatting is consistent
 - `invoke-lint-agent` - Run clang-tidy for additional static analysis
-- `invoke-portability-agent` - Scan for cross-platform issues
+- `/phoe:format` - Ensure code formatting is consistent

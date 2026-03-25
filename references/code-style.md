@@ -1,20 +1,6 @@
----
-name: invoke-style-agent
-description: World-class code formatting and linting expert. Maintains format.py and tidy.py tools, understands all clang-format/clang-tidy settings, and knows CLion IDE configuration. Use for formatting issues, linting setup, tool maintenance, or configuring code style across the project.
-tools: Read, Grep, Glob, Bash, Edit, Write
----
+# Code Style Reference
 
-# Code Style Expert
-
-You are a world-class code formatting and static analysis expert with deep knowledge of clang-format, clang-tidy, and CLion's code analysis features. You maintain this project's formatting infrastructure and ensure consistency across all tooling.
-
-## Your Responsibilities
-
-1. **Maintain `format.py` and `tidy.py`** - Keep these tools clean, functional, and easy to use
-2. **Configure formatting rules** - Manage `.clang-format`, `.clang-tidy`, and `.editorconfig`
-3. **Synchronize with CLion** - Ensure IDE settings match CLI tools
-4. **Dogfood the tools** - Run format.py and tidy.py to verify they work correctly
-5. **Educate on style** - Explain the project's naming conventions and formatting choices
+Tool locations, formatting rules, and linting configuration for the Phoenix Engine.
 
 ## Tool Locations
 
@@ -210,14 +196,6 @@ ensure_tool(exe, package)  # Auto-install via pip if missing
 - `-f, --filter=PATTERN` - Skip files matching wildcard
 - `--system-headers` - Include system headers
 
-**Workflow:**
-1. Select files based on `--files` mode
-2. Filter to C/C++ extensions via `filter_cpp()`
-3. Exclude files outside repository (unless `--system-headers`)
-4. Apply optional wildcard filter
-5. Run clang-format with `-i` (in-place) or `-n` (dry-run)
-6. With `--error`: also add `--Werror` flag
-
 ### `tidy.py` - clang-tidy Wrapper
 
 **Command-line Options:**
@@ -227,29 +205,6 @@ ensure_tool(exe, package)  # Auto-install via pip if missing
 - `--limit=N` - Stop after N files with warnings (default: 5)
 - `--clang-tidy=PATH` - Custom executable
 - `-f, --filter=PATTERN` - Skip files matching wildcard
-
-**Workflow:**
-1. Optionally generate compile_commands.json via cmake
-2. Check for existing compilation database
-3. Select and filter source files (headers excluded)
-4. Run clang-tidy on each file sequentially
-5. Stop after `--limit` files produce warnings
-
-## Dogfooding Procedures
-
-When working on format.py or tidy.py, always verify:
-
-```bash
-# 1. Format the tools themselves
-python Tools/format.py --files=staged
-
-# 2. Verify formatting is clean
-python Tools/format.py --files=staged -error
-
-# 3. For tidy changes, regenerate compdb and test
-python Tools/tidy.py --compdb
-python Tools/tidy.py --files=branch --filter '*Trials.cpp'
-```
 
 ## Common Issues & Solutions
 
@@ -274,42 +229,9 @@ cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DTESTS=ON
 - Some checks may need explicit suppression via `// NOLINT` (use sparingly)
 - Verify the header filter regex matches your files
 
-## Modifying the Configuration
-
-### Adding a clang-format Rule
-1. Edit `.clang-format`
-2. Consult [Clang-Format Style Options](https://clang.llvm.org/docs/ClangFormatStyleOptions.html)
-3. Run `python Tools/format.py --files=all -n` to preview impact
-4. Update CLion settings in `.idea/codeStyles/Project.xml` if applicable
-
-### Adding a clang-tidy Check
-1. Edit `.clang-tidy` - add to `Checks` list
-2. If it should fail CI, add to `WarningsAsErrors`
-3. Configure check options in `CheckOptions` section
-4. Test with `python Tools/tidy.py --files=branch`
-
-### Adding a Naming Convention
-1. Add pattern to `.clang-tidy` under `CheckOptions`
-2. Use `readability-identifier-naming.<Type>Pattern` format
-3. Patterns are POSIX Extended Regular Expressions
-4. Test with sample code before committing
-
 ## Version Requirements
 
 - **clang-format**: 20.x (installed via `pip install clang-format`)
 - **clang-tidy**: 20.x (installed via `pip install clang-tidy`)
 - **Python**: 3.x with pathlib support
 - **CMake**: Required for compilation database generation
-
-## Integration with CI
-
-The CI pipeline runs:
-```bash
-python Tools/format.py --files=staged
-python Tools/format.py --files=staged -error  # Fails if formatting changes needed
-```
-
-Ensure all code is formatted before committing:
-```bash
-python Tools/format.py --files=staged && python Tools/format.py --files=staged -error
-```

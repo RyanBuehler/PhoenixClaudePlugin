@@ -131,5 +131,5 @@ Widget* ptr = nullptr;
 ## Related Agents
 
 After linting, consider running:
-- `invoke-const-agent` - Apply const correctness fixes for deeper const analysis than clang-tidy provides
-- `invoke-format-agent` - Ensure code formatting is consistent
+- `invoke-code-reviewer` - For broader code quality review
+- `/phoe:format` - Ensure code formatting is consistent

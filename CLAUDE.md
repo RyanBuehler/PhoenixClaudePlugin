@@ -76,6 +76,7 @@ For all code style and design practices, follow `Docs/StyleGuide.md`.
 - Keep platform-specific logic (for example, Linux-only behavior) confined to
   the corresponding platform liaison sources so code for other platforms remains
   encapsulated and unaffected.
+- Apply const correctness by default: const local variables, const reference parameters, const member functions for accessors.
 - For every use of `std::memory_order`, add a nearby comment explaining why that ordering is required.
 - After changing C/C++ code, run `python Tools/format.py --files=staged`
   to apply `clang-format`, then `python Tools/format.py --files=staged -error`
@@ -172,12 +173,8 @@ The pipe accepts one command per line. Commands are queued and executed on the m
 The following agents are available for specialized tasks. Each is defined in `agents/`.
 
 ### Core Development
-- `invoke-code-reviewer` — C++ code review for bugs, UB, style, and modern C++23 improvements
-- `invoke-const-agent` — Fixes const correctness issues across C++ code
-- `invoke-format-agent` — Formats C++ files using clang-format with project rules
+- `invoke-code-reviewer` — C++ code review for bugs, UB, style, portability, and modern C++23 improvements
 - `invoke-lint-agent` — Runs clang-tidy for static analysis and bug detection
-- `invoke-style-agent` — Code formatting/linting expert, maintains format.py and tidy.py
-- `invoke-python-reviewer` — Python code review for bugs, style, and modern Python 3.12+ patterns
 - `invoke-include-analyzer` — IWYU analysis, circular include detection, PCH optimization
 
 ### Architecture & Design
@@ -192,11 +189,9 @@ The following agents are available for specialized tasks. Each is defined in `ag
 ### Platform
 - `invoke-linux-agent` — Linux platform C++ development, POSIX APIs, and liaison modules
 - `invoke-windows-agent` — Windows platform C++ development, Win32 APIs, and liaison modules
-- `invoke-portability-agent` — Cross-platform portability scanning and convention enforcement
 
 ### Testing & Debugging
-- `invoke-test-author` — Sets up new unit tests using the Trials test framework
-- `invoke-test-engineer` — Test strategy, coverage, debugging failing tests
+- `invoke-test-engineer` — Test setup, strategy, coverage, debugging failing tests
 - `invoke-debugger-agent` — GDB/LLDB workflows, breakpoints, core dump analysis
 - `invoke-memory-agent` — Memory leak detection, ASan/MSan/LSan, Valgrind
 
@@ -224,6 +219,7 @@ The `references/` directory contains quick-reference guides that agents can cons
 - `modern-python.md` — Python 3.12+ features, pathlib, type hints, CLI patterns
 - `modern-vulkan.md` — Dynamic rendering, descriptor buffers, synchronization2, timeline semaphores
 - `cpp-portability.md` — Cross-platform pitfalls, fixed-width types, alignment, char signedness
+- `code-style.md` — Formatting stack, clang-format/clang-tidy configuration, tool architecture
 
 ## Permissions
 
