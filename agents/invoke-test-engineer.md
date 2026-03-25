@@ -59,90 +59,112 @@ ctest --test-dir build -N
 
 ### Step 1: Create the Test Source File
 
-Test files should be named `<Component>Trials.cpp` and placed in `Plugins/Trials/Source/`:
+Test files are named `<Component>Trials.cpp` and placed in the module's `Trials/` directory. They are discovered automatically via glob — no CMake registration needed.
 
 ```cpp
-// Plugins/Trials/Source/MyComponentTrials.cpp
+// Modules/Core/Engine/Trials/MyComponentTrials.cpp
 
-#include "Trials/TestFramework.h"  // Include test framework
-#include "MyComponent/MyComponent.h"  // Include code under test
+#include "Trials.h"
+import Phoenix;
 
-namespace MyComponentTrials
+using namespace Trials;
+
+UNIT_TRIAL("MyComponent", "DefaultConstructionIsValid")
 {
+	MyComponent Component;
+	REQUIRES(Component.IsValid(), "Default constructed component should be valid");
+}
 
-// Test fixture for shared setup (optional)
-class MyComponentFixture
+UNIT_TRIAL("MyComponent", "ProcessReturnsExpectedValue")
 {
-public:
+	MyComponent Component;
+	const auto Result = Component.Process(42);
+
+	if (!Require(Result.has_value(), "Process should succeed"))
+		return;
+	Equal(*Result, 42, "Process should return input value");
+}
+```
+
+### Step 2: Fixture-Based Tests (Optional)
+
+```cpp
+struct MyComponentFixture
+{
+	MyComponent Component;
+
 	void SetUp()
 	{
-		// Initialize test resources
-		m_Component = CreateComponent();
+		Component = CreateTestComponent();
 	}
 
 	void TearDown()
 	{
-		// Clean up test resources
-		DestroyComponent(m_Component);
+		// cleanup if needed
 	}
-
-protected:
-	MyComponent* m_Component = nullptr;
 };
 
-// Basic test case
-void TestMyComponent_BasicOperation_Succeeds()
+UNIT_TRIAL_F(MyComponentFixture, "MyComponent", "FixtureValueIsInitialized")
 {
-	// Arrange
-	MyComponent component;
-
-	// Act
-	auto result = component.DoSomething();
-
-	// Assert
-	ASSERT_TRUE(result.IsSuccess());
-	ASSERT_EQ(result.GetValue(), 42);
+	REQUIRES(Fixture.Component.IsValid(), "Fixture should provide valid component");
 }
-
-// Test case with fixture
-void TestMyComponent_WithFixture_WorksCorrectly(MyComponentFixture& fixture)
-{
-	// Arrange - fixture.m_Component already set up
-
-	// Act
-	auto result = fixture.m_Component->Process();
-
-	// Assert
-	ASSERT_TRUE(result.IsValid());
-}
-
-}  // namespace MyComponentTrials
-```
-
-### Step 2: Register with CMake
-
-Add the test file to `Plugins/Trials/CMakeLists.txt`:
-
-```cmake
-# In Plugins/Trials/CMakeLists.txt
-target_sources(Trials PRIVATE
-	Source/ExistingTrials.cpp
-	Source/MyComponentTrials.cpp  # Add new test file
-)
 ```
 
 ### Step 3: Build and Run
 
 ```bash
-# Rebuild
+# Rebuild (test files are globbed automatically)
 cmake --build build --config Release --parallel
 
-# Run tests
+# Run all tests
 ctest --test-dir build -C Release --output-on-failure
 
-# Or run specific test executable
-./build/Plugins/Trials/Module_ModuleTrials
+# Run tests for a specific module
+ctest --test-dir build -C Release -R "Engine"
 ```
+
+### Assertion API
+
+All template assertions return `bool` and auto-format failure messages with actual/expected values.
+
+**Hard assertions — stop test on failure (return early):**
+
+| Function | Behavior |
+|----------|----------|
+| `REQUIRES(condition, message)` | Macro — stops test if condition is false |
+| `REQUIRES_NOT(condition, message)` | Macro — stops test if condition is true |
+| `Require(condition, message)` | Function form of REQUIRES (returns bool) |
+| `RequireNot(condition, message)` | Function form of REQUIRES_NOT (returns bool) |
+| `Equal(actual, expected, message)` | Equality check |
+| `NotEqual(actual, expected, message)` | Inequality check |
+| `Less(actual, expected, message)` | Less-than check |
+| `LessOrEqual(actual, expected, message)` | Less-or-equal check |
+| `Greater(actual, expected, message)` | Greater-than check |
+| `GreaterOrEqual(actual, expected, message)` | Greater-or-equal check |
+| `NearlyEqual(actual, expected, epsilon, message)` | Floating-point comparison |
+| `Contains(str, substr, message)` | Substring check |
+| `StartsWith(str, prefix, message)` | String prefix check |
+| `EndsWith(str, suffix, message)` | String suffix check |
+
+**Soft assertions — record failure but continue execution:**
+
+| Function | Behavior |
+|----------|----------|
+| `Verify(condition, message)` | Soft condition check |
+| `VerifyNot(condition, message)` | Soft negated condition check |
+| `VerifyEqual(actual, expected, message)` | Soft equality check |
+| `VerifyNotEqual(actual, expected, message)` | Soft inequality check |
+| `VerifyLess(actual, expected, message)` | Soft less-than check |
+| `VerifyGreater(actual, expected, message)` | Soft greater-than check |
+| `VerifyNearlyEqual(actual, expected, epsilon, message)` | Soft floating-point comparison |
+| `REQUIRE_NO_FAILURES()` | Macro — stops test if any Verify calls failed |
+
+**Skip:**
+
+| Function | Behavior |
+|----------|----------|
+| `SKIP_TRIAL("reason")` | Skip test unconditionally |
+| `SKIP_TRIAL_IF(condition, "reason")` | Skip test conditionally |
 
 ## Test Design Patterns
 

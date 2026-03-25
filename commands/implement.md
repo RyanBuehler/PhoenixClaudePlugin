@@ -113,6 +113,8 @@ If this challenge is complex (multiple modules, many affected files, or extensiv
 
 Enter plan mode, create an implementation plan, then execute it. Follow the project's normal development workflow — write code, follow conventions from CLAUDE.md.
 
+Implementation must include unit tests for all new public interfaces and non-trivial logic. Place test files in `<Module>/Trials/<Component>Trials.cpp` — they are discovered automatically via glob, no CMake registration needed. Use `UNIT_TRIAL("Category", "TestName")` for tests and `UNIT_TRIAL_F(Fixture, "Category", "TestName")` for fixture-based tests. Use the Trials assertion API (`REQUIRES`, `Equal`, `Verify`, etc.), not `ASSERT_*` macros. Tests are not optional — code without test coverage does not pass review.
+
 ## 8. Verification Gate
 
 All verification must pass before proceeding:
