@@ -113,7 +113,22 @@ If this challenge is complex (multiple modules, many affected files, or extensiv
 
 Enter plan mode, create an implementation plan, then execute it. Follow the project's normal development workflow — write code, follow conventions from CLAUDE.md.
 
-Implementation must include unit tests for all new public interfaces and non-trivial logic. Place test files in `<Module>/Trials/<Component>Trials.cpp` — they are discovered automatically via glob, no CMake registration needed. Use `UNIT_TRIAL("Category", "TestName")` for tests and `UNIT_TRIAL_F(Fixture, "Category", "TestName")` for fixture-based tests. Use the Trials assertion API (`REQUIRES`, `Equal`, `Verify`, etc.), not `ASSERT_*` macros. Tests are not optional — code without test coverage does not pass review.
+### Unit Test Coverage
+
+After implementing the feature code, evaluate whether unit tests are needed. Tests are required when the implementation introduces:
+
+- New public interfaces (classes, functions, or API surface that other code will call)
+- Non-trivial logic (algorithms, state machines, parsing, validation, calculations)
+- Behavior changes to existing logic that alter observable outcomes
+
+Tests are NOT required for:
+
+- Build system or CMake-only changes
+- Configuration file changes (JSON, cfg)
+- Pure wiring or delegation (forwarding calls to already-tested functions)
+- Platform-specific code that can only be tested on the target platform's CI
+
+When tests are applicable, launch `invoke-test-engineer` as a subagent to write them. Provide it with the implementation diff and the module context so it can place tests correctly and follow Trials conventions.
 
 ## 8. Verification Gate
 
@@ -136,6 +151,8 @@ Before committing, systematically evaluate each acceptance criterion from the ch
    - **Unverifiable?** If the criterion cannot be verified mechanically (e.g., "feels responsive"), flag it for human review.
 3. If any criterion is clearly **unmet**, fix the implementation and re-run `/phoe:verify` before continuing.
 4. List any criteria flagged as **unverifiable** — these will be included in the report for the user.
+
+5. **Test coverage check** — if the implementation introduced testable logic (per the criteria in Step 7), verify that corresponding tests exist and pass. If tests were expected but missing, go back and add them before continuing.
 
 Do not proceed to code review until all mechanically-verifiable criteria are met.
 
@@ -174,6 +191,7 @@ If the challenge belongs to a saga, show updated saga progress:
 
 Tell the user:
 - What was implemented
+- Tests added (list test names) or why tests were not applicable
 - Verification results (all passing)
 - Branch name: `challenge/<label>`
 - Saga progress (if applicable)
