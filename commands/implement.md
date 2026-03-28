@@ -52,8 +52,8 @@ If this fails, build it from source with `/phoe:build` and copy the binary to th
 
 1. Read the handoff document.
 2. Display: "Resuming from checkpoint — here's where we left off:" followed by the handoff summary.
-3. Skip Step 6 (Explore and Understand) — the handoff already contains the exploration results.
-4. Proceed to Step 7 (Plan and Implement), using the handoff's "remaining work" as the starting point.
+3. Skip Step 7 (Explore and Understand) — the handoff already contains the exploration results.
+4. Proceed to Step 8 (Plan and Implement), using the handoff's "remaining work" as the starting point.
 5. Delete the handoff file once implementation is complete and all verification passes.
 
 ## 3. Show Context
@@ -68,19 +68,39 @@ Display the challenge details: title, description, acceptance criteria, and veri
 
 Show the saga name, where this challenge sits in the ordering, and overall saga progress. This gives full feature context for the implementation.
 
-## 4. Create a Dedicated Branch
+## 4. Conditional Remote Sync
+
+Fetch remote main to check for recent changes:
+
+```bash
+git fetch origin main
+git log main..origin/main --oneline
+```
+
+If there are new commits on remote main, review the changed files and commit messages. Evaluate whether the changes overlap with the current challenge's affected files, tags, or description.
+
+- **If relevant** — fast-forward main before branching:
+
+```bash
+git checkout main
+git pull --ff-only origin main
+```
+
+- **If unrelated** — skip the pull and branch from current local main. No sync needed.
+
+## 5. Create a Dedicated Branch
 
 ```bash
 git checkout -b challenge/<label>
 ```
 
-## 5. Move to In Progress
+## 6. Move to In Progress
 
 ```bash
 ./Crucible challenge move --label=<LABEL> in_progress
 ```
 
-## 6. Explore and Understand
+## 7. Explore and Understand
 
 Read the challenge's affected files, references, and tags. Explore the codebase to understand what needs to change. If the challenge belongs to a saga, review completed sibling challenges for patterns and context.
 
@@ -109,7 +129,7 @@ If this challenge is complex (multiple modules, many affected files, or extensiv
 
 **When to checkpoint:** Use judgment. Natural breakpoints include: after exploration but before implementation, or after implementing half the changes when the remaining work is still substantial. The goal is to avoid coherence loss on large tasks.
 
-## 7. Plan and Implement
+## 8. Plan and Implement
 
 Enter plan mode, create an implementation plan, then execute it. Follow the project's normal development workflow — write code, follow conventions from CLAUDE.md.
 
@@ -130,7 +150,7 @@ Tests are NOT required for:
 
 When tests are applicable, launch `invoke-test-engineer` as a subagent to write them. Provide it with the implementation diff and the module context so it can place tests correctly and follow Trials conventions.
 
-## 8. Verification Gate
+## 9. Verification Gate
 
 All verification must pass before proceeding:
 
@@ -140,7 +160,7 @@ All verification must pass before proceeding:
 
 **c. If any verification fails** — fix the issue and re-verify. Do not proceed until everything passes.
 
-## 9. Acceptance Criteria Evaluation
+## 10. Acceptance Criteria Evaluation
 
 Before committing, systematically evaluate each acceptance criterion from the challenge JSON. The model that wrote the code must not self-approve without structured evaluation.
 
@@ -152,11 +172,11 @@ Before committing, systematically evaluate each acceptance criterion from the ch
 3. If any criterion is clearly **unmet**, fix the implementation and re-run `/phoe:verify` before continuing.
 4. List any criteria flagged as **unverifiable** — these will be included in the report for the user.
 
-5. **Test coverage check** — if the implementation introduced testable logic (per the criteria in Step 7), verify that corresponding tests exist and pass. If tests were expected but missing, go back and add them before continuing.
+5. **Test coverage check** — if the implementation introduced testable logic (per the criteria in Step 8), verify that corresponding tests exist and pass. If tests were expected but missing, go back and add them before continuing.
 
 Do not proceed to code review until all mechanically-verifiable criteria are met.
 
-## 10. Automated Code Review
+## 11. Automated Code Review
 
 Invoke the code reviewer as a **separate agent** to evaluate the implementation diff. The agent that wrote the code must not be the only judge.
 
@@ -166,16 +186,16 @@ Invoke the code reviewer as a **separate agent** to evaluate the implementation 
 3. **Gate on zero CRITICAL findings.** If any CRITICAL issues are found:
    - Fix each CRITICAL issue
    - Re-run `/phoe:verify`
-   - Re-run acceptance criteria evaluation (Step 9)
+   - Re-run acceptance criteria evaluation (Step 10)
    - Re-invoke the code reviewer (repeat this step)
 4. **WARNING findings** are included in the final report for user review but do not block the commit.
 5. **SUGGESTION and NOTE findings** are omitted from the report unless particularly insightful.
 
-## 11. Commit Changes
+## 12. Commit Changes
 
 Commit all changes on the challenge branch with a descriptive message referencing the challenge label.
 
-## 12. Report
+## 13. Report
 
 Move the challenge to review status:
 
