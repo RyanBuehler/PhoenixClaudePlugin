@@ -48,17 +48,19 @@ The project does not use `#ifdef` for feature/module gating. Modularity is drive
 - Applications declare their module needs in `*Description.json` `requires_module` arrays
 - `SetupModule.cmake` recursively resolves dependencies from domain directories
 - Missing dependencies cause graceful skip, not fatal errors
-- `APPLICATION` cache variable selects which app to build: `Editor`, `Game`, or `Minimal`
+- `APPLICATION` cache variable selects which app to build: `Editor`, `Game`, `Vigil`, `Crucible`, `Forge`, or `Minimal`
 
 ## CI
 
 The Linux CI workflow (`.github/workflows/ci.yml`) runs three sequential jobs on PR:
 
 1. **Linux: Modularity** — Validates Engine builds with only Core (Minimal application)
-2. **Linux: Build & Test (Incremental)** — Full build with ccache, runs BASE_TRIAL tests
+2. **Linux: Build & Test (Incremental)** — Builds all 5 apps (Editor, Vigil, Game, Crucible, Forge) with ccache. Runs `CORE_TRIAL|PLUGIN_TRIAL|APP_TRIAL` from Editor (most module coverage), then `APP_TRIAL` only from Vigil, Crucible, and Forge (app-specific tests). Game is build-only (all its tests are covered by Editor).
 3. **Linux: Format & Lint** — Checks formatting and runs clang-tidy
 
 Jobs run in order; failure in any job skips subsequent jobs.
+
+Test labels are derived from `MODULE_CATEGORY`, a target property set automatically from the module's directory: `Applications/` → APP_TRIAL, `Plugins/` → PLUGIN_TRIAL, `Modules/` → CORE_TRIAL. Benchmarks are skipped at runtime by default — they use `BENCHMARK_TRIAL` in the Trials framework and run only when `--type benchmark` is passed to the test executable.
 
 ## Code Guidelines
 
@@ -141,7 +143,7 @@ For all code style and design practices, follow `Docs/StyleGuide.md`.
         cmake --build build --config Release --parallel
         python Tools/format.py --files=staged
         python Tools/format.py --files=staged -error
-        ctest --test-dir build -C Release --output-on-failure
+        ctest --test-dir build -C Release --output-on-failure -L "CORE_TRIAL|PLUGIN_TRIAL|APP_TRIAL"
 - When presenting solutions, always ensure the project builds cleanly in Release
   and Headless configurations, and run all appropriate tests beforehand.
 

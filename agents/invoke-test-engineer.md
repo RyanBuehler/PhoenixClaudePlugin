@@ -23,14 +23,13 @@ You are a world-class SDET with deep expertise in C++ testing, test architecture
 Plugins/
 └── Trials/                    # Test framework plugin
     ├── CMakeLists.txt
-    ├── Include/
-    │   └── Trials/            # Test framework headers
     └── Source/
-        └── *Trials.cpp        # Test source files
+        ├── Public/            # Trials.h, TrialHelpers.h, PerformanceHelpers.h
+        └── Private/           # Trials.cpp
 
 Modules/
 └── */
-    └── Tests/                 # Module-specific tests (if separate)
+    └── Trials/                # Module-specific tests (*Trials.cpp, auto-discovered)
 ```
 
 ### Running Tests
@@ -39,11 +38,11 @@ Modules/
 cmake -S . -B build -DTESTS=ON -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release --parallel
 
-# Run all tests
-ctest --test-dir build -C Release --output-on-failure
+# Run all tests (unit trials only — benchmarks skipped by default)
+ctest --test-dir build -C Release --output-on-failure -L "CORE_TRIAL|PLUGIN_TRIAL|APP_TRIAL"
 
 # Run specific test executable
-./build/Plugins/Trials/Engine_EngineTrials
+./build/bin/Engine_EngineTrials
 
 # Run with verbose output
 ctest --test-dir build -C Release --output-on-failure -V
@@ -110,14 +109,53 @@ UNIT_TRIAL_F(MyComponentFixture, "MyComponent", "FixtureValueIsInitialized")
 }
 ```
 
-### Step 3: Build and Run
+### Step 3: Benchmark Trials (Optional)
+
+For performance benchmarks, use `BENCHMARK_TRIAL` instead of `UNIT_TRIAL`. Benchmarks live alongside unit trials in the same `Trials/` directory and are auto-discovered the same way.
+
+```cpp
+// Modules/Core/Engine/Trials/MyComponentBenchmarkTrials.cpp
+
+#include "Trials.h"
+import Phoenix;
+
+BENCHMARK_TRIAL("MyComponent", "ProcessThroughput")
+{
+	MyComponent Component;           // setup — runs each pass, not per-iteration
+
+	BENCHMARK_ITERATE                // measured — runs N times (auto-calibrated)
+	{
+		Component.Process(42);
+	}
+}
+```
+
+Benchmarks use a separate `BenchmarkRegistry` — they don't mix with unit tests. The framework handles:
+- **Warmup** — 3 iterations, discarded
+- **Calibration** — times 1 iteration, computes N to fill ~1 second
+- **Measurement** — runs N iterations, reports mean duration
+
+```bash
+# Run benchmarks for a specific executable
+./build/bin/Engine_MyComponentBenchmarkTrials --type benchmark
+
+# List all registered trials and benchmarks
+./build/bin/Engine_MyComponentBenchmarkTrials --list
+
+# Run both unit tests and benchmarks
+./build/bin/Engine_MyComponentBenchmarkTrials --type unit --type benchmark
+```
+
+Benchmarks are skipped by default (no `--type` flag = unit trials only). CI never runs benchmarks — they're for local performance analysis.
+
+### Step 4: Build and Run
 
 ```bash
 # Rebuild (test files are globbed automatically)
 cmake --build build --config Release --parallel
 
-# Run all tests
-ctest --test-dir build -C Release --output-on-failure
+# Run all unit tests
+ctest --test-dir build -C Release --output-on-failure -L "CORE_TRIAL|PLUGIN_TRIAL|APP_TRIAL"
 
 # Run tests for a specific module
 ctest --test-dir build -C Release -R "Engine"
@@ -514,7 +552,7 @@ ctest --test-dir build -R "TestName" --output-on-failure
 ctest --test-dir build -R "TestName" -V
 
 # Run test executable directly for more control
-./build/Plugins/Trials/Module_ModuleTrials --filter="TestName"
+./build/bin/Module_ModuleTrials --run "TestName"
 ```
 
 ### Add Diagnostic Output

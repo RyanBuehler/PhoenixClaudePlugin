@@ -186,134 +186,42 @@ heaptrack_print heaptrack.program.*.gz
 
 ## Benchmarking
 
-### Micro-Benchmarking Best Practices
+### Phoenix Trials Framework
+
+The project has a built-in `BENCHMARK_TRIAL` macro in the Trials framework. Use it instead of hand-rolling timing loops. The framework handles warmup, auto-calibrated iteration (~1s target), and formatted reporting.
+
 ```cpp
-#include <chrono>
+// Modules/Core/Engine/Trials/HashBenchmarkTrials.cpp
+#include "Trials.h"
+import Phoenix;
 
-// Good: Prevent dead code elimination
-template<typename T>
-void DoNotOptimize(T&& value)
+BENCHMARK_TRIAL("Engine.Hash", "WhipHash_1KB")
 {
-    asm volatile("" : : "r,m"(value) : "memory");
-}
+    auto data = GenerateTestData(1024);  // setup — runs each pass, not per-iteration
 
-// Good: Compiler barrier
-void ClobberMemory()
-{
-    asm volatile("" : : : "memory");
-}
-
-// Benchmark template
-template<typename Func>
-double BenchmarkNs(Func&& func, size_t iterations)
-{
-    // Warmup
-    for (size_t i = 0; i < iterations / 10; ++i)
+    BENCHMARK_ITERATE                    // measured — auto-calibrated N iterations
     {
-        func();
+        volatile auto hash = WhipHash::Hash(data.data(), data.size());
     }
-
-    auto start = std::chrono::high_resolution_clock::now();
-
-    for (size_t i = 0; i < iterations; ++i)
-    {
-        func();
-        ClobberMemory();
-    }
-
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
-
-    return static_cast<double>(duration.count()) / iterations;
 }
 ```
 
-### Benchmark Pitfalls to Avoid
-```cpp
-// BAD: Compiler optimizes away the work
-void BadBenchmark()
-{
-    for (int i = 0; i < 1000000; ++i)
-    {
-        int result = ExpensiveComputation(i);
-        // result is unused - compiler removes the computation!
-    }
-}
-
-// GOOD: Prevent optimization
-void GoodBenchmark()
-{
-    for (int i = 0; i < 1000000; ++i)
-    {
-        int result = ExpensiveComputation(i);
-        DoNotOptimize(result);  // Force computation to happen
-    }
-}
-
-// BAD: Including setup in timing
-void BadTiming()
-{
-    auto start = Clock::now();
-    std::vector<int> data = GenerateLargeData();  // Setup!
-    ProcessData(data);  // The actual work
-    auto end = Clock::now();
-}
-
-// GOOD: Separate setup from timing
-void GoodTiming()
-{
-    std::vector<int> data = GenerateLargeData();  // Setup outside timing
-
-    auto start = Clock::now();
-    ProcessData(data);  // Only time the actual work
-    auto end = Clock::now();
-}
+Run benchmarks with `--type benchmark`:
+```bash
+./build/bin/Engine_HashBenchmarkTrials --type benchmark
+# Output:
+#   [BENCH] Engine.Hash.WhipHash_1KB: 1,247,000 iterations
+#           mean: 802 ns | total: 1.00 s
 ```
 
-### Statistical Significance
-```cpp
-struct BenchmarkResult
-{
-    double Mean;
-    double StdDev;
-    double Min;
-    double Max;
-    double Median;
-    size_t Samples;
-};
+Benchmarks are skipped by default in CI and normal test runs. They only execute when explicitly requested.
 
-BenchmarkResult RunBenchmark(auto&& func, size_t samples = 100)
-{
-    std::vector<double> times;
-    times.reserve(samples);
+### Benchmark Pitfalls
 
-    for (size_t i = 0; i < samples; ++i)
-    {
-        times.push_back(MeasureOnce(func));
-    }
-
-    std::sort(times.begin(), times.end());
-
-    double sum = std::accumulate(times.begin(), times.end(), 0.0);
-    double mean = sum / samples;
-
-    double sqSum = 0;
-    for (double t : times)
-    {
-        sqSum += (t - mean) * (t - mean);
-    }
-    double stdDev = std::sqrt(sqSum / samples);
-
-    return {
-        .Mean = mean,
-        .StdDev = stdDev,
-        .Min = times.front(),
-        .Max = times.back(),
-        .Median = times[samples / 2],
-        .Samples = samples
-    };
-}
-```
+- **Dead code elimination** — ensure the result of computed work is used (assign to `volatile`, store to a sink, or pass through a function the compiler can't see through)
+- **Setup in the measured section** — place allocation and initialization before `BENCHMARK_ITERATE`, not inside it
+- **Environment noise** — close other applications, disable frequency scaling if possible, run multiple times to check for variance
+- **Comparing across runs** — results depend heavily on the machine state; compare within the same run (e.g., two BENCHMARK_TRIAL entries side by side) rather than across sessions
 
 ## Optimization Techniques
 
