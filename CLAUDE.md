@@ -132,10 +132,11 @@ For all code style and design practices, follow `Docs/StyleGuide.md`.
 
 ## Build & Test Verification
 
-- Do NOT run builds or tests after every code change. Only run the full
-  verification sequence **immediately before committing** (i.e., when the user
-  asks to commit or you are about to create a commit). This overrides any
-  TDD or verification-before-completion guidance from other skills.
+- Do NOT run builds or tests after every code change. Run the full
+  verification sequence (`/phoe:verify`) **before committing** as part of the
+  development workflow. A pre-push hook enforces that verification has passed
+  before any push is allowed. This overrides any TDD or
+  verification-before-completion guidance from other skills.
 - To verify compilation and run all tests locally, mirror the CI pipeline.
 - It is mandatory to configure the build with tests enabled and execute the
   full suite before committing:

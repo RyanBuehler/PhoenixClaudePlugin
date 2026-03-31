@@ -1,5 +1,5 @@
 ---
-description: Full CI-mirror verification sequence — configure, build, format check, lint, and test via Forge. The mandatory pre-commit check.
+description: Full CI-mirror verification sequence — configure, build, format check, lint, and test via Forge. The mandatory pre-push check.
 ---
 
 Run the full CI-mirror verification sequence. Stop on the first failure.
@@ -24,13 +24,13 @@ Run `/phoe:test` — run the test suite (via Forge or ctest fallback).
 
 ## 5. Write Verification Marker
 
-If all four steps pass, write the marker so the pre-commit hook allows the commit:
+If all four steps pass, write the marker so the pre-push hook allows the push:
 
 ```bash
 mkdir -p ~/.claude/tmp && date +%s > ~/.claude/tmp/verification-passed
 ```
 
-This file is consumed (deleted) by the pre-commit hook after a successful commit.
+This file is consumed (deleted) by the pre-push hook after a successful push.
 
 ## 6. Report
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PreToolUse hook: blocks git commit unless /phoe:verify has passed recently."""
+"""PreToolUse hook: blocks git push unless /phoe:verify has passed recently."""
 
 import sys
 import json
@@ -12,25 +12,25 @@ BYPASS = os.path.join(HOOK_DIR, "verification-bypass")
 MAX_AGE_SECONDS = 1800  # 30 minutes
 
 REMINDER = (
-	"Run /phoe:verify before committing. It runs the full verification sequence:\n"
+	"Run /phoe:verify before pushing. It runs the full verification sequence:\n"
 	"  1. Build (cmake)\n"
 	"  2. Format (clang-format)\n"
 	"  3. Lint (clang-tidy)\n"
 	"  4. Test (ctest)\n"
 	"\n"
-	"Once all pass, /phoe:verify writes a marker file that allows the commit.\n"
+	"Once all pass, /phoe:verify writes a marker file that allows the push.\n"
 	"\n"
-	"If this is NOT a Phoenix C++ commit (e.g., docs, config, or a different repo),\n"
+	"If this is NOT a Phoenix C++ push (e.g., docs, config, or a different repo),\n"
 	"ask the user if verification can be skipped. If they confirm, run:\n"
 	"  mkdir -p ~/.claude/tmp && touch ~/.claude/tmp/verification-bypass\n"
-	"Then retry the commit."
+	"Then retry the push."
 )
 
 def main():
 	input_data = json.load(sys.stdin)
 	command = input_data.get("tool_input", {}).get("command", "")
 
-	if "git commit" not in command:
+	if "git push" not in command:
 		print("{}")
 		sys.exit(0)
 

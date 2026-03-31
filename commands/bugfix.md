@@ -63,7 +63,7 @@ git checkout -b bug/<label>
 ## 5. Move to In Progress
 
 ```bash
-./Crucible bug move --label=<LABEL> in_progress
+./Crucible bug move --label=<LABEL> implementing
 ```
 
 ## 6. Reproduce

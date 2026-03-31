@@ -36,11 +36,22 @@ If this fails, build it from source with `/phoe:build` and copy the binary to th
 ```
 
 3. Pick the best challenge using this priority order:
-   - **Saga ordering first** — if a challenge belongs to a saga, only pick it if all earlier challenges in that saga are done, canceled, or in review. Never skip ahead in a saga's ordering.
+   - **Saga ordering first** — if a challenge belongs to a saga, only pick it if all earlier challenges in that saga are `merged` or `canceled`. Never skip ahead in a saga's ordering.
+   - **Blocked check** — if a saga predecessor is in `review` or `implementing` (not yet merged), the next challenge cannot proceed. Move it to `blocked` and stop:
+     ```bash
+     ./Crucible challenge block <NEXT_ID> --blocked_by=<PREDECESSOR_ID> --reason="Awaiting merge of #<PREDECESSOR_ID> on branch challenge/<predecessor-label>"
+     ```
+     Tell the user which challenge is blocked and why, then try the next eligible challenge. If no unblocked challenges remain, stop.
    - **Priority second** — among eligible challenges, pick the highest priority (critical > high > medium > low).
    - **Lowest ID breaks ties** — if still tied, pick the lowest ID.
 
-4. If no eligible todo challenges exist, tell the user and stop.
+4. Also check `blocked` challenges: for each, verify if the blocker is now `merged`. If so, auto-unblock:
+   ```bash
+   ./Crucible challenge unblock <ID> todo
+   ```
+   Then include the unblocked challenge in the candidate pool.
+
+5. If no eligible todo challenges exist, tell the user and stop.
 
 **If argument is a label**, fetch by label:
 
@@ -94,10 +105,10 @@ git pull --ff-only origin main
 git checkout -b challenge/<label>
 ```
 
-## 6. Move to In Progress
+## 6. Move to Implementing
 
 ```bash
-./Crucible challenge move --label=<LABEL> in_progress
+./Crucible challenge move --label=<LABEL> implementing
 ```
 
 ## 7. Explore and Understand
@@ -215,10 +226,10 @@ Tell the user:
 - Verification results (all passing)
 - Branch name: `challenge/<label>`
 - Saga progress (if applicable)
-- The challenge is now in `review` status — user inspects before marking done
+- The challenge is now in `review` status — user inspects before marking merged
 
-**Do not merge or mark as done.** The user will review and decide whether to merge, request changes, or mark done.
+**Do not merge or mark as merged.** The user will review and decide whether to merge, request changes, or mark merged.
 
 Use `/phoe:plan` to create new challenges or extend an existing saga.
 
-> **Note:** When the user moves a challenge to `done`, it is automatically archived to `.crucible/archive/`. If work needs to be revisited, use `./Crucible challenge unarchive --label=<LABEL>` to restore it to `todo` status.
+> **Note:** When the user moves a challenge to `merged`, it is automatically archived to `.crucible/archive/`. If work needs to be revisited, use `./Crucible challenge unarchive --label=<LABEL>` to restore it to `todo` status.
