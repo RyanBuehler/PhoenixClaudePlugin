@@ -57,8 +57,7 @@ git branch -vv
 
 Look for branches marked `[gone]` in the output. If any exist:
 - List them for the user with their last commit message
-- Ask for confirmation before deleting
-- Delete confirmed branches with `git branch -D <branch>`
+- Delete them with `git branch -D <branch>` — no confirmation needed since their remote is already gone (typically merged via PR).
 
 Also list any remaining local branches (excluding `main`) that still have a valid remote, so the user is aware of them — but do **not** delete these without being asked.
 
