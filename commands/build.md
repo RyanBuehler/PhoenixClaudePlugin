@@ -8,9 +8,9 @@ Build the project, using Forge if available.
 
 Check if the Forge binary exists. Search these paths in order and use the first match:
 
-1. `build/bin/PhoenixForge`
-2. `build-editor-debug/bin/PhoenixForge`
-3. `build-editor-release/bin/PhoenixForge`
+1. `build/bin/forge`
+2. `build-editor-debug/bin/forge`
+3. `build-editor-release/bin/forge`
 
 ## 2. Select Profile
 

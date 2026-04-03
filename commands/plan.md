@@ -13,19 +13,19 @@ Plan a feature from idea to actionable Crucible Challenges grouped under a Saga.
 Ensure Crucible is initialized:
 
 ```bash
-./Crucible status
+./crucible status
 ```
 
 If this fails, ask the user for the project name and initialize:
 
 ```bash
-./Crucible init --project="<NAME>"
+./crucible init --project="<NAME>"
 ```
 
 If a `<saga_label>` argument was provided, verify it exists:
 
 ```bash
-./Crucible saga show --label=<SAGA_LABEL>
+./crucible saga show --label=<SAGA_LABEL>
 ```
 
 If the saga is not found, stop and tell the user.
@@ -101,29 +101,29 @@ After approval, create the challenges and saga using the CLI.
 **Create each challenge:**
 
 ```bash
-./Crucible challenge create --title="<TITLE>" --description="<DESC>" --priority="<PRIORITY>" --tags="<TAGS>" --acceptance-criteria="<CRITERION1>,<CRITERION2>" --verification="<DESC1>|<CMD1>,<DESC2>|<CMD2>" --affected-files="<FILE1>,<FILE2>" --references="<REF1>,<REF2>"
-./Crucible challenge move --label=<LABEL> todo
+./crucible challenge create --title="<TITLE>" --description="<DESC>" --priority="<PRIORITY>" --tags="<TAGS>" --acceptance-criteria="<CRITERION1>,<CRITERION2>" --verification="<DESC1>|<CMD1>,<DESC2>|<CMD2>" --affected-files="<FILE1>,<FILE2>" --references="<REF1>,<REF2>"
+./crucible challenge move --label=<LABEL> todo
 ```
 
 **Create a new saga** (if not extending):
 
 ```bash
-./Crucible saga create --title="<TITLE>" --description="<DESC>" --challenges="label1,label2,..." --label="<OPTIONAL_LABEL>"
+./crucible saga create --title="<TITLE>" --description="<DESC>" --challenges="label1,label2,..." --label="<OPTIONAL_LABEL>"
 ```
 
 **Extend an existing saga** (if `<saga_label>` was provided):
 
 ```bash
-./Crucible saga add <SAGA_LABEL> <CHALLENGE_LABEL>
+./crucible saga add <SAGA_LABEL> <CHALLENGE_LABEL>
 ```
 
 **Verify the result:**
 
 ```bash
-./Crucible saga show --label=<SAGA_LABEL>
+./crucible saga show --label=<SAGA_LABEL>
 ```
 
-If `./Crucible` is missing, build it from source with `/phoe:build` and copy the binary to the project root.
+If `./crucible` is missing, build with `/phoe:build` (using `-DAPPLICATION=Crucible`), then copy the binary from `build/bin/crucible` to the project root.
 
 ## 7. Report
 

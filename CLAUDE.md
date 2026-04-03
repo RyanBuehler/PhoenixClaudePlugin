@@ -167,7 +167,7 @@ Launch the engine with `--console-pipe=PATH` to enable external command injectio
 
 ```bash
 # Launch with pipe
-./cmake-build-release/bin/Phoenix --console-pipe=/tmp/phoenix-console.fifo
+./build/bin/editor --console-pipe=/tmp/phoenix-console.fifo
 
 # Send commands from another process
 echo "aurora.screenshot" > /tmp/phoenix-console.fifo
@@ -214,7 +214,7 @@ The following agents are available for specialized tasks. Each is defined in `ag
 Screenshots require a display server (X11 or Wayland). On headless CI, use `xvfb-run`:
 
 ```bash
-xvfb-run ./cmake-build-release/bin/Phoenix --aurora.screenshot.exit
+xvfb-run ./build/bin/editor --aurora.screenshot.exit
 ```
 
 ## Reference Documents

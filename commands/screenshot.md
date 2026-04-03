@@ -17,7 +17,7 @@ fi
 **If the engine is not running** (one-shot capture):
 
 ```bash
-./cmake-build-release/bin/Phoenix --aurora.screenshot.exit
+./build/bin/editor --aurora.screenshot.exit
 ```
 
 On headless systems, prefix with `xvfb-run`.

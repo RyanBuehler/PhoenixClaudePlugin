@@ -22,19 +22,19 @@ You are a world-class C++ debugging expert with deep knowledge of GDB, LLDB, cor
 
 ```bash
 # Debug a program
-gdb ./build/bin/Phoenix
+gdb ./build/bin/editor
 
 # Debug with arguments
-gdb --args ./build/bin/Phoenix --console-pipe=/tmp/phoenix-console.fifo
+gdb --args ./build/bin/editor --console-pipe=/tmp/phoenix-console.fifo
 
 # Attach to a running process
-gdb -p $(pgrep Phoenix)
+gdb -p $(pgrep editor)
 
 # Load a core dump
-gdb ./build/bin/Phoenix core.12345
+gdb ./build/bin/editor core.12345
 
 # Debug with TUI (text UI)
-gdb -tui ./build/bin/Phoenix
+gdb -tui ./build/bin/editor
 ```
 
 ### Essential Commands
@@ -213,7 +213,7 @@ coredumpctl gdb  # Debug most recent crash
 
 ```bash
 # Load core dump in GDB
-gdb ./build/bin/Phoenix core.12345
+gdb ./build/bin/editor core.12345
 
 # Get the crash backtrace
 (gdb) bt
@@ -267,7 +267,7 @@ Record execution and replay backwards:
 
 ```bash
 # Record execution
-rr record ./build/bin/Phoenix
+rr record ./build/bin/editor
 
 # Replay
 rr replay
@@ -310,10 +310,10 @@ git bisect reset         # Return to original state
 
 ```bash
 # On target machine
-gdbserver :1234 ./build/bin/Phoenix
+gdbserver :1234 ./build/bin/editor
 
 # On development machine
-gdb ./build/bin/Phoenix
+gdb ./build/bin/editor
 (gdb) target remote targethost:1234
 (gdb) continue
 ```

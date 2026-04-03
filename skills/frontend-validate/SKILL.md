@@ -31,7 +31,7 @@ echo "aurora.screenshot" > /tmp/phoenix-console.fifo
 Otherwise, one-shot capture:
 
 ```bash
-./build/bin/PhoenixEditor --aurora.screenshot.exit
+./build/bin/editor --aurora.screenshot.exit
 ```
 
 Read `Screenshots/.last-capture` to get the output path, then read the captured PNG.

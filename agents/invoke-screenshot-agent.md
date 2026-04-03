@@ -34,7 +34,7 @@ echo "aurora.screenshot" > /tmp/phoenix-console.fifo
 Launch the engine, capture a single screenshot after a 2-second stabilization delay, then shut down:
 
 ```bash
-./cmake-build-release/bin/Phoenix --aurora.screenshot.exit
+./build/bin/editor --aurora.screenshot.exit
 ```
 
 ## Polling for Output
@@ -70,7 +70,7 @@ The engine supports external command injection via a FIFO pipe:
 
 ```bash
 # Launch the engine with pipe support
-./cmake-build-release/bin/Phoenix --console-pipe=/tmp/phoenix-console.fifo
+./build/bin/editor --console-pipe=/tmp/phoenix-console.fifo
 
 # Send commands from another terminal
 echo "aurora.screenshot" > /tmp/phoenix-console.fifo
@@ -91,7 +91,7 @@ The pipe accepts one command per line. Commands are queued and executed on the m
 Screenshots require a display server (X11 or Wayland). On headless CI or servers, use `xvfb-run`:
 
 ```bash
-xvfb-run ./cmake-build-release/bin/Phoenix --aurora.screenshot.exit
+xvfb-run ./build/bin/editor --aurora.screenshot.exit
 ```
 
 ## Analysis Guidelines

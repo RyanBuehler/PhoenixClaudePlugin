@@ -14,10 +14,10 @@ Implement a Crucible Challenge end-to-end. Accepts a label or `next` to auto-pic
 Verify the Crucible binary exists:
 
 ```bash
-./Crucible status
+./crucible status
 ```
 
-If this fails, build it from source with `/phoe:build` and copy the binary to the project root.
+If `./crucible` is missing, build with `/phoe:build` (using `-DAPPLICATION=Crucible`), then copy the binary from `build/bin/crucible` to the project root.
 
 ## 2. Resolve the Challenge
 
@@ -26,20 +26,20 @@ If this fails, build it from source with `/phoe:build` and copy the binary to th
 1. List all sagas and their progress:
 
 ```bash
-./Crucible --json saga list
+./crucible --json saga list
 ```
 
 2. List all todo challenges:
 
 ```bash
-./Crucible --json challenge list --status=todo
+./crucible --json challenge list --status=todo
 ```
 
 3. Pick the best challenge using this priority order:
    - **Saga ordering first** — if a challenge belongs to a saga, only pick it if all earlier challenges in that saga are `merged` or `canceled`. Never skip ahead in a saga's ordering.
    - **Blocked check** — if a saga predecessor is in `review` or `implementing` (not yet merged), the next challenge cannot proceed. Move it to `blocked` and stop:
      ```bash
-     ./Crucible challenge block <NEXT_ID> --blocked_by=<PREDECESSOR_ID> --reason="Awaiting merge of #<PREDECESSOR_ID> on branch challenge/<predecessor-label>"
+     ./crucible challenge block <NEXT_ID> --blocked_by=<PREDECESSOR_ID> --reason="Awaiting merge of #<PREDECESSOR_ID> on branch challenge/<predecessor-label>"
      ```
      Tell the user which challenge is blocked and why, then try the next eligible challenge. If no unblocked challenges remain, stop.
    - **Priority second** — among eligible challenges, pick the highest priority (critical > high > medium > low).
@@ -47,7 +47,7 @@ If this fails, build it from source with `/phoe:build` and copy the binary to th
 
 4. Also check `blocked` challenges: for each, verify if the blocker is now `merged`. If so, auto-unblock:
    ```bash
-   ./Crucible challenge unblock <ID> todo
+   ./crucible challenge unblock <ID> todo
    ```
    Then include the unblocked challenge in the candidate pool.
 
@@ -56,7 +56,7 @@ If this fails, build it from source with `/phoe:build` and copy the binary to th
 **If argument is a label**, fetch by label:
 
 ```bash
-./Crucible challenge show --label=<LABEL>
+./crucible challenge show --label=<LABEL>
 ```
 
 **Check for existing handoff:** Look for `.crucible/handoffs/<LABEL>-checkpoint.md`. If found:
@@ -74,7 +74,7 @@ Display the challenge details: title, description, acceptance criteria, and veri
 **Check for saga membership** — search the saga list for the resolved challenge ID. If it belongs to a saga:
 
 ```bash
-./Crucible saga show --label=<SAGA_LABEL>
+./crucible saga show --label=<SAGA_LABEL>
 ```
 
 Show the saga name, where this challenge sits in the ordering, and overall saga progress. This gives full feature context for the implementation.
@@ -108,7 +108,7 @@ git checkout -b challenge/<label>
 ## 6. Move to Implementing
 
 ```bash
-./Crucible challenge move --label=<LABEL> implementing
+./crucible challenge move --label=<LABEL> implementing
 ```
 
 ## 7. Explore and Understand
@@ -175,7 +175,7 @@ All verification must pass before proceeding:
 
 Before committing, systematically evaluate each acceptance criterion from the challenge JSON. The model that wrote the code must not self-approve without structured evaluation.
 
-1. Retrieve the challenge's acceptance criteria: `./Crucible challenge show --label=<LABEL>`
+1. Retrieve the challenge's acceptance criteria: `./crucible challenge show --label=<LABEL>`
 2. For **each** criterion, answer explicitly:
    - **Met?** Yes / No / Partially
    - **Evidence:** What in the diff proves this? (file:line, test name, or command output)
@@ -211,13 +211,13 @@ Commit all changes on the challenge branch with a descriptive message referencin
 Move the challenge to review status:
 
 ```bash
-./Crucible challenge move --label=<LABEL> review
+./crucible challenge move --label=<LABEL> review
 ```
 
 If the challenge belongs to a saga, show updated saga progress:
 
 ```bash
-./Crucible saga show --label=<SAGA_LABEL>
+./crucible saga show --label=<SAGA_LABEL>
 ```
 
 Tell the user:
@@ -232,4 +232,4 @@ Tell the user:
 
 Use `/phoe:plan` to create new challenges or extend an existing saga.
 
-> **Note:** When the user moves a challenge to `merged`, it is automatically archived to `.crucible/archive/`. If work needs to be revisited, use `./Crucible challenge unarchive --label=<LABEL>` to restore it to `todo` status.
+> **Note:** When the user moves a challenge to `merged`, it is automatically archived to `.crucible/archive/`. If work needs to be revisited, use `./crucible challenge unarchive --label=<LABEL>` to restore it to `todo` status.

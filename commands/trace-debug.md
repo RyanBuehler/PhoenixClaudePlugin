@@ -40,7 +40,7 @@ Run the engine or test to trigger the scenario:
 
 ```bash
 # For engine scenarios:
-./build/bin/PhoenixEditor
+./build/bin/editor
 
 # For test scenarios:
 ctest --test-dir build -C Release -R "TestName" --output-on-failure

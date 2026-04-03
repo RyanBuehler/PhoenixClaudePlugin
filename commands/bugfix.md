@@ -14,10 +14,10 @@ Fix a Crucible Bug end-to-end. Accepts a label or `next` to auto-pick the highes
 Verify the Crucible binary exists:
 
 ```bash
-./Crucible status
+./crucible status
 ```
 
-If this fails, build it from source with `/phoe:build` and copy the binary to the project root.
+If `./crucible` is missing, build with `/phoe:build` (using `-DAPPLICATION=Crucible`), then copy the binary from `build/bin/crucible` to the project root.
 
 ## 2. Resolve the Bug
 
@@ -26,7 +26,7 @@ If this fails, build it from source with `/phoe:build` and copy the binary to th
 1. List all todo bugs:
 
 ```bash
-./Crucible --json bug list --status=todo
+./crucible --json bug list --status=todo
 ```
 
 2. Pick the best bug using this priority order:
@@ -39,7 +39,7 @@ If this fails, build it from source with `/phoe:build` and copy the binary to th
 **If argument is a label**, fetch by label:
 
 ```bash
-./Crucible bug show --label=<LABEL>
+./crucible bug show --label=<LABEL>
 ```
 
 **Check for existing handoff:** Look for `.crucible/handoffs/bug-<LABEL>-checkpoint.md`. If found:
@@ -63,7 +63,7 @@ git checkout -b bug/<label>
 ## 5. Move to In Progress
 
 ```bash
-./Crucible bug move --label=<LABEL> implementing
+./crucible bug move --label=<LABEL> implementing
 ```
 
 ## 6. Reproduce
@@ -125,7 +125,7 @@ All verification must pass before proceeding:
 
 Before committing, systematically evaluate each acceptance criterion from the bug JSON.
 
-1. Retrieve the bug's acceptance criteria: `./Crucible bug show --label=<LABEL>`
+1. Retrieve the bug's acceptance criteria: `./crucible bug show --label=<LABEL>`
 2. For **each** criterion, answer explicitly:
    - **Met?** Yes / No / Partially
    - **Evidence:** What in the diff proves this? (file:line, test name, or command output)
@@ -155,7 +155,7 @@ Commit all changes on the bug branch with a descriptive message referencing the 
 Move the bug to review status:
 
 ```bash
-./Crucible bug move --label=<LABEL> review
+./crucible bug move --label=<LABEL> review
 ```
 
 Tell the user:
@@ -166,4 +166,4 @@ Tell the user:
 
 **Do not merge or mark as done.** The user will review and decide.
 
-> **Note:** When the user moves a bug to `done`, it is automatically archived to `.crucible/bug-archive/`. If work needs to be revisited, use `./Crucible bug unarchive --label=<LABEL>` to restore it to `todo` status.
+> **Note:** When the user moves a bug to `done`, it is automatically archived to `.crucible/bug-archive/`. If work needs to be revisited, use `./crucible bug unarchive --label=<LABEL>` to restore it to `todo` status.
