@@ -62,6 +62,7 @@ Draft a saga and break the work into commit-sized, ordered Challenges.
 - **Priority** — `critical` > `high` > `medium` > `low` (based on dependency order and importance)
 - **Tags** — comma-separated tags (e.g., `cpp,rendering`, `plugin,commands`, `tests`)
 - **Acceptance criteria** — what "done" looks like
+- **Strategy** — ordered implementation steps: patterns to follow (with file paths), functions/classes to extend, specific constraints, and step-by-step approach. Think of this as briefing a capable engineer who cannot ask questions. When creating challenges intended for `/phoe:execute`, the strategy must be thorough enough for fully autonomous implementation.
 - **Verification steps** — commands to verify the work
 - **Affected files** — files likely to be touched
 - **References** — related docs, issues, or prior work
@@ -86,9 +87,9 @@ If extending an existing saga, show its current challenges first for context.
 
 **Challenges:**
 
-| # | Title (→ label) | Priority | Tags | Key acceptance criteria |
-|---|-----------------|----------|--------|------------------------|
-| 1 | ... | ... | ... | ... |
+| # | Title (→ label) | Priority | Tags | Key acceptance criteria | Strategy summary |
+|---|-----------------|----------|--------|------------------------|------------------|
+| 1 | ... | ... | ... | ... | ... |
 
 Ask the user to confirm, adjust, add, remove, or reorder challenges before proceeding. Only create after the user approves.
 
@@ -101,7 +102,7 @@ After approval, create the challenges and saga using the CLI.
 **Create each challenge:**
 
 ```bash
-./crucible challenge create --title="<TITLE>" --description="<DESC>" --priority="<PRIORITY>" --tags="<TAGS>" --acceptance-criteria="<CRITERION1>,<CRITERION2>" --verification="<DESC1>|<CMD1>,<DESC2>|<CMD2>" --affected-files="<FILE1>,<FILE2>" --references="<REF1>,<REF2>"
+./crucible challenge create --title="<TITLE>" --description="<DESC>" --priority="<PRIORITY>" --tags="<TAGS>" --acceptance-criteria="<CRITERION1>,<CRITERION2>" --strategy="<STEP1>,<STEP2>,<STEP3>" --verification="<DESC1>|<CMD1>,<DESC2>|<CMD2>" --affected-files="<FILE1>,<FILE2>" --references="<REF1>,<REF2>"
 ./crucible challenge move --label=<LABEL> todo
 ```
 

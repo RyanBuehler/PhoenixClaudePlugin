@@ -2,12 +2,15 @@
 description: Pick up a Crucible Challenge by label (or "next" for highest-priority saga-aware todo) and implement it end-to-end with verification, stopping at review status.
 ---
 
-Implement a Crucible Challenge end-to-end. Accepts a label or `next` to auto-pick the highest-priority todo respecting saga ordering.
+Implement a Crucible Challenge end-to-end with human supervision. Accepts a label or `next` to auto-pick the highest-priority todo respecting saga ordering.
+
+> **This is the human-supervised workflow.** For fully autonomous execution of multiple challenges, use `/phoe:execute`.
 
 ## Arguments
 
 - **`<label>`** — the challenge label to implement
 - **`next`** — automatically pick the highest-priority `todo` challenge, respecting saga ordering
+- *(no argument)* — if no todo challenges exist, prompt the user to run `/phoe:plan` first
 
 ## 1. Bootstrap
 
@@ -142,7 +145,7 @@ If this challenge is complex (multiple modules, many affected files, or extensiv
 
 ## 8. Plan and Implement
 
-Enter plan mode, create an implementation plan, then execute it. Follow the project's normal development workflow — write code, follow conventions from CLAUDE.md.
+Enter plan mode, create an implementation plan, then execute it. Follow the project's normal development workflow — write code, follow conventions from CLAUDE.md. If the challenge has a `strategy` field, use it as a starting point for the implementation plan.
 
 ### Unit Test Coverage
 
