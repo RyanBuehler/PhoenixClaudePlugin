@@ -1,9 +1,9 @@
 ---
-description: Update the PhoenixClaudePlugin from its source repository. Takes an optional path argument to the plugin repo, otherwise asks. Applies changes and bumps the version number.
+description: Edit the PhoenixClaudePlugin source — add or modify commands, agents, hooks, skills, or references following plugin conventions, then bump the calendar version.
 allowed-tools: Read, Edit, Write, Bash, Glob, Grep, Agent
 ---
 
-Update the PhoenixClaudePlugin (the "phoe" plugin for Claude Code).
+Edit the PhoenixClaudePlugin (the "phoe" plugin for Claude Code).
 
 ## Arguments
 

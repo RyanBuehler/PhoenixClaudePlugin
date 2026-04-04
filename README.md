@@ -77,7 +77,7 @@ Slash commands for common workflows.
 | `/scaffold-module` | Create a new module using `Tools/create_module.py` |
 | `/frontend-design` | Generate interactive HTML playground for iterating on UI layout and styling |
 | `/reset-workspace` | Clean up the workspace — resolve unstaged files, switch to main, pull latest, prune branches |
-| `/update-plugin` | Update the PhoenixClaudePlugin from its source repository |
+| `/edit-plugin` | Edit the PhoenixClaudePlugin source — add/modify commands, agents, hooks, skills, or references and bump the version |
 
 ## Skills (2)
 
