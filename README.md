@@ -60,7 +60,7 @@ Specialized subagents for different aspects of engine development.
 |-------|-------------|
 | `invoke-screenshot-agent` | Engine screenshot capture and analysis |
 
-## Commands (13)
+## Commands (12)
 
 Slash commands for common workflows.
 
@@ -75,18 +75,18 @@ Slash commands for common workflows.
 | `/screenshot` | Capture a screenshot from the engine |
 | `/verify` | Full CI-mirror: build + format + lint + test |
 | `/scaffold-module` | Create a new module using `Tools/create_module.py` |
-| `/trace-debug` | Instrument code with Scribe breadcrumb traces, rebuild, read logs, diagnose |
 | `/frontend-design` | Generate interactive HTML playground for iterating on UI layout and styling |
 | `/reset-workspace` | Clean up the workspace — resolve unstaged files, switch to main, pull latest, prune branches |
 | `/update-plugin` | Update the PhoenixClaudePlugin from its source repository |
 
-## Skills (1)
+## Skills (2)
 
 Auto-activating skills that trigger based on context.
 
 | Skill | Description |
 |-------|-------------|
 | `frontend-validate` | Auto-captures and evaluates screenshots after UI code changes; annotation playground for marking issues |
+| `trace-debug` | Auto-activates when investigating reproducible Phoenix bugs; instruments with Scribe breadcrumbs and bisects the suspect region by judgment |
 
 ## Hooks
 
