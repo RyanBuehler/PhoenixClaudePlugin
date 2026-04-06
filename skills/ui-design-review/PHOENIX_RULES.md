@@ -11,9 +11,10 @@ written against.
 | **Mosaic** | The UI framework (retained-mode widget tree) |
 | **Montage** | The 2D rendering batcher (`Montage.h`, `TextRenderer.h`) |
 | **Tessera** | Atomic widget — Button, TextLabel, DragFloat, Slider, Checkbox, etc. Base class: `Tessera` (inherits `ITessera`) |
-| **Canvas** | Generic container Tessera. Holds children. Base class for Panel and Emblema. |
+| **Canvas** | Generic container Tessera. Holds children. Base class for Panel. Layout tool with anchors, sizing, clipping. Ledger-agnostic — works in-game at runtime. |
 | **Panel** | Canvas with dockable/resizable/tabbable layout machinery |
-| **Emblema** | Canvas with Ledger binding. Owns Account subscriptions, builds Tessera subtree, posts Entries on user interaction. |
+| **Signatory** | Abstract Ledger participant (non-visual). Holds Ledger& ref, RAII subscription handles, transaction metadata. Used by non-UI participants: hotkey systems, MCP bridges, auto-save services. Lives in Ledger module. |
+| **Emblema** | Visual Ledger participant. Inherits from both Canvas and Signatory (multiple inheritance). IS a Canvas (in the Tessera tree, holds children, gets layout) AND a Signatory (talks to the Ledger). Lives in a bridge module separate from both Mosaic and Ledger. |
 | **TesseraLease** | Current non-owning external reference to a Tessera (`weak_ptr` wrapper). Being retired in favor of `TesseraHandle` in Track A4. |
 | **TesseraHandle** | Future 4-8 byte POD `{index, generation}` — the universal non-owning Tessera reference (Track A4, not yet built) |
 | **TesseraRegistry** | Future central registry owning all live Tesserae in a dense sparse-set layout (Track A4, not yet built) |
