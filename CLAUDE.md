@@ -21,6 +21,21 @@ Engine interacts with modules ONLY through `ModuleRegistry` and `IModuleBase`. I
 services through non-template subsystem interfaces (`ITerminalService`, `IInputService`), not
 concrete module types.
 
+## Subsystem Interface Design
+
+Subsystem interfaces must be **intent-based**, not lazy accessors. Every method on an
+`ISubsystem` should describe an action a consumer performs (`PostEntry`, `SubmitTask`,
+`RegisterAccount`), not hand out a reference to the underlying system (`GetLedger`,
+`GetInstance`).
+
+The app owns its systems directly (e.g. Editor owns its `Ledger`). Other modules participate
+through the subsystem protocol, not by grabbing a reference to the internals.
+
+Follow `IArbiterSubsystem` as the canonical example: it exposes `SubmitTask` /
+`WaitForCompletion` rather than `GetArbiter`. Interfaces that degenerate into a single
+`GetX()` accessor are a code smell — replace them with the operations the consumer actually
+needs to perform.
+
 ## Engine Independence
 
 Engine depends only on Core. All module dependencies are opt-in via Application description JSON
