@@ -35,10 +35,12 @@ Otherwise the binary is current — skip to step 4.
 ### 2. Rebuild
 
 ```bash
-cmake -S . -B <build-dir> <flag> -DCMAKE_BUILD_TYPE=Release
+cmake -S . -B <build-dir> -G Ninja <flag> -DCMAKE_BUILD_TYPE=Release
 cmake --build <build-dir> --parallel
 ln -sfn <build-dir>/bin/<app> ./<app>
 ```
+
+`-G Ninja` is required — Phoenix uses C++23 modules, which CMake only supports under the Ninja, Ninja Multi-Config, and recent Visual Studio generators. The default Makefiles generator fails at configure time.
 
 For Crucible, repeat the symlink step for both binaries:
 
