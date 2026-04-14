@@ -11,15 +11,19 @@ Fix a Crucible Bug end-to-end. Accepts a label or `next` to auto-pick the highes
 
 ## 1. Bootstrap
 
-Ensure `./crucible-server --headless &` is running. The CLI is a client; commands fail if the server is down.
+Follow `references/ensure-binary.md` for the **Crucible** row to guarantee `./crucible` and `./crucible-server` exist and match the expected version. If the procedure stops with a version mismatch, stop here and report it to the user.
 
-Verify the Crucible binary exists:
+Then ensure the Crucible server is running (the CLI is a client; commands fail if the server is down):
+
+```bash
+./crucible-server --headless &
+```
+
+Confirm Crucible is initialized for this project:
 
 ```bash
 ./crucible status
 ```
-
-If `./crucible` or `./crucible-server` is missing, build with `/phoe:build` (using `-DAPPLICATION=Crucible`), then copy both binaries from `build/bin/` to the project root.
 
 ## 2. Resolve the Bug
 

@@ -10,12 +10,24 @@ Plan a feature from idea to actionable Crucible Challenges grouped under a Saga.
 
 ## 1. Bootstrap
 
-Ensure `./crucible-server --headless &` is running. The CLI is a client; commands fail if the server is down.
+Follow `references/ensure-binary.md` for the **Crucible** row to guarantee `./crucible` and `./crucible-server` exist and match the expected version. If the procedure stops with a version mismatch, stop here and report it to the user.
 
-Ensure Crucible is initialized:
+Then ensure the Crucible server is running (the CLI is a client; commands fail if the server is down):
+
+```bash
+./crucible-server --headless &
+```
+
+Confirm Crucible is initialized for this project:
 
 ```bash
 ./crucible status
+```
+
+If that fails with "not initialized", ask the user for the project name and run:
+
+```bash
+./crucible init --project="<NAME>"
 ```
 
 If a `<saga_label>` argument was provided, verify it exists:
@@ -121,8 +133,6 @@ All list-style flags use `|` as the separator. Verification entries are flat str
 ```bash
 ./crucible saga show --label=<SAGA_LABEL>
 ```
-
-If `./crucible` or `./crucible-server` is missing, build with `/phoe:build` (using `-DAPPLICATION=Crucible`), then copy both binaries from `build/bin/` to the project root.
 
 ## 7. Report
 

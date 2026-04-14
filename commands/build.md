@@ -1,41 +1,26 @@
 ---
-description: Build the project using Forge profiles. Falls back to raw cmake if Forge is unavailable.
+description: Build the project using Forge profiles. Ensures the Forge binary is present and at the expected version before building.
 ---
 
-Build the project, using Forge if available.
+Build the project using Forge.
 
-## 1. Detect Forge
+## 1. Ensure Forge is Ready
 
-Check if the Forge binary exists. Search these paths in order and use the first match:
-
-1. `build/bin/forge`
-2. `build-editor-debug/bin/forge`
-3. `build-editor-release/bin/forge`
+Follow `references/ensure-binary.md` for the **Forge** row. This guarantees `./forge` exists, is at the expected version, and is safe to invoke. If the procedure stops with a version mismatch, stop here and report it to the user.
 
 ## 2. Select Profile
 
-If Forge was found, detect the active profile from existing build directories:
+Detect the active profile from existing build directories:
 
-- If `build-editor-release` exists, use `editor-release`
-- If `build-editor-debug` exists, use `editor-debug`
-- Default to `editor-debug`
+- If `build-editor-release` exists, use `editor-release`.
+- If `build-editor-debug` exists, use `editor-debug`.
+- Otherwise default to `editor-debug`.
 
-## 3a. Build with Forge
-
-If Forge is available, configure and build:
+## 3. Build with Forge
 
 ```bash
-<forge-binary> configure <profile>
-<forge-binary> build <profile>
-```
-
-## 3b. Fallback: Build with cmake
-
-If no Forge binary is available, fall back to raw cmake:
-
-```bash
-cmake -S . -B build -DTESTS=ON -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release --parallel
+./forge configure <profile>
+./forge build <profile>
 ```
 
 ## 4. Report

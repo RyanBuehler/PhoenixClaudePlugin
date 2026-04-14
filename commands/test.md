@@ -1,42 +1,28 @@
 ---
-description: Run the project's test suite using Forge. Falls back to raw ctest if Forge is unavailable.
+description: Run the project's test suite using Forge. Ensures the Forge binary is present and at the expected version before testing.
 ---
 
-Run the full test suite, using Forge if available.
+Run the full test suite using Forge.
 
-## 1. Detect Forge
+## 1. Ensure Forge is Ready
 
-Check if the Forge binary exists. Search these paths in order and use the first match:
-
-1. `build/bin/forge`
-2. `build-editor-debug/bin/forge`
-3. `build-editor-release/bin/forge`
+Follow `references/ensure-binary.md` for the **Forge** row. This guarantees `./forge` exists, is at the expected version, and is safe to invoke. If the procedure stops with a version mismatch, stop here and report it to the user.
 
 ## 2. Select Profile
 
-If Forge was found, detect the active profile from existing build directories:
+Detect the active profile from existing build directories:
 
-- If `build-editor-release` exists, use `editor-release`
-- If `build-editor-debug` exists, use `editor-debug`
-- Default to `editor-debug`
+- If `build-editor-release` exists, use `editor-release`.
+- If `build-editor-debug` exists, use `editor-debug`.
+- Otherwise default to `editor-debug`.
 
-## 3a. Test with Forge
-
-If Forge is available:
+## 3. Test with Forge
 
 ```bash
-<forge-binary> test <profile> --output-on-failure
+./forge test <profile> --output-on-failure
 ```
 
-## 3b. Fallback: Test with ctest
-
-If no Forge binary is available, fall back to raw ctest:
-
-```bash
-ctest --test-dir build -C Release --output-on-failure
-```
-
-If the build directory doesn't exist, inform the user to run `/phoe:build` first.
+If the build directory for the selected profile doesn't exist, tell the user to run `/phoe:build` first.
 
 ## 4. Report
 

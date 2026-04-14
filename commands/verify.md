@@ -4,11 +4,11 @@ description: Full CI-mirror verification sequence — configure, build, format c
 
 Run the full CI-mirror verification sequence. Stop on the first failure.
 
-`/phoe:build` and `/phoe:test` will use Forge automatically when available, falling back to raw cmake/ctest otherwise.
+`/phoe:build` and `/phoe:test` will ensure `./forge` is present and current before running (see `references/ensure-binary.md`). On a fresh worktree, the first step will rebuild Forge; subsequent runs are instant.
 
 ## 1. Build
 
-Run `/phoe:build` — configure and build the project (via Forge or cmake fallback).
+Run `/phoe:build` — ensures Forge is ready, then configures and builds the project.
 
 ## 2. Format
 
@@ -20,7 +20,7 @@ Run `/phoe:lint` — run clang-tidy on changed files.
 
 ## 4. Test
 
-Run `/phoe:test` — run the test suite (via Forge or ctest fallback).
+Run `/phoe:test` — run the test suite via Forge.
 
 ## 5. Write Verification Marker
 
