@@ -14,13 +14,15 @@ Implement a Crucible Challenge end-to-end with human supervision. Accepts a labe
 
 ## 1. Bootstrap
 
+Ensure `./crucible-server --headless &` is running. The CLI is a client; commands fail if the server is down.
+
 Verify the Crucible binary exists:
 
 ```bash
 ./crucible status
 ```
 
-If `./crucible` is missing, build with `/phoe:build` (using `-DAPPLICATION=Crucible`), then copy the binary from `build/bin/crucible` to the project root.
+If `./crucible` or `./crucible-server` is missing, build with `/phoe:build` (using `-DAPPLICATION=Crucible`), then copy both binaries from `build/bin/` to the project root.
 
 ## 2. Resolve the Challenge
 
@@ -62,7 +64,7 @@ If `./crucible` is missing, build with `/phoe:build` (using `-DAPPLICATION=Cruci
 ./crucible challenge show --label=<LABEL>
 ```
 
-**Check for existing handoff:** Look for `.crucible/handoffs/<LABEL>-checkpoint.md`. If found:
+**Check for existing handoff:** Look for `.claude/handoffs/<LABEL>-checkpoint.md`. If found:
 
 1. Read the handoff document.
 2. Display: "Resuming from checkpoint — here's where we left off:" followed by the handoff summary.
@@ -122,7 +124,7 @@ Read the challenge's affected files, references, and tags. Explore the codebase 
 
 If this challenge is complex (multiple modules, many affected files, or extensive exploration required), consider writing a checkpoint after exploration and before implementation:
 
-1. Write `.crucible/handoffs/<LABEL>-checkpoint.md`:
+1. Write `.claude/handoffs/<LABEL>-checkpoint.md`:
    ```markdown
    # Checkpoint: <LABEL>
    ## Challenge
@@ -138,7 +140,7 @@ If this challenge is complex (multiple modules, many affected files, or extensiv
    ## Open Questions
    <anything needing user input>
    ```
-2. Tell the user: "This challenge is consuming significant context. I've written a checkpoint to `.crucible/handoffs/<LABEL>-checkpoint.md`. Start a new session and run `/phoe:implement <LABEL>` to continue with fresh context."
+2. Tell the user: "This challenge is consuming significant context. I've written a checkpoint to `.claude/handoffs/<LABEL>-checkpoint.md`. Start a new session and run `/phoe:implement <LABEL>` to continue with fresh context."
 3. Stop. Do not continue implementation in the current session.
 
 **When to checkpoint:** Use judgment. Natural breakpoints include: after exploration but before implementation, or after implementing half the changes when the remaining work is still substantial. The goal is to avoid coherence loss on large tasks.
@@ -235,4 +237,4 @@ Tell the user:
 
 Use `/phoe:plan` to create new challenges or extend an existing saga.
 
-> **Note:** When the user moves a challenge to `merged`, it is automatically archived to `.crucible/archive/`. If work needs to be revisited, use `./crucible challenge unarchive --label=<LABEL>` to restore it to `todo` status.
+> **Note:** When the user moves a challenge to `merged`, it is automatically archived in the server's data dir. If work needs to be revisited, use `./crucible challenge unarchive --label=<LABEL>` to restore it to `todo` status.

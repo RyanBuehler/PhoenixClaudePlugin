@@ -10,16 +10,12 @@ Plan a feature from idea to actionable Crucible Challenges grouped under a Saga.
 
 ## 1. Bootstrap
 
+Ensure `./crucible-server --headless &` is running. The CLI is a client; commands fail if the server is down.
+
 Ensure Crucible is initialized:
 
 ```bash
 ./crucible status
-```
-
-If this fails, ask the user for the project name and initialize:
-
-```bash
-./crucible init --project="<NAME>"
 ```
 
 If a `<saga_label>` argument was provided, verify it exists:
@@ -60,7 +56,7 @@ Draft a saga and break the work into commit-sized, ordered Challenges.
 - **Title** — concise action phrase (drives the auto-generated label)
 - **Description** — what needs to happen, with enough context for implementation
 - **Priority** — `critical` > `high` > `medium` > `low` (based on dependency order and importance)
-- **Tags** — comma-separated tags (e.g., `cpp,rendering`, `plugin,commands`, `tests`)
+- **Tags** — pipe-separated tags (e.g., `cpp|rendering`, `plugin|commands`, `tests`)
 - **Acceptance criteria** — what "done" looks like
 - **Strategy** — ordered implementation steps: patterns to follow (with file paths), functions/classes to extend, specific constraints, and step-by-step approach. Think of this as briefing a capable engineer who cannot ask questions. When creating challenges intended for `/phoe:execute`, the strategy must be thorough enough for fully autonomous implementation.
 - **Verification steps** — commands to verify the work
@@ -99,17 +95,19 @@ If only a single challenge results, offer to create just a standalone challenge 
 
 After approval, create the challenges and saga using the CLI.
 
+All list-style flags use `|` as the separator. Verification entries are flat strings (commands embedded in prose, e.g. `"Compile the build (cmake --build .)"`).
+
 **Create each challenge:**
 
 ```bash
-./crucible challenge create --title="<TITLE>" --description="<DESC>" --priority="<PRIORITY>" --tags="<TAGS>" --acceptance-criteria="<CRITERION1>,<CRITERION2>" --strategy="<STEP1>,<STEP2>,<STEP3>" --verification="<DESC1>|<CMD1>,<DESC2>|<CMD2>" --affected-files="<FILE1>,<FILE2>" --references="<REF1>,<REF2>"
+./crucible challenge create --title="<TITLE>" --description="<DESC>" --priority="<PRIORITY>" --tags="<T1>|<T2>" --acceptance-criteria="<C1>|<C2>" --strategy="<S1>|<S2>|<S3>" --verification="<V1>|<V2>" --affected-files="<F1>|<F2>" --references="<R1>|<R2>"
 ./crucible challenge move --label=<LABEL> todo
 ```
 
 **Create a new saga** (if not extending):
 
 ```bash
-./crucible saga create --title="<TITLE>" --description="<DESC>" --challenges="label1,label2,..." --label="<OPTIONAL_LABEL>"
+./crucible saga create --title="<TITLE>" --description="<DESC>" --challenges="label1|label2|..." --label="<OPTIONAL_LABEL>"
 ```
 
 **Extend an existing saga** (if `<saga_label>` was provided):
@@ -124,7 +122,7 @@ After approval, create the challenges and saga using the CLI.
 ./crucible saga show --label=<SAGA_LABEL>
 ```
 
-If `./crucible` is missing, build with `/phoe:build` (using `-DAPPLICATION=Crucible`), then copy the binary from `build/bin/crucible` to the project root.
+If `./crucible` or `./crucible-server` is missing, build with `/phoe:build` (using `-DAPPLICATION=Crucible`), then copy both binaries from `build/bin/` to the project root.
 
 ## 7. Report
 

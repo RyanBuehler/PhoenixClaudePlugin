@@ -11,13 +11,15 @@ Fix a Crucible Bug end-to-end. Accepts a label or `next` to auto-pick the highes
 
 ## 1. Bootstrap
 
+Ensure `./crucible-server --headless &` is running. The CLI is a client; commands fail if the server is down.
+
 Verify the Crucible binary exists:
 
 ```bash
 ./crucible status
 ```
 
-If `./crucible` is missing, build with `/phoe:build` (using `-DAPPLICATION=Crucible`), then copy the binary from `build/bin/crucible` to the project root.
+If `./crucible` or `./crucible-server` is missing, build with `/phoe:build` (using `-DAPPLICATION=Crucible`), then copy both binaries from `build/bin/` to the project root.
 
 ## 2. Resolve the Bug
 
@@ -42,7 +44,7 @@ If `./crucible` is missing, build with `/phoe:build` (using `-DAPPLICATION=Cruci
 ./crucible bug show --label=<LABEL>
 ```
 
-**Check for existing handoff:** Look for `.crucible/handoffs/bug-<LABEL>-checkpoint.md`. If found:
+**Check for existing handoff:** Look for `.claude/handoffs/bug-<LABEL>-checkpoint.md`. If found:
 
 1. Read the handoff document.
 2. Display: "Resuming from checkpoint — here's where we left off:" followed by the handoff summary.
@@ -88,7 +90,7 @@ Invoke the `superpowers:systematic-debugging` skill to trace the root cause:
 
 If diagnosis is consuming significant context, write a checkpoint before implementing the fix:
 
-1. Write `.crucible/handoffs/bug-<LABEL>-checkpoint.md`:
+1. Write `.claude/handoffs/bug-<LABEL>-checkpoint.md`:
    ```markdown
    # Checkpoint: bug-<LABEL>
    ## Bug
@@ -166,4 +168,4 @@ Tell the user:
 
 **Do not merge or mark as done.** The user will review and decide.
 
-> **Note:** When the user moves a bug to `done`, it is automatically archived to `.crucible/bug-archive/`. If work needs to be revisited, use `./crucible bug unarchive --label=<LABEL>` to restore it to `todo` status.
+> **Note:** When the user moves a bug to `done`, it is automatically archived in the server's data dir. If work needs to be revisited, use `./crucible bug unarchive --label=<LABEL>` to restore it to `todo` status.

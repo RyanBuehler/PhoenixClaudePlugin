@@ -15,13 +15,15 @@ Determine which mode by checking if the argument is a number, "next", or a strin
 
 ## 1. Bootstrap
 
+Ensure `./crucible-server --headless &` is running. The CLI is a client; commands fail if the server is down.
+
 Verify Crucible binary exists:
 
 ```bash
 ./crucible status
 ```
 
-If this fails, build it from source with `/phoe:build` (using `-DAPPLICATION=Crucible`), then copy the binary to the project root.
+If `./crucible` or `./crucible-server` is missing, build with `/phoe:build` (using `-DAPPLICATION=Crucible`), then copy both binaries from `build/bin/` to the project root.
 
 Verify workspace is clean:
 
@@ -193,7 +195,7 @@ For each returning subagent:
 |--------|--------|
 | **DONE** | Proceed to 4d (Merge + Verify) |
 | **DONE_WITH_CONCERNS** | Read concerns. If about correctness/scope: dispatch a targeted fix subagent. If observational: note and proceed. |
-| **BLOCKED** | Retry once: re-read the affected files and any files the subagent mentioned, enrich the prompt with additional context from the codebase, and re-dispatch. On second BLOCKED: mark challenge blocked in Crucible with detailed explanation, write checkpoint to `.crucible/handoffs/<LABEL>-checkpoint.md`, **keep the branch and commits intact**. Skip to next challenge. |
+| **BLOCKED** | Retry once: re-read the affected files and any files the subagent mentioned, enrich the prompt with additional context from the codebase, and re-dispatch. On second BLOCKED: mark challenge blocked in Crucible with detailed explanation, write checkpoint to `.claude/handoffs/<LABEL>-checkpoint.md`, **keep the branch and commits intact**. Skip to next challenge. |
 | **NEEDS_CONTEXT** | Retry once: read the subagent's questions, answer them by reading the codebase/CLAUDE.md/sibling saga challenges, and re-dispatch with enriched context. On second NEEDS_CONTEXT: mark blocked with unanswered questions as the reason, **keep the branch intact**. Skip. |
 
 When marking a challenge blocked:
@@ -291,7 +293,7 @@ For each successfully reviewed challenge:
 
 ## 5. Subagent Feedback Log
 
-After all waves complete, collect the "Workflow Friction" sections from every subagent report and append them to `.crucible/SUBAGENT_FEEDBACK.md`:
+After all waves complete, collect the "Workflow Friction" sections from every subagent report and append them to `.claude/SUBAGENT_FEEDBACK.md`:
 
 ```markdown
 ## <date> - /phoe:execute <args>
@@ -328,11 +330,11 @@ Saga Progress:
 
 Blocked Challenges:
   forge-compiler: Build failure in ForgeCompiler.cpp:42 -- missing include for <filesystem>.
-  Checkpoint written to .crucible/handoffs/forge-compiler-checkpoint.md
+  Checkpoint written to .claude/handoffs/forge-compiler-checkpoint.md
   Resume with: /phoe:implement forge-compiler
 
 Stats: 2 completed, 1 blocked, 0 skipped
-Feedback logged to: .crucible/SUBAGENT_FEEDBACK.md
+Feedback logged to: .claude/SUBAGENT_FEEDBACK.md
 ```
 
 Include:
