@@ -27,7 +27,36 @@ Confirm Crucible is initialized for this project:
 
 ## 2. Resolve the Bug
 
-**If argument is `next`**, use severity-aware selection:
+**When argument is `next`, first reconcile any bugs currently in `review`.** The user may have merged them since the last session; Crucible does not auto-detect this.
+
+1. List review bugs:
+
+```bash
+./crucible --json bug list --status=review
+```
+
+2. For each review bug, probe the local git history for merge evidence (both signals are read-only):
+
+```bash
+# Signal A — squash-merge commit on main referencing the label or ID
+git log main --oneline -i --grep="<LABEL>"
+git log main --oneline --grep="#<ID>"
+
+# Signal B — merge-commit style, where the branch ref is still present locally
+git rev-parse --verify bug/<LABEL> 2>/dev/null \
+  && git merge-base --is-ancestor bug/<LABEL> main \
+  && echo "branch tip is ancestor of main"
+```
+
+3. If either signal fires, show the user the matching commit(s) and ask whether to mark the bug done. **Never auto-mark.** On confirmation:
+
+```bash
+./crucible bug move --label=<LABEL> done
+```
+
+4. If a review bug shows no merge evidence, leave it in `review`.
+
+Then pick the next todo using severity-aware selection:
 
 1. List all todo bugs:
 
@@ -161,13 +190,17 @@ Invoke the code reviewer as a **separate agent** to evaluate the implementation 
 
 Commit all changes on the bug branch with a descriptive message referencing the bug label.
 
-## 13. Report
+## 13. Move to Review — Required
 
-Move the bug to review status:
+Immediately after the commit lands, move the bug to `review`. This is a mandatory, non-skippable final workflow step — the fix is not considered complete until the bug is in `review`:
 
 ```bash
 ./crucible bug move --label=<LABEL> review
 ```
+
+If this move fails (server down, label mismatch, Crucible not initialized), **stop and surface the error to the user**. Do not report the bug as fixed, and do not continue to the report step, until the move has succeeded.
+
+## 14. Report
 
 Tell the user:
 - What was fixed and the root cause

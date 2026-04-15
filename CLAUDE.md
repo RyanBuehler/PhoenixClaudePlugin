@@ -175,9 +175,27 @@ For all code style and design practices, follow `Docs/StyleGuide.md`.
 
 - Do NOT run builds or tests after every code change. Run the full
   verification sequence (`/phoe:verify`) **before committing** as part of the
-  development workflow. A pre-push hook enforces that verification has passed
-  before any push is allowed. This overrides any TDD or
-  verification-before-completion guidance from other skills.
+  development workflow. Passing `/phoe:verify` is a mandatory precondition for
+  every commit; a commit made without it is incomplete work. This overrides any
+  TDD or verification-before-completion guidance from other skills.
+
+## Push & Pull Request Workflow
+
+Pushing and PR creation are shared-state, outside-visible actions. Never take
+them autonomously.
+
+Before running `git push` or `gh pr create`:
+
+1. **Verify git credentials are configured and authenticate against the remote.**
+   Run `git config user.name`, `git config user.email`, and
+   `git ls-remote <remote> HEAD` to confirm auth works. If credentials are
+   missing, expired, or fail against the remote, stop and surface the failure
+   to the user — do not attempt the push.
+2. **Ask the user for explicit confirmation.** Even when verification has
+   passed and credentials are valid, always ask before pushing or opening a
+   pull request. Present what you intend to push (branch, commits, target
+   remote) and wait for an explicit go-ahead. A prior approval does not carry
+   forward to later pushes.
 - To verify compilation and run all tests locally, mirror the CI pipeline.
 - It is mandatory to configure the build with tests enabled and execute the
   full suite before committing:
