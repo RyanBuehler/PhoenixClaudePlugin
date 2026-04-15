@@ -5,6 +5,32 @@
 - **NEVER mention Claude Code in commit messages.** No "Generated with Claude Code", no Co-Authored-By Claude, nothing. Commit messages should look like they were written by a human developer.
 - **Never combine `cd` and `git` in a compound command** (e.g. `cd /some/dir && git status`). Changing into an untrusted directory before running git exposes you to bare repository attacks where a malicious `.git` config can execute arbitrary code. Always run git commands using absolute paths or from the known working directory.
 
+## Branch & Worktree Workflow
+
+All work happens on a dedicated branch in a dedicated worktree. Branch names are `<type>/<label>` where both segments are lowercase kebab-case (`^[a-z0-9][a-z0-9-]*$`). Slash-less branch names are rejected.
+
+Common types:
+
+- `challenge/<label>` — Crucible challenge work
+- `bug/<label>` — Crucible bug fixes
+- `doc/<label>` — documentation-only changes
+- `ci/<label>` — CI and tooling changes
+- `misc/<label>` — one-off work that doesn't fit the above
+
+Prefix the label with the affected system or module when it helps reviewers, e.g. `challenge/crucible-update-ui`, `bug/windows-liaison-fix-focus`, `doc/branch-workflow`. The system prefix is convention only; the hook does not enforce a specific list.
+
+Create every branch via worktree, from the main repo root:
+
+    git worktree add .claude/worktrees/<type>-<label> -b <type>/<label>
+
+The worktree path uses dashes where the branch uses slashes. Plain `git checkout -b`, `git switch -c`, and `git branch <name>` are blocked at tool-use time by `hooks/branch-worktree-check.py`.
+
+Remove a worktree when done (the branch stays until the user deletes it):
+
+    git worktree remove .claude/worktrees/<type>-<label>
+
+`/phoe:reset-workspace` prunes worktrees whose branch is `[gone]`. Blocked branches and their worktrees are preserved for human resumption.
+
 ## Modules vs Subsystems
 
 These are distinct concepts. Do NOT conflate them.

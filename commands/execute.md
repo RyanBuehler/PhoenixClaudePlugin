@@ -102,14 +102,14 @@ For each wave, execute the following steps:
 For each challenge in the wave:
 
 1. Read the full challenge JSON: `./crucible --json challenge show --label=<LABEL>`
-2. Create branch: `git checkout main && git checkout -b challenge/<label>`
+2. Create worktree and branch from the main repo root: `git worktree add .claude/worktrees/challenge-<label> -b challenge/<label>`
 3. Move to implementing: `./crucible challenge move --label=<LABEL> implementing`
 
-If the wave has multiple challenges, return to main after creating each branch.
+Each worktree is an independent checkout; `main` is untouched.
 
 ### 4b. Implement (parallel within wave)
 
-Dispatch one implementer subagent per challenge. If the wave has multiple challenges, dispatch them in parallel using `isolation: "worktree"`. For single-challenge waves, work directly on the challenge branch.
+Dispatch one implementer subagent per challenge. Set the subagent `cwd` to `.claude/worktrees/challenge-<label>`. For multi-challenge waves, also pass `isolation: "worktree"` so each subagent operates in its own worktree checkout.
 
 **Implementer subagent prompt template:**
 
@@ -290,7 +290,7 @@ CRITICAL/WARNING/SUGGESTION/NOTE severity levels.
 For each successfully reviewed challenge:
 
 1. Move to review: `./crucible challenge move --label=<LABEL> review`
-2. Clean up worktree if used: `git worktree remove .claude/worktrees/challenge-<label>` (only if worktree was created)
+2. Clean up worktree: `git worktree remove .claude/worktrees/challenge-<label>`
 3. **Keep the branch** -- do not delete. The user reviews and decides when to clean up.
 
 **Blocked challenge policy:** Never revert branches or discard commits from blocked challenges. Partial work is valuable context for human resumption via `/phoe:implement <label>`. Always keep branches, commits, and checkpoint files intact.

@@ -41,7 +41,7 @@ git pull
 
 Report whether new commits were pulled or main was already up to date.
 
-## 4. Prune Stale Branches
+## 4. Prune Stale Branches and Worktrees
 
 Update remote tracking info:
 
@@ -53,11 +53,16 @@ Find local branches whose upstream is gone:
 
 ```bash
 git branch -vv
+git worktree list --porcelain
 ```
 
-Look for branches marked `[gone]` in the output. If any exist:
-- List them for the user with their last commit message
-- Delete them with `git branch -D <branch>` — no confirmation needed since their remote is already gone (typically merged via PR).
+Look for branches marked `[gone]` in `git branch -vv` output. If any exist:
+- List them for the user with their last commit message.
+- For each gone branch that has an associated worktree under `.claude/worktrees/`, remove the worktree first: `git worktree remove .claude/worktrees/<type>-<label>`. A branch cannot be deleted while checked out in a worktree.
+- Delete the branch with `git branch -D <branch>` — no confirmation needed since the remote is already gone (typically merged via PR).
+- After processing all gone branches, run `git worktree prune` to clear administrative entries for directories the user manually removed.
+
+Leave worktrees whose branch is still live in place — they represent blocked or in-progress work. Do not `rm -rf` `.claude/worktrees/`.
 
 Also list any remaining local branches (excluding `main`) that still have a valid remote, so the user is aware of them — but do **not** delete these without being asked.
 

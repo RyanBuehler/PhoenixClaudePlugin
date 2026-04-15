@@ -60,11 +60,16 @@ Confirm Crucible is initialized for this project:
 
 Display the bug details: title, description, severity, reproduction steps, acceptance criteria, and verification steps.
 
-## 4. Create a Dedicated Branch
+## 4. Create a Dedicated Worktree
+
+From the main repo root:
 
 ```bash
-git checkout -b bug/<label>
+git worktree add .claude/worktrees/bug-<label> -b bug/<label>
+cd .claude/worktrees/bug-<label>
 ```
+
+Run all subsequent steps from inside the worktree directory.
 
 ## 5. Move to In Progress
 

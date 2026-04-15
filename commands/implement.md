@@ -108,11 +108,16 @@ git pull --ff-only origin main
 
 - **If unrelated** — skip the pull and branch from current local main. No sync needed.
 
-## 5. Create a Dedicated Branch
+## 5. Create a Dedicated Worktree
+
+From the main repo root:
 
 ```bash
-git checkout -b challenge/<label>
+git worktree add .claude/worktrees/challenge-<label> -b challenge/<label>
+cd .claude/worktrees/challenge-<label>
 ```
+
+Run all subsequent steps from inside the worktree directory.
 
 ## 6. Move to Implementing
 

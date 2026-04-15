@@ -29,16 +29,9 @@ Review existing files for style and formatting conventions before writing new on
 
 ## 3. Bump the Version
 
-Read the current version from `.claude-plugin/plugin.json`.
+Read the current version from `.claude-plugin/marketplace.json`. Version lives there only — `plugin.json` does not carry a version field.
 
-The project uses calendar versioning: `YYYY.MINOR.PATCH` (e.g., `2026.0.0`).
-
-Present the current version and ask the user whether this is a:
-- **Patch** (bug fixes, minor wording changes) — bump `YYYY.minor.PATCH`
-- **Minor** (new features, new agents/commands, non-breaking changes) — bump `YYYY.MINOR.0`
-- **New year** (first release of a new calendar year) — bump `YYYY.0.0`
-
-Do NOT assume the bump level — always ask the user to choose. Apply the chosen version bump to both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`.
+The project uses calendar versioning: `YYYY.MINOR.PATCH` (e.g., `2026.0.0`). Default to a **patch** bump (`YYYY.MINOR.PATCH+1`) — do not change the year or minor segments. Confirm with the user before bumping minor or year (e.g., for a major new feature or the first release of a new calendar year). Apply the bump only to `.claude-plugin/marketplace.json`.
 
 ## 4. Report
 
