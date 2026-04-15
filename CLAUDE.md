@@ -130,6 +130,16 @@ For all code style and design practices, follow `Docs/StyleGuide.md`.
   in place for subsequent tidy runs. Test sources matching `*Trials.cpp` may
   be skipped by passing `--filter *Trials.cpp`.
 
+## Labels and Identifiers
+
+- Use `Label` (not `string`/`string_view`) for keys, registry lookups, dispatch tokens,
+  event/action names — anything used as identity. Raw strings stay for textual data
+  (logs, UI text, file contents, parsed tokens).
+- Pass `Label` by value; never `const Label&`. Convert at API boundaries with
+  `ToCString()` / `ToString()`.
+- When registering into a module's registries, use that module's wrapper (e.g.
+  `Input::Label`) so the hash carries the module signature.
+
 ## Color Values
 
 - All floating-point color types (`Color::Red`, `Colors::RGBA`, `Colors::RGB`, etc.) use
