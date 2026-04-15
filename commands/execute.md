@@ -283,7 +283,12 @@ CRITICAL/WARNING/SUGGESTION/NOTE severity levels.
 
 - **Spec FAIL or quality CRITICAL:** Dispatch a fix subagent with combined feedback from both reviewers. Re-run `/phoe:verify`. Re-dispatch both reviewers. On second failure: mark blocked with reviewer feedback. **Keep all branches and commits intact.** Skip.
 - **Quality WARNING only:** Proceed. Log warnings in the final report.
-- **Quality SUGGESTION/NOTE:** Proceed. Ignore.
+- **Quality SUGGESTION:** Dispatch a suggestion-triage subagent with the full suggestion list. For each suggestion the subagent must decide:
+  - **Implement it** if it is clearly in-scope, correct, and adds value -- apply the change directly.
+  - **Defer it** if it raises a real question, is ambiguous, or is out of scope for this challenge -- emplace a `// TODO(<challenge-label>): <one-line summary of the suggestion>` comment at the most relevant code location so it can be evaluated later.
+
+  Suggestions must never be silently dropped. The triage subagent commits any changes (implementations and TODOs) to the challenge branch. After it returns, re-run `/phoe:verify`. Do NOT re-dispatch the reviewers. Log the triage outcome (implemented / deferred counts) in the final report.
+- **Quality NOTE:** Proceed. Log notes in the final report.
 
 ### 4g. Finalize
 
