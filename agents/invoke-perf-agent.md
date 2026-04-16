@@ -206,9 +206,9 @@ BENCHMARK_TRIAL("Engine.Hash", "WhipHash_1KB")
 }
 ```
 
-Run benchmarks with `--type benchmark`:
+Run benchmarks with `--type benchmark` (substitute `<profile>` for the active Forge profile — `editor-debug` or `editor-release`):
 ```bash
-./build/bin/Engine_HashBenchmarkTrials --type benchmark
+build-<profile>/bin/Engine_HashBenchmarkTrials --type benchmark
 # Output:
 #   [BENCH] Engine.Hash.WhipHash_1KB: 1,247,000 iterations
 #           mean: 802 ns | total: 1.00 s

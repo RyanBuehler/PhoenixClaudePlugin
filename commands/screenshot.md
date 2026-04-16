@@ -16,11 +16,20 @@ fi
 
 **If the engine is not running** (one-shot capture):
 
+Detect the active Forge profile from existing build directories and launch the editor via its profile-suffixed path. The engine's build dirs are profile-suffixed (`build-editor-debug/`, `build-editor-release/`), not `${PHOE_ENV}`-suffixed — only the tool binaries (Forge, Crucible, Vigil) use the env suffix. Do not add `${PHOE_ENV}` to an engine path:
+
 ```bash
-./build/bin/editor --aurora.screenshot.exit
+for PROFILE in editor-release editor-debug; do
+    if [ -x "build-${PROFILE}/bin/editor" ]; then
+        build-${PROFILE}/bin/editor --aurora.screenshot.exit
+        break
+    fi
+done
 ```
 
-On headless systems, prefix with `xvfb-run`.
+If neither profile directory exists, run `/phoe:build` first.
+
+On headless systems, prefix the editor invocation with `xvfb-run`.
 
 ## 2. Retrieve
 

@@ -128,7 +128,11 @@ For all code style and design practices, follow `Docs/StyleGuide.md`.
   it once per build directory with `python Tools/tidy.py --compdb` (optionally
   keeping your `--filter` arguments); this leaves `build/compile_commands.json`
   in place for subsequent tidy runs. Test sources matching `*Trials.cpp` may
-  be skipped by passing `--filter *Trials.cpp`.
+  be skipped by passing `--filter *Trials.cpp`. Note: the `build/` directory
+  that `Tools/tidy.py --compdb` creates is a tooling-scratch dir for the
+  compilation database only — it is *not* the project's Forge-managed build
+  dir (which is always profile-suffixed, e.g. `build-editor-debug/`). Don't
+  run cmake/ctest against `build/`; only `Tools/tidy.py` reads from it.
 
 ## Labels and Identifiers
 
@@ -180,6 +184,7 @@ For all code style and design practices, follow `Docs/StyleGuide.md`.
 ## Build Commands
 
 - **NEVER** use `-j$(nproc)` or `-j` with cmake. Always use `cmake --build <dir> --parallel`. The `$()` subshell triggers permission prompts and `-j` is generator-specific.
+- **Worktrees do not share build directories with the main workspace.** CMake caches absolute paths to the source tree, so each git worktree needs its own `/phoe:build` run (which configures + builds via Forge's profile system into the worktree's own `build-editor-debug/` etc.). Do not symlink or reuse the main workspace's build dirs inside a worktree — the cached source paths will point at the wrong tree and produce subtly broken artifacts.
 
 ## Build & Test Verification
 
@@ -207,13 +212,12 @@ Before running `git push` or `gh pr create`:
    remote) and wait for an explicit go-ahead. A prior approval does not carry
    forward to later pushes.
 - To verify compilation and run all tests locally, mirror the CI pipeline.
-- It is mandatory to configure the build with tests enabled and execute the
-  full suite before committing:
-        cmake -S . -B build -DTESTS=ON -DCMAKE_BUILD_TYPE=Release
-        cmake --build build --config Release --parallel
-        python Tools/format.py --files=staged
-        python Tools/format.py --files=staged -error
-        ctest --test-dir build -C Release --output-on-failure -L "CORE_TRIAL|PLUGIN_TRIAL|APP_TRIAL"
+- It is mandatory to execute the full verification suite before committing. Run
+  `/phoe:verify` — it drives Forge through build + format + lint + test using the
+  active profile and the environment-suffixed tool paths, producing the same
+  pass/fail signal as the `Linux: Build & Test (Incremental)` CI job. Do not
+  invoke cmake/ctest directly; a bare `build/` directory does not exist in this
+  project.
 - When presenting solutions, always ensure the project builds cleanly in Release
   and Headless configurations, and run all appropriate tests beforehand.
 
@@ -236,7 +240,7 @@ Launch the engine with `--console-pipe=PATH` to enable external command injectio
 
 ```bash
 # Launch with pipe
-./build/bin/editor --console-pipe=/tmp/phoenix-console.fifo
+build-<profile>/bin/editor --console-pipe=/tmp/phoenix-console.fifo
 
 # Send commands from another process
 echo "aurora.screenshot" > /tmp/phoenix-console.fifo
@@ -283,7 +287,7 @@ The following agents are available for specialized tasks. Each is defined in `ag
 Screenshots require a display server (X11 or Wayland). On headless CI, use `xvfb-run`:
 
 ```bash
-xvfb-run ./build/bin/editor --aurora.screenshot.exit
+xvfb-run build-<profile>/bin/editor --aurora.screenshot.exit
 ```
 
 ## Reference Documents

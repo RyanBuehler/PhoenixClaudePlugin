@@ -53,11 +53,7 @@ Once the user has saved their design (or shares the JSON):
 
 Rebuild and capture a screenshot to compare against the playground mockup:
 
-```bash
-cmake --build build --config Release --parallel
-```
-
-Use `/phoe:screenshot` to capture the result and visually compare against the playground layout.
+Run `/phoe:build` to rebuild the engine through Forge, then `/phoe:screenshot` to capture the result and visually compare against the playground layout.
 
 ## 6. Report
 

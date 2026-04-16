@@ -1,12 +1,18 @@
 ---
-description: Run the project's test suite using Forge. Ensures the Forge binary is present and at the expected version before testing.
+description: Run the project's test suite using Forge. Delegates Forge-readiness to /phoe:build.
 ---
 
 Run the full test suite using Forge.
 
-## 1. Ensure Forge is Ready
+## 1. Ensure Forge Is Ready
 
-Follow `references/ensure-binary.md` for the **Forge** row. This guarantees `./forge` exists, is at the expected version, and is safe to invoke. If the procedure stops with a version mismatch, stop here and report it to the user.
+Run `/phoe:build forge`. This rebuilds Forge from scratch if it's missing, at the wrong version, or was built in a different environment (host vs container); it's a no-op otherwise. If `/phoe:build forge` stops with a version mismatch, stop here and report it to the user.
+
+Resolve the environment suffix for subsequent invocations:
+
+```bash
+PHOE_ENV=${PHOE_ENV:-$([ -f /.dockerenv ] && echo container || echo host)}
+```
 
 ## 2. Select Profile
 
@@ -19,7 +25,8 @@ Detect the active profile from existing build directories:
 ## 3. Test with Forge
 
 ```bash
-./forge test <profile> --output-on-failure
+PHOE_ENV=${PHOE_ENV:-$([ -f /.dockerenv ] && echo container || echo host)}
+build-forge-${PHOE_ENV}-release/bin/forge test <profile> --output-on-failure
 ```
 
 If the build directory for the selected profile doesn't exist, tell the user to run `/phoe:build` first.

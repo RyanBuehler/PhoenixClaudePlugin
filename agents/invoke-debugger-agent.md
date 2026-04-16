@@ -16,25 +16,29 @@ You are a world-class C++ debugging expert with deep knowledge of GDB, LLDB, cor
 4. **No Exceptions** — the project forbids try/catch/throw; error handling uses return codes
 5. **Preserve Evidence** — save core dumps, logs, and stack traces before modifying code
 
+## Phoenix Build Paths
+
+Throughout this agent, substitute `<profile>` for whichever Forge profile is built — typically `editor-debug` (best for debugging: symbols + assertions + no optimization) or `editor-release`. If neither `build-editor-debug/` nor `build-editor-release/` exists, run `/phoe:build` first. Do not invoke `cmake --build` or reference a bare `build/` directory — Phoenix does not use one; Forge owns profile-suffixed build dirs.
+
 ## GDB Quick Reference
 
 ### Starting GDB
 
 ```bash
 # Debug a program
-gdb ./build/bin/editor
+gdb build-<profile>/bin/editor
 
 # Debug with arguments
-gdb --args ./build/bin/editor --console-pipe=/tmp/phoenix-console.fifo
+gdb --args build-<profile>/bin/editor --console-pipe=/tmp/phoenix-console.fifo
 
 # Attach to a running process
 gdb -p $(pgrep editor)
 
 # Load a core dump
-gdb ./build/bin/editor core.12345
+gdb build-<profile>/bin/editor core.12345
 
 # Debug with TUI (text UI)
-gdb -tui ./build/bin/editor
+gdb -tui build-<profile>/bin/editor
 ```
 
 ### Essential Commands
@@ -213,7 +217,7 @@ coredumpctl gdb  # Debug most recent crash
 
 ```bash
 # Load core dump in GDB
-gdb ./build/bin/editor core.12345
+gdb build-<profile>/bin/editor core.12345
 
 # Get the crash backtrace
 (gdb) bt
@@ -267,7 +271,7 @@ Record execution and replay backwards:
 
 ```bash
 # Record execution
-rr record ./build/bin/editor
+rr record build-<profile>/bin/editor
 
 # Replay
 rr replay
@@ -310,10 +314,10 @@ git bisect reset         # Return to original state
 
 ```bash
 # On target machine
-gdbserver :1234 ./build/bin/editor
+gdbserver :1234 build-<profile>/bin/editor
 
 # On development machine
-gdb ./build/bin/editor
+gdb build-<profile>/bin/editor
 (gdb) target remote targethost:1234
 (gdb) continue
 ```
@@ -353,19 +357,12 @@ end
 
 ## Build for Debugging
 
-```bash
-# Debug build with full symbols
-cmake -S . -B build-debug \
-    -DCMAKE_BUILD_TYPE=Debug \
-    -DTESTS=ON
+Use Forge profiles through `/phoe:build`:
 
-cmake --build build-debug --parallel
+- **`editor-debug`** — full symbols, no optimization, all assertions. The default for interactive GDB sessions; produces `build-editor-debug/bin/editor`.
+- **`editor-release`** — optimized, usually what CI/production ship with. Useful when reproducing release-only bugs; produces `build-editor-release/bin/editor`.
 
-# Release with debug info (for production crash analysis)
-cmake -S . -B build-relwithdebinfo \
-    -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-    -DTESTS=ON
-```
+Run `/phoe:build` after switching profiles or on a fresh worktree. If you need a RelWithDebInfo-style profile for post-mortem analysis on production crash dumps, add it as a new Forge profile under `BuildProfiles/` rather than running raw `cmake -S . -B <dir>` — that would create a sibling build dir outside Forge's management and diverge from the rest of the project's build system.
 
 ## Related Agents
 

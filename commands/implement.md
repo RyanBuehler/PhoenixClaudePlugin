@@ -14,18 +14,20 @@ Implement a Crucible Challenge end-to-end with human supervision. Accepts a labe
 
 ## 1. Bootstrap
 
-Follow `references/ensure-binary.md` for the **Crucible** row to guarantee `./crucible` and `./crucible-server` exist and match the expected version. If the procedure stops with a version mismatch, stop here and report it to the user.
+Run `/phoe:build crucible` to ensure both `crucible` and `crucible-server` exist under `build-crucible-${PHOE_ENV}-release/bin/` and match the expected version. A fresh worktree, or a first-time switch between host and container environments, will trigger a one-time clean build; subsequent invocations are no-ops. If `/phoe:build crucible` stops with a version mismatch, stop here and report it to the user.
 
-Then ensure the Crucible server is running (the CLI is a client; commands fail if the server is down):
+Resolve the environment suffix for subsequent invocations (include this line at the top of every bash block that touches a binary):
 
 ```bash
-./crucible-server --headless &
+PHOE_ENV=${PHOE_ENV:-$([ -f /.dockerenv ] && echo container || echo host)}
 ```
 
-Confirm Crucible is initialized for this project:
+The Crucible server is a user-managed process outside the plugin's scope — do not start it. If the CLI can't reach a server, the first `crucible` call below will fail with a clear error; surface that to the user and stop.
+
+Confirm Crucible is reachable and initialized for this project:
 
 ```bash
-./crucible status
+build-crucible-${PHOE_ENV}-release/bin/crucible status
 ```
 
 ## 2. Resolve the Challenge
@@ -35,7 +37,7 @@ Confirm Crucible is initialized for this project:
 1. List review challenges:
 
 ```bash
-./crucible --json challenge list --status=review
+build-crucible-${PHOE_ENV}-release/bin/crucible --json challenge list --status=review
 ```
 
 2. For each review challenge, probe the local git history for merge evidence (both signals are read-only):
@@ -54,7 +56,7 @@ git rev-parse --verify challenge/<LABEL> 2>/dev/null \
 3. If either signal fires, show the user the matching commit(s) and ask whether to mark the challenge merged. **Never auto-mark.** On confirmation:
 
 ```bash
-./crucible challenge move --label=<LABEL> merged
+build-crucible-${PHOE_ENV}-release/bin/crucible challenge move --label=<LABEL> merged
 ```
 
 4. If a review challenge shows no merge evidence, leave it in `review` — it is still under human review.
@@ -64,20 +66,20 @@ Then pick the next todo using saga-aware selection:
 1. List all sagas and their progress:
 
 ```bash
-./crucible --json saga list
+build-crucible-${PHOE_ENV}-release/bin/crucible --json saga list
 ```
 
 2. List all todo challenges:
 
 ```bash
-./crucible --json challenge list --status=todo
+build-crucible-${PHOE_ENV}-release/bin/crucible --json challenge list --status=todo
 ```
 
 3. Pick the best challenge using this priority order:
    - **Saga ordering first** — if a challenge belongs to a saga, only pick it if all earlier challenges in that saga are `merged` or `canceled`. Never skip ahead in a saga's ordering.
    - **Blocked check** — if a saga predecessor is in `review` or `implementing` (not yet merged), the next challenge cannot proceed. Move it to `blocked` and stop:
      ```bash
-     ./crucible challenge block <NEXT_ID> --blocked_by=<PREDECESSOR_ID> --reason="Awaiting merge of #<PREDECESSOR_ID> on branch challenge/<predecessor-label>"
+     build-crucible-${PHOE_ENV}-release/bin/crucible challenge block <NEXT_ID> --blocked_by=<PREDECESSOR_ID> --reason="Awaiting merge of #<PREDECESSOR_ID> on branch challenge/<predecessor-label>"
      ```
      Tell the user which challenge is blocked and why, then try the next eligible challenge. If no unblocked challenges remain, stop.
    - **Priority second** — among eligible challenges, pick the highest priority (critical > high > medium > low).
@@ -85,7 +87,7 @@ Then pick the next todo using saga-aware selection:
 
 4. Also check `blocked` challenges: for each, verify if the blocker is now `merged`. If so, auto-unblock:
    ```bash
-   ./crucible challenge unblock <ID> todo
+   build-crucible-${PHOE_ENV}-release/bin/crucible challenge unblock <ID> todo
    ```
    Then include the unblocked challenge in the candidate pool.
 
@@ -94,7 +96,7 @@ Then pick the next todo using saga-aware selection:
 **If argument is a label**, fetch by label:
 
 ```bash
-./crucible challenge show --label=<LABEL>
+build-crucible-${PHOE_ENV}-release/bin/crucible challenge show --label=<LABEL>
 ```
 
 **Check for existing handoff:** Look for `.claude/handoffs/<LABEL>-checkpoint.md`. If found:
@@ -112,7 +114,7 @@ Display the challenge details: title, description, acceptance criteria, and veri
 **Check for saga membership** — search the saga list for the resolved challenge ID. If it belongs to a saga:
 
 ```bash
-./crucible saga show --label=<SAGA_LABEL>
+build-crucible-${PHOE_ENV}-release/bin/crucible saga show --label=<SAGA_LABEL>
 ```
 
 Show the saga name, where this challenge sits in the ordering, and overall saga progress. This gives full feature context for the implementation.
@@ -148,10 +150,20 @@ cd .claude/worktrees/challenge-<label>
 
 Run all subsequent steps from inside the worktree directory.
 
+**Crucible CLI absolute path.** The `build-crucible-${PHOE_ENV}-release/` directory lives at the *main repo root*, not inside the worktree. Once you `cd` into the worktree, the relative path no longer resolves. Resolve the main-repo-rooted absolute path in every bash block that invokes the CLI:
+
+```bash
+PHOE_ENV=${PHOE_ENV:-$([ -f /.dockerenv ] && echo container || echo host)}
+CRUCIBLE="$(git rev-parse --path-format=absolute --git-common-dir | xargs dirname)/build-crucible-${PHOE_ENV}-release/bin/crucible"
+"$CRUCIBLE" challenge show --label=<LABEL>   # or any crucible subcommand
+```
+
+All subsequent `build-crucible-${PHOE_ENV}-release/bin/crucible <args>` snippets in this document assume you've derived `$CRUCIBLE` first — substitute `"$CRUCIBLE" <args>` when running them from inside the worktree.
+
 ## 6. Move to Implementing
 
 ```bash
-./crucible challenge move --label=<LABEL> implementing
+build-crucible-${PHOE_ENV}-release/bin/crucible challenge move --label=<LABEL> implementing
 ```
 
 ## 7. Explore and Understand
@@ -218,7 +230,7 @@ All verification must pass before proceeding:
 
 Before committing, systematically evaluate each acceptance criterion from the challenge JSON. The model that wrote the code must not self-approve without structured evaluation.
 
-1. Retrieve the challenge's acceptance criteria: `./crucible challenge show --label=<LABEL>`
+1. Retrieve the challenge's acceptance criteria: `build-crucible-${PHOE_ENV}-release/bin/crucible challenge show --label=<LABEL>`
 2. For **each** criterion, answer explicitly:
    - **Met?** Yes / No / Partially
    - **Evidence:** What in the diff proves this? (file:line, test name, or command output)
@@ -254,17 +266,45 @@ Commit all changes on the challenge branch with a descriptive message referencin
 Immediately after the commit lands, move the challenge to `review`. This is a mandatory, non-skippable final workflow step — implementation is not considered complete until the challenge is in `review`:
 
 ```bash
-./crucible challenge move --label=<LABEL> review
+build-crucible-${PHOE_ENV}-release/bin/crucible challenge move --label=<LABEL> review
 ```
 
 If this move fails (server down, label mismatch, Crucible not initialized), **stop and surface the error to the user**. Do not report the challenge as done, and do not continue to the report step, until the move has succeeded.
 
-## 14. Report
+## 14. Propagate Changes to Follow-on Challenges
+
+If this challenge belongs to a saga, reconcile its siblings — the implementation may have invalidated assumptions baked into later challenge specs (e.g., this challenge renamed a core type that a later challenge references by its old name, or changed a file path, function signature, or module boundary that a later challenge's `description`, `strategy`, `acceptance_criteria`, or `affected_files` mentions explicitly).
+
+1. List remaining siblings (todo + blocked) in the saga, after this challenge's position:
+   ```bash
+   build-crucible-${PHOE_ENV}-release/bin/crucible --json saga show --label=<SAGA_LABEL>
+   ```
+2. For each later sibling, fetch its full spec:
+   ```bash
+   build-crucible-${PHOE_ENV}-release/bin/crucible --json challenge show --label=<SIBLING_LABEL>
+   ```
+3. Scan each sibling's text for stale references against the diff this challenge produced. Things to look for:
+   - Type / class / function / method names that were renamed
+   - File paths that moved or were split
+   - API signatures or parameter names that changed
+   - Module or layer boundaries that shifted
+   - Concepts the sibling depends on that no longer exist or have been replaced
+4. For each sibling with stale references, update the affected fields:
+   ```bash
+   build-crucible-${PHOE_ENV}-release/bin/crucible challenge update --label=<SIBLING_LABEL> [--description=... --strategy=... --affected_files=...]
+   ```
+   Run `build-crucible-${PHOE_ENV}-release/bin/crucible challenge update --help` for the exact flags. Keep edits surgical — update only the references that are actually stale; do not rewrite specs or scope.
+5. If a sibling has no stale references, leave it alone.
+6. Record which siblings were updated (and what fields changed) for the report.
+
+Do not edit the implementation itself from this step — this is metadata reconciliation only. If the implementation surfaced a real scope problem in a later challenge (not a rename), note it in the report and let the user decide whether to re-plan.
+
+## 15. Report
 
 If the challenge belongs to a saga, show updated saga progress:
 
 ```bash
-./crucible saga show --label=<SAGA_LABEL>
+build-crucible-${PHOE_ENV}-release/bin/crucible saga show --label=<SAGA_LABEL>
 ```
 
 Tell the user:
@@ -273,10 +313,11 @@ Tell the user:
 - Verification results (all passing)
 - Branch name: `challenge/<label>`
 - Saga progress (if applicable)
+- Follow-on sibling updates, if any (which siblings were updated and what fields changed)
 - The challenge is now in `review` status — user inspects before marking merged
 
 **Do not merge or mark as merged.** The user will review and decide whether to merge, request changes, or mark merged.
 
 Use `/phoe:plan` to create new challenges or extend an existing saga.
 
-> **Note:** When the user moves a challenge to `merged`, it is automatically archived in the server's data dir. If work needs to be revisited, use `./crucible challenge unarchive --label=<LABEL>` to restore it to `todo` status.
+> **Note:** When the user moves a challenge to `merged`, it is automatically archived in the server's data dir. If work needs to be revisited, use `build-crucible-${PHOE_ENV}-release/bin/crucible challenge unarchive --label=<LABEL>` to restore it to `todo` status.

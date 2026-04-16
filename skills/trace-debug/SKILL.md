@@ -43,7 +43,7 @@ Complete every step before placing a single trace.
 
 Run the repro steps twice unchanged. The bug must fire both times. If it fires once and passes once, **STOP** — a non-deterministic bug will poison every bisection round because a missing trace cannot be distinguished from "didn't trigger this run."
 
-Stabilize by narrowing the environment: pin random seeds (`std::mt19937`), force a single tick rate, disable subsystems that introduce asynchrony, or isolate the failing test via `ctest --test-dir build -C Release -R "<name>" --repeat until-pass:10` to confirm it fails 10/10 times. If you cannot stabilize it, hand off to `invoke-concurrency-agent`.
+Stabilize by narrowing the environment: pin random seeds (`std::mt19937`), force a single tick rate, disable subsystems that introduce asynchrony, or isolate the failing test via `ctest --test-dir build-<profile> -R "<name>" --repeat until-pass:10` (substitute `<profile>` for `editor-debug` or `editor-release`) to confirm it fails 10/10 times. If you cannot stabilize it, hand off to `invoke-concurrency-agent`.
 
 ### 1.2 State the hypothesis in one sentence
 
@@ -99,17 +99,19 @@ Structural boundaries are where bugs hide (data crosses an interface, invariants
 
 ### 2.3 Build and reproduce
 
-```bash
-cmake --build build --config Release --parallel
-```
-
-Never use `-j` or `-j$(nproc)` — that's a hard project rule. For test-case repros:
+Rebuild through Forge (which handles profile selection and env-suffixed tool paths):
 
 ```bash
-ctest --test-dir build -C Release -R "<TestName>" --output-on-failure
+/phoe:build
 ```
 
-For engine repros: `./build/bin/editor`. If the repro requires interactive steps, ask the user for them once; after that, rebuild-reproduce autonomously each round.
+Never invoke `cmake --build` directly, and never use `-j` or `-j$(nproc)` — that's a hard project rule. For test-case repros (substitute `<profile>` for `editor-debug` or `editor-release`):
+
+```bash
+ctest --test-dir build-<profile> -R "<TestName>" --output-on-failure
+```
+
+For engine repros: `build-<profile>/bin/editor`. If the repro requires interactive steps, ask the user for them once; after that, rebuild-reproduce autonomously each round.
 
 **Fix compile errors in the instrumentation before re-reading code.** A trace that does not compile teaches you nothing.
 

@@ -31,10 +31,10 @@ echo "aurora.screenshot" > /tmp/phoenix-console.fifo
 
 ### Method 2: One-Shot Capture (Engine Not Running)
 
-Launch the engine, capture a single screenshot after a 2-second stabilization delay, then shut down:
+Launch the engine, capture a single screenshot after a 2-second stabilization delay, then shut down. Substitute `<profile>` for whichever Forge profile has been built (`editor-release` or `editor-debug`); if neither build directory exists, run `/phoe:build` first:
 
 ```bash
-./build/bin/editor --aurora.screenshot.exit
+build-<profile>/bin/editor --aurora.screenshot.exit
 ```
 
 ## Polling for Output
@@ -70,7 +70,7 @@ The engine supports external command injection via a FIFO pipe:
 
 ```bash
 # Launch the engine with pipe support
-./build/bin/editor --console-pipe=/tmp/phoenix-console.fifo
+build-<profile>/bin/editor --console-pipe=/tmp/phoenix-console.fifo
 
 # Send commands from another terminal
 echo "aurora.screenshot" > /tmp/phoenix-console.fifo
@@ -91,7 +91,7 @@ The pipe accepts one command per line. Commands are queued and executed on the m
 Screenshots require a display server (X11 or Wayland). On headless CI or servers, use `xvfb-run`:
 
 ```bash
-xvfb-run ./build/bin/editor --aurora.screenshot.exit
+xvfb-run build-<profile>/bin/editor --aurora.screenshot.exit
 ```
 
 ## Analysis Guidelines

@@ -16,22 +16,20 @@ Activate when ALL of these are true:
 
 ### 1. Rebuild
 
-```bash
-cmake --build build --config Release --parallel
-```
+Run `/phoe:build` — this rebuilds the engine through Forge using the active profile.
 
 ### 2. Capture screenshot
 
-Use `/screenshot` to capture the current visual state. If the engine is running via console pipe:
+Use `/phoe:screenshot` to capture the current visual state. If the engine is running via console pipe:
 
 ```bash
 echo "aurora.screenshot" > /tmp/phoenix-console.fifo
 ```
 
-Otherwise, one-shot capture:
+Otherwise, one-shot capture via the Forge-managed build output (substitute `<profile>` for `editor-release` or `editor-debug`):
 
 ```bash
-./build/bin/editor --aurora.screenshot.exit
+build-<profile>/bin/editor --aurora.screenshot.exit
 ```
 
 Read `Screenshots/.last-capture` to get the output path, then read the captured PNG.

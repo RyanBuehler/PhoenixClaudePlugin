@@ -11,18 +11,20 @@ Fix a Crucible Bug end-to-end. Accepts a label or `next` to auto-pick the highes
 
 ## 1. Bootstrap
 
-Follow `references/ensure-binary.md` for the **Crucible** row to guarantee `./crucible` and `./crucible-server` exist and match the expected version. If the procedure stops with a version mismatch, stop here and report it to the user.
+Run `/phoe:build crucible` to ensure both `crucible` and `crucible-server` exist under `build-crucible-${PHOE_ENV}-release/bin/` and match the expected version. A fresh worktree, or a first-time switch between host and container environments, will trigger a one-time clean build; subsequent invocations are no-ops. If `/phoe:build crucible` stops with a version mismatch, stop here and report it to the user.
 
-Then ensure the Crucible server is running (the CLI is a client; commands fail if the server is down):
+Resolve the environment suffix for subsequent invocations (include this line at the top of every bash block that touches a binary):
 
 ```bash
-./crucible-server --headless &
+PHOE_ENV=${PHOE_ENV:-$([ -f /.dockerenv ] && echo container || echo host)}
 ```
 
-Confirm Crucible is initialized for this project:
+The Crucible server is a user-managed process outside the plugin's scope — do not start it. If the CLI can't reach a server, the first `crucible` call below will fail with a clear error; surface that to the user and stop.
+
+Confirm Crucible is reachable and initialized for this project:
 
 ```bash
-./crucible status
+build-crucible-${PHOE_ENV}-release/bin/crucible status
 ```
 
 ## 2. Resolve the Bug
@@ -32,7 +34,7 @@ Confirm Crucible is initialized for this project:
 1. List review bugs:
 
 ```bash
-./crucible --json bug list --status=review
+build-crucible-${PHOE_ENV}-release/bin/crucible --json bug list --status=review
 ```
 
 2. For each review bug, probe the local git history for merge evidence (both signals are read-only):
@@ -51,7 +53,7 @@ git rev-parse --verify bug/<LABEL> 2>/dev/null \
 3. If either signal fires, show the user the matching commit(s) and ask whether to mark the bug done. **Never auto-mark.** On confirmation:
 
 ```bash
-./crucible bug move --label=<LABEL> done
+build-crucible-${PHOE_ENV}-release/bin/crucible bug move --label=<LABEL> done
 ```
 
 4. If a review bug shows no merge evidence, leave it in `review`.
@@ -61,7 +63,7 @@ Then pick the next todo using severity-aware selection:
 1. List all todo bugs:
 
 ```bash
-./crucible --json bug list --status=todo
+build-crucible-${PHOE_ENV}-release/bin/crucible --json bug list --status=todo
 ```
 
 2. Pick the best bug using this priority order:
@@ -74,7 +76,7 @@ Then pick the next todo using severity-aware selection:
 **If argument is a label**, fetch by label:
 
 ```bash
-./crucible bug show --label=<LABEL>
+build-crucible-${PHOE_ENV}-release/bin/crucible bug show --label=<LABEL>
 ```
 
 **Check for existing handoff:** Look for `.claude/handoffs/bug-<LABEL>-checkpoint.md`. If found:
@@ -100,10 +102,20 @@ cd .claude/worktrees/bug-<label>
 
 Run all subsequent steps from inside the worktree directory.
 
+**Crucible CLI absolute path.** The `build-crucible-${PHOE_ENV}-release/` directory lives at the *main repo root*, not inside the worktree. Once you `cd` into the worktree, the relative path no longer resolves. Resolve the main-repo-rooted absolute path in every bash block that invokes the CLI:
+
+```bash
+PHOE_ENV=${PHOE_ENV:-$([ -f /.dockerenv ] && echo container || echo host)}
+CRUCIBLE="$(git rev-parse --path-format=absolute --git-common-dir | xargs dirname)/build-crucible-${PHOE_ENV}-release/bin/crucible"
+"$CRUCIBLE" bug show --label=<LABEL>   # or any crucible subcommand
+```
+
+All subsequent `build-crucible-${PHOE_ENV}-release/bin/crucible <args>` snippets in this document assume you've derived `$CRUCIBLE` first — substitute `"$CRUCIBLE" <args>` when running them from inside the worktree.
+
 ## 5. Move to In Progress
 
 ```bash
-./crucible bug move --label=<LABEL> implementing
+build-crucible-${PHOE_ENV}-release/bin/crucible bug move --label=<LABEL> implementing
 ```
 
 ## 6. Reproduce
@@ -165,7 +177,7 @@ All verification must pass before proceeding:
 
 Before committing, systematically evaluate each acceptance criterion from the bug JSON.
 
-1. Retrieve the bug's acceptance criteria: `./crucible bug show --label=<LABEL>`
+1. Retrieve the bug's acceptance criteria: `build-crucible-${PHOE_ENV}-release/bin/crucible bug show --label=<LABEL>`
 2. For **each** criterion, answer explicitly:
    - **Met?** Yes / No / Partially
    - **Evidence:** What in the diff proves this? (file:line, test name, or command output)
@@ -195,7 +207,7 @@ Commit all changes on the bug branch with a descriptive message referencing the 
 Immediately after the commit lands, move the bug to `review`. This is a mandatory, non-skippable final workflow step — the fix is not considered complete until the bug is in `review`:
 
 ```bash
-./crucible bug move --label=<LABEL> review
+build-crucible-${PHOE_ENV}-release/bin/crucible bug move --label=<LABEL> review
 ```
 
 If this move fails (server down, label mismatch, Crucible not initialized), **stop and surface the error to the user**. Do not report the bug as fixed, and do not continue to the report step, until the move has succeeded.
@@ -210,4 +222,4 @@ Tell the user:
 
 **Do not merge or mark as done.** The user will review and decide.
 
-> **Note:** When the user moves a bug to `done`, it is automatically archived in the server's data dir. If work needs to be revisited, use `./crucible bug unarchive --label=<LABEL>` to restore it to `todo` status.
+> **Note:** When the user moves a bug to `done`, it is automatically archived in the server's data dir. If work needs to be revisited, use `build-crucible-${PHOE_ENV}-release/bin/crucible bug unarchive --label=<LABEL>` to restore it to `todo` status.

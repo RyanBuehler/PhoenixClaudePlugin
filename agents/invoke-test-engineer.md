@@ -33,25 +33,33 @@ Modules/
 ```
 
 ### Running Tests
+
+**Phoenix runs tests through Forge, not raw cmake/ctest.** Always go through the plugin commands so you pick up the active profile (editor-debug / editor-release) and the environment-suffixed build dir.
+
 ```bash
-# Full build with tests
-cmake -S . -B build -DTESTS=ON -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release --parallel
+# Full build + all checks (build + format + lint + test)
+/phoe:verify
 
-# Run all tests (unit trials only — benchmarks skipped by default)
-ctest --test-dir build -C Release --output-on-failure -L "CORE_TRIAL|PLUGIN_TRIAL|APP_TRIAL"
+# Just the test suite (assumes build is current)
+/phoe:test
+```
 
-# Run specific test executable
-./build/bin/Engine_EngineTrials
+Forge drives cmake/ctest under the hood. Do not invoke cmake or ctest directly — a bare `build/` dir will not exist in this project, and any you create will bypass the Forge profile system.
 
-# Run with verbose output
-ctest --test-dir build -C Release --output-on-failure -V
+When you need finer-grained control (e.g., during local debugging of a flaky test), ctest flags still apply to the Forge-managed build dir. Substitute `<profile>` for `editor-debug` or `editor-release` and `<bin>` for `build-<profile>/bin`:
 
-# Run tests matching a pattern
-ctest --test-dir build -C Release -R "Engine"
+```bash
+# Run tests matching a pattern against the already-built profile
+ctest --test-dir build-<profile> --output-on-failure -R "Engine"
+
+# Verbose output
+ctest --test-dir build-<profile> --output-on-failure -V
 
 # List available tests
-ctest --test-dir build -N
+ctest --test-dir build-<profile> -N
+
+# Run a specific test executable directly
+build-<profile>/bin/Engine_EngineTrials
 ```
 
 ## Creating a New Test File
@@ -137,29 +145,37 @@ Benchmarks use a separate `BenchmarkRegistry` — they don't mix with unit tests
 
 ```bash
 # Run benchmarks for a specific executable
-./build/bin/Engine_MyComponentBenchmarkTrials --type benchmark
+build-<profile>/bin/Engine_MyComponentBenchmarkTrials --type benchmark
 
 # List all registered trials and benchmarks
-./build/bin/Engine_MyComponentBenchmarkTrials --list
+build-<profile>/bin/Engine_MyComponentBenchmarkTrials --list
 
 # Run both unit tests and benchmarks
-./build/bin/Engine_MyComponentBenchmarkTrials --type unit --type benchmark
+build-<profile>/bin/Engine_MyComponentBenchmarkTrials --type unit --type benchmark
 ```
 
 Benchmarks are skipped by default (no `--type` flag = unit trials only). CI never runs benchmarks — they're for local performance analysis.
 
 ### Step 4: Build and Run
 
+Test files are globbed automatically — no manual registration needed. To pick them up, just run the project build + test flow via Forge:
+
 ```bash
-# Rebuild (test files are globbed automatically)
-cmake --build build --config Release --parallel
+# Build + run all checks (includes the test suite)
+/phoe:verify
 
-# Run all unit tests
-ctest --test-dir build -C Release --output-on-failure -L "CORE_TRIAL|PLUGIN_TRIAL|APP_TRIAL"
-
-# Run tests for a specific module
-ctest --test-dir build -C Release -R "Engine"
+# Just the test suite
+/phoe:test
 ```
+
+For iterating on a single test while the rest of the suite stays green, run ctest directly against the already-built Forge profile (substitute `<profile>` for the active one — `editor-debug` or `editor-release`):
+
+```bash
+# Run tests for a specific module
+ctest --test-dir build-<profile> --output-on-failure -R "Engine"
+```
+
+Do not invoke `cmake --build build` — Phoenix does not use a bare `build/` directory; Forge owns the profile-suffixed build dirs.
 
 ### Assertion API
 
@@ -545,14 +561,14 @@ void TestCollection_Good()
 
 ### Reproduce Locally
 ```bash
-# Run the specific failing test
-ctest --test-dir build -R "TestName" --output-on-failure
+# Run the specific failing test (substitute <profile> for editor-debug or editor-release)
+ctest --test-dir build-<profile> -R "TestName" --output-on-failure
 
 # Run with verbose output
-ctest --test-dir build -R "TestName" -V
+ctest --test-dir build-<profile> -R "TestName" -V
 
 # Run test executable directly for more control
-./build/bin/Module_ModuleTrials --run "TestName"
+build-<profile>/bin/Module_ModuleTrials --run "TestName"
 ```
 
 ### Add Diagnostic Output
@@ -648,9 +664,5 @@ void TestFilePermissions()
 - No flaky tests allowed in CI
 
 ### Test Execution in CI
-```bash
-# Standard CI test command
-cmake -S . -B build -DTESTS=ON -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release --parallel
-ctest --test-dir build -C Release --output-on-failure
-```
+
+CI uses its own build paths (`build-forge-bootstrap/` and similar) outside the scope of this agent. For local verification mirroring CI, run `/phoe:verify` — it drives Forge with the project's configured profiles and produces the same pass/fail signal as the CI `Linux: Build & Test (Incremental)` job.
