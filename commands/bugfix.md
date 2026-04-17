@@ -161,6 +161,8 @@ If diagnosis is consuming significant context, write a checkpoint before impleme
 
 Implement the fix. Follow the project's normal development workflow — write code, follow conventions from CLAUDE.md.
 
+When emplacing TODO comments during the fix, follow the discipline in the plugin's CLAUDE.md "TODO Comments" section: keep them to one line, describe the work itself, never embed file paths, line numbers, bug labels, PR numbers, branch names, or dates (anything that can go stale), and never leave a TODO that narrates the change you just made.
+
 ## 9. Verify
 
 All verification must pass before proceeding:
@@ -202,6 +204,43 @@ Invoke the code reviewer as a **separate agent** to evaluate the implementation 
 
 Commit all changes on the bug branch with a descriptive message referencing the bug label.
 
+## 12a. Write Finalize Handoff
+
+Write a handoff file so `/phoe:finalize` can publish this fix without reconstructing context.
+
+Path: `.claude/handoffs/finalize/<branch-suffix>.md` where `<branch-suffix>` is the branch name
+with slashes replaced by dashes (`bug/windows-focus-loss` → `bug-windows-focus-loss`). Create
+the directory on first write: `mkdir -p .claude/handoffs/finalize`.
+
+```markdown
+# Finalize Handoff
+
+## Task type
+bug
+
+## Branch
+bug/<label>
+
+## Strategy
+branch-per-bug
+
+## Tasks
+- <label> (status: review)
+
+## Summary
+<2–4 bullets describing the bug, the root cause, and the fix>
+
+## Verification
+Reproduction steps no longer trigger the bug. Passed `/phoe:verify` and `invoke-code-reviewer`
+with zero CRITICAL findings before this handoff was written.
+
+## Source
+/phoe:bugfix run on <YYYY-MM-DD>
+```
+
+Do not include file paths, line numbers, PR numbers, or any detail that will go stale once the
+fix is merged. The handoff is consumed and deleted by `/phoe:finalize`.
+
 ## 13. Move to Review — Required
 
 Immediately after the commit lands, move the bug to `review`. This is a mandatory, non-skippable final workflow step — the fix is not considered complete until the bug is in `review`:
@@ -218,6 +257,7 @@ Tell the user:
 - What was fixed and the root cause
 - Verification results (all passing, reproduction steps no longer trigger)
 - Branch name: `bug/<label>`
+- Handoff written to `.claude/handoffs/finalize/<branch-suffix>.md` — run `/phoe:finalize` to publish
 - The bug is now in `review` status — user inspects before marking done
 
 **Do not merge or mark as done.** The user will review and decide.

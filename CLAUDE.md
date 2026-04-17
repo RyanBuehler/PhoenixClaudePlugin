@@ -134,6 +134,57 @@ For all code style and design practices, follow `Docs/StyleGuide.md`.
   dir (which is always profile-suffixed, e.g. `build-editor-debug/`). Don't
   run cmake/ctest against `build/`; only `Tools/tidy.py` reads from it.
 
+## TODO Comments
+
+TODOs in code are notes to a future programmer who has none of today's context. Write them so they
+stay useful as the codebase moves around them.
+
+- **Keep them short.** One line, one sentence. If a TODO needs a paragraph, the work needs a
+  Crucible challenge or bug, not a comment.
+- **Describe the work, not the origin.** State what needs to happen, not where the note came from.
+- **Never reference anything that can go stale.** No file paths, no line numbers, no Crucible
+  labels, no PR numbers, no branch names, no commit hashes, no agent names, no date. All of those
+  drift the moment something is renamed, rebased, squashed, archived, or merged. The TODO should
+  still make sense a year later when none of that context exists.
+- **Do not annotate work you just did.** TODOs that explain a refactor, justify a recent rename,
+  or narrate a decision belong in the commit message and PR description — not the source. Future
+  readers see only the current code; commentary about what *used* to be there is noise.
+- **Do not annotate trivially obvious follow-ups.** "TODO: also update the header" is something
+  you do now, not later.
+
+Good:
+
+    // TODO: handle UTF-8 surrogate pairs in token splitter
+
+Bad:
+
+    // TODO(execute-saga-canvas-overhaul): per code review on PR #312, see Modules/Mosaic/Canvas.cpp:142
+    // TODO: previously this used a raw pointer, switched to CanvasLease in this commit
+    // TODO: address feedback from challenge `add-viewport-resize`
+
+This discipline applies to TODOs added by humans, by `/phoe:implement`, by `/phoe:bugfix`, by
+`/phoe:execute` review-triage subagents, and by any other agent that touches the source.
+
+## Crucible Lifecycle Reference
+
+The plugin's Crucible workflows operate on three task types. Match status names exactly — the CLI
+rejects unknown statuses, and using the wrong terminal status (e.g. `merged` for a bug, `done` for
+a challenge) causes silent reconciliation failures across `/phoe:implement`, `/phoe:execute`,
+`/phoe:bugfix`, and `/phoe:finalize`.
+
+| Task type | Statuses (in order)                                              | Terminal |
+|-----------|------------------------------------------------------------------|----------|
+| Challenge | `todo` → `implementing` → `review` → `merged` (or `blocked`)     | `merged` |
+| Bug       | `todo` → `implementing` → `review` → `done`                      | `done`   |
+| Saga      | *(no status — tracks collective challenge progress)*             | n/a      |
+
+CLI shape is parallel — `crucible challenge move --label=<L> <status>` /
+`crucible bug move --label=<L> <status>`. When writing a workflow that accepts either, branch on
+type early and use the type-correct verbs throughout; do not paper over the difference.
+
+Branch naming follows the same split: `challenge/<label>` for challenges, `bug/<label>` for bugs.
+Worktrees follow at `.claude/worktrees/<type>-<label>` (slashes converted to dashes).
+
 ## Labels and Identifiers
 
 - Use `Label` (not `string`/`string_view`) for keys, registry lookups, dispatch tokens,

@@ -1,18 +1,26 @@
 ---
-description: Finalize completed challenges into remote main via PR — analyzes branch topology, recommends PR strategy, pushes, creates PRs, addresses review feedback, and tracks post-merge Crucible status.
+description: Finalize completed challenges and bugs into remote main via PR — reads handoffs, analyzes branch topology, recommends PR strategy, pushes, creates PRs, addresses review feedback, and tracks post-merge Crucible status.
 ---
 
-Finalize completed Crucible challenges into remote main. Analyzes branch topology from a `/phoe:execute` run (or manual `/phoe:implement` sessions), recommends a PR strategy, creates PRs after user approval, addresses PR review comments, and tracks post-merge status updates.
+Finalize completed Crucible challenges and bugs into remote main. Reads handoffs left by
+`/phoe:execute`, `/phoe:implement`, and `/phoe:bugfix`, analyzes branch topology, recommends a
+PR strategy, creates PRs after user approval, addresses PR review comments, and tracks
+post-merge status updates.
 
-> **Verification is the implementing agent's responsibility.** Challenges arriving in `review` status have already passed `/phoe:verify` (build + format + lint + test). This command does not re-run the full verification suite. When addressing PR review comments, rebuild to confirm the fix compiles. Only re-run `/phoe:verify` if the changes are significant enough to warrant it (e.g., logic changes, new files, API modifications).
+> **Verification is the implementing agent's responsibility.** Tasks arriving in `review` status have already passed `/phoe:verify` (build + format + lint + test). This command does not re-run the full verification suite. When addressing PR review comments, rebuild to confirm the fix compiles. Only re-run `/phoe:verify` if the changes are significant enough to warrant it (e.g., logic changes, new files, API modifications).
+
+> **Lifecycle terms.** Challenges terminate at `merged`. Bugs terminate at `done`. The CLI has
+> separate `challenge` and `bug` subcommands; their status verbs do not interchange. See the
+> "Crucible Lifecycle Reference" section in the plugin's CLAUDE.md.
 
 ## Arguments
 
-- *(no argument)* — assess all `review`-status challenges and recommend a finalization strategy
-- **`<label>`** — finalize a specific challenge
-- **`merged <label> [<label2> ...]`** — mark one or more challenges as merged after their PR lands on remote main
+- *(no argument)* — assess all `review`-status challenges and bugs and recommend a finalization strategy
+- **`<label>`** — finalize a specific challenge or bug (type is inferred from the branch prefix and handoff)
+- **`landed <label> [<label2> ...]`** — mark one or more tasks as terminal after their PR lands on remote main (translates to `merged` for challenges, `done` for bugs)
+- **`merged <label> [<label2> ...]`** — alias for `landed`, kept for backwards compatibility
 
-Determine which mode by checking if the first word is `merged` (post-merge tracking), otherwise treat as assessment/finalization mode.
+Determine which mode by checking if the first word is `landed` or `merged` (post-merge tracking), otherwise treat as assessment/finalization mode.
 
 ## 1. Bootstrap
 
@@ -32,33 +40,63 @@ build-crucible-${PHOE_ENV}-release/bin/crucible status
 
 ## 2. Assess State
 
-### 2a. Gather review challenges
+### 2a. Read finalize handoffs
+
+The implementing commands (`/phoe:execute`, `/phoe:implement`, `/phoe:bugfix`) drop a handoff
+file per branch into `.claude/handoffs/finalize/` describing what landed and how it should be
+published.
+
+```bash
+ls .claude/handoffs/finalize/ 2>/dev/null
+```
+
+Read every handoff file. Each one tells you: the task type (`challenge` or `bug`), the branch
+name, the strategy hint (`branch-per-challenge`, `branch-per-bug`, or `combined-branch`), the
+tasks the branch carries, the saga (if any), and a short summary.
+
+If the handoff directory is empty or missing, fall back to listing `review`-status tasks
+directly (step 2b). Handoffs are an optimization, not a requirement — older work may not have
+them.
+
+### 2b. Gather review tasks (challenges and bugs)
+
+Always list both, even when handoffs are present, to catch anything the user moved to `review`
+manually since the last implementing run:
 
 ```bash
 build-crucible-${PHOE_ENV}-release/bin/crucible --json challenge list --status=review
+build-crucible-${PHOE_ENV}-release/bin/crucible --json bug list --status=review
 ```
 
-If a specific label was given, filter to just that challenge. If no challenges are in `review`, report and stop.
+If a specific label was given, filter accordingly. Resolve the type from the handoff first; if
+no handoff exists, probe both `challenge show --label=<L>` and `bug show --label=<L>` to find
+the matching task. Throughout the rest of the command, branch on type so you call
+`crucible challenge ...` for challenges and `crucible bug ...` for bugs — never mix.
 
-### 2b. Verify branch existence
+If nothing is in `review` for either type, report and stop.
 
-For each review challenge, confirm the local branch exists:
+### 2c. Verify branch existence
+
+For each review task, confirm the local branch exists:
 
 ```bash
-git rev-parse --verify challenge/<label> 2>/dev/null
+git rev-parse --verify challenge/<label> 2>/dev/null  # for challenges
+git rev-parse --verify bug/<label> 2>/dev/null        # for bugs
 ```
 
-If a branch is missing, warn the user and exclude it from finalization — it may exist in a different clone or have been cleaned up.
+If a handoff lists a combined-branch (e.g. `challenge/saga-canvas-overhaul`), verify that
+branch instead. If a branch is missing, warn the user and exclude it from finalization — it may
+exist in a different clone or have been cleaned up.
 
-### 2c. Sync remote
+### 2d. Sync remote
 
 ```bash
 git fetch origin main
 ```
 
-### 2d. Detect fix commits
+### 2e. Detect fix commits
 
-During `/phoe:execute`, the review phase (steps 4e–4f) may apply fix or suggestion-triage commits directly to local `main`. These are commits on `main` that no challenge branch contains.
+During `/phoe:execute`, the review phase (steps 4e–4f) may apply fix or suggestion-triage commits directly to local `main`. These are commits on `main` that no challenge or bug branch contains.
 
 ```bash
 ORIGIN_MAIN=$(git rev-parse origin/main)
@@ -68,20 +106,20 @@ LOCAL_MAIN=$(git rev-parse main)
 if [ "$ORIGIN_MAIN" = "$LOCAL_MAIN" ]; then
     FIX_COMMITS=0
 else
-    CHALLENGE_BRANCHES=$(git branch --list 'challenge/*' --format='%(refname:short)' | tr '\n' ' ')
-    FIX_COMMITS=$(git log --oneline origin/main..main --not $CHALLENGE_BRANCHES | wc -l)
+    WORK_BRANCHES=$(git branch --list 'challenge/*' 'bug/*' --format='%(refname:short)' | tr '\n' ' ')
+    FIX_COMMITS=$(git log --oneline origin/main..main --not $WORK_BRANCHES | wc -l)
 fi
 ```
 
-Record the count. If non-zero, the challenge branches alone do not represent the full reviewed state — this constrains the strategy options.
+Record the count. If non-zero, the work branches alone do not represent the full reviewed state — this constrains the strategy options.
 
-### 2e. Classify branch topology
+### 2f. Classify branch topology
 
-For each challenge branch, determine its relationship to `origin/main`:
+For each work branch (a challenge or bug task), determine its relationship to `origin/main`:
 
 ```bash
 ORIGIN_MAIN=$(git rev-parse origin/main)
-MERGE_BASE=$(git merge-base $ORIGIN_MAIN challenge/<label>)
+MERGE_BASE=$(git merge-base $ORIGIN_MAIN <branch>)
 
 if [ "$MERGE_BASE" = "$ORIGIN_MAIN" ]; then
     echo "INDEPENDENT"
@@ -90,29 +128,32 @@ else
 fi
 ```
 
-For dependent branches, identify which challenge branches are ancestors:
+For dependent branches, identify which other work branches are ancestors:
 
 ```bash
-for other in $CHALLENGE_BRANCHES; do
-    if [ "$other" != "challenge/<label>" ]; then
-        if git merge-base --is-ancestor "$other" "challenge/<label>" 2>/dev/null; then
+for other in $WORK_BRANCHES; do
+    if [ "$other" != "<branch>" ]; then
+        if git merge-base --is-ancestor "$other" "<branch>" 2>/dev/null; then
             echo "  predecessor: $other"
         fi
     fi
 done
 ```
 
-Build a dependency graph: nodes are challenges, directed edges mean "A is ancestor of B."
+Build a dependency graph: nodes are work branches, directed edges mean "A is ancestor of B."
 
-### 2f. Group into finalization sets
+### 2g. Group into finalization sets
 
-Using the dependency graph and saga membership, group challenges:
+Using the dependency graph, the handoff strategy hints from 2a, and saga membership, group work branches:
 
-- **Independent set**: Challenges with no dependency edges between them. Each can be a standalone PR against `main`.
+- **Independent set**: Branches with no dependency edges between them. Each can be a standalone PR against `main`.
 - **Dependency chain**: A linear sequence A → B → C where each depends on its predecessor. Typically a saga executed in order.
+- **Combined branch**: A single branch carrying multiple challenges (declared by an `/phoe:execute` handoff with `Strategy: combined-branch`). Treat as one PR; do not try to split.
 - **Mixed**: Some independent, some chained. Handle each group by its type.
 
-### 2g. Check saga membership
+Bugs are always one branch per task — they have no saga and no combined-branch strategy. Group them as independent unless a manual sequence has produced dependent bug branches.
+
+### 2h. Check saga membership
 
 For each challenge, check if it belongs to a saga:
 
@@ -120,7 +161,7 @@ For each challenge, check if it belongs to a saga:
 build-crucible-${PHOE_ENV}-release/bin/crucible --json saga list
 ```
 
-Saga membership informs the strategy recommendation — saga challenges are naturally grouped.
+Saga membership informs the strategy recommendation — saga challenges are naturally grouped. Bugs do not have sagas; skip this for bug branches.
 
 ## 3. Recommend Strategy
 
@@ -231,16 +272,16 @@ git checkout -b land/<name> main
 git push -u origin land/<name>
 ```
 
-For combined PRs without fix commits, using the last challenge branch:
+For combined PRs without fix commits, push the branch declared by the handoff (or the last branch in the dependency chain when there is no handoff):
 
 ```bash
-git push -u origin challenge/<last-in-chain>
+git push -u origin <branch-name>
 ```
 
-For individual or stacked PRs:
+For individual or stacked PRs (challenge or bug):
 
 ```bash
-git push -u origin challenge/<label>
+git push -u origin challenge/<label>   # or bug/<label>
 ```
 
 ### 4b. Create PRs
@@ -251,9 +292,9 @@ Follow the project's PR format — summary and Crucible reference only, no test 
 
 ```bash
 gh pr create \
-  --head challenge/<label> \
+  --head <type>/<label> \
   --base <target> \
-  --title "<challenge title>" \
+  --title "<task title>" \
   --body "$(cat <<'EOF'
 ## Summary
 <2-4 bullet points: what changed and why>
@@ -263,7 +304,7 @@ EOF
 )"
 ```
 
-For stacked PRs, `<target>` is `challenge/<predecessor-label>` for dependent challenges, `main` for the first.
+`<type>` is `challenge` or `bug`. For stacked PRs (challenges only), `<target>` is `challenge/<predecessor-label>` for dependent challenges, `main` for the first. Bugs always target `main`.
 
 **Combined PR:**
 
@@ -274,14 +315,14 @@ gh pr create \
   --title "<saga name or descriptive batch title>" \
   --body "$(cat <<'EOF'
 ## Summary
-<bullet points covering all challenges in the set>
+<bullet points covering all tasks in the set>
 
 Crucible: <label-1>, <label-2>, <label-3>
 EOF
 )"
 ```
 
-Compose the summary from each challenge's title and key changes. Keep it concise — the individual challenge specs in Crucible are the detailed record.
+Compose the summary from the handoff (if present) plus each task's title and key changes. Keep it concise — the individual specs in Crucible are the detailed record.
 
 ### 4c. Report
 
@@ -289,16 +330,17 @@ Compose the summary from each challenge's title and key changes. Keep it concise
 PRs Created
 ===========
 
-| PR | Challenge(s) | URL | Base |
-|----|-------------|-----|------|
-| #42 | add-viewport-resize | https://github.com/.../pull/42 | main |
-| #43 | wire-canvas-events | https://github.com/.../pull/43 | challenge/add-viewport-resize |
-| #44 | polish-canvas-api | https://github.com/.../pull/44 | challenge/wire-canvas-events |
+| PR | Tasks | URL | Base |
+|----|-------|-----|------|
+| #42 | challenge/add-viewport-resize | https://github.com/.../pull/42 | main |
+| #43 | challenge/wire-canvas-events  | https://github.com/.../pull/43 | challenge/add-viewport-resize |
+| #44 | challenge/polish-canvas-api   | https://github.com/.../pull/44 | challenge/wire-canvas-events |
+| #45 | bug/windows-focus-loss        | https://github.com/.../pull/45 | main |
 
-Merge order: #42 → #43 → #44 (stacked — merge in sequence)
+Merge order: #42 → #43 → #44 (stacked — merge in sequence); #45 independent
 
 After each merge, report back or run:
-  /phoe:finalize merged <label>
+  /phoe:finalize landed <label>
 ```
 
 For combined:
@@ -307,12 +349,12 @@ For combined:
 PR Created
 ==========
 
-| PR | Challenge(s) | URL |
-|----|-------------|-----|
+| PR | Tasks | URL |
+|----|-------|-----|
 | #42 | add-viewport-resize, wire-canvas-events, polish-canvas-api | https://github.com/.../pull/42 |
 
 After merge, run:
-  /phoe:finalize merged add-viewport-resize wire-canvas-events polish-canvas-api
+  /phoe:finalize landed add-viewport-resize wire-canvas-events polish-canvas-api
 ```
 
 ## 5. Address PR Review Comments
@@ -335,10 +377,12 @@ Parse the review comments to understand what needs to change.
 Check out the relevant branch and apply the requested changes:
 
 ```bash
-git checkout challenge/<label>
+git checkout <type>/<label>   # challenge/<label> or bug/<label>
 ```
 
 Apply fixes directly. These are typically small, targeted changes — the implementation was already reviewed and verified by the implementing agent.
+
+If the fix introduces or modifies TODO comments, follow the discipline in the plugin's CLAUDE.md "TODO Comments" section: short, describe the work itself, no stale references (file paths, line numbers, labels, PR numbers, branch names).
 
 ### 5c. Rebuild
 
@@ -355,7 +399,7 @@ Only run the full `/phoe:verify` suite if the changes are significant (new logic
 ```bash
 git add <changed-files>
 git commit -m "Address review: <brief description of what changed>"
-git push origin challenge/<label>
+git push origin <type>/<label>
 ```
 
 The PR updates automatically. Do not reply to individual inline review comments — the fix commit is the response.
@@ -366,7 +410,7 @@ If further rounds of review comments arrive, repeat 5a–5d. Each round is a new
 
 ## 6. Post-merge Tracking
 
-Invoked as `/phoe:finalize merged <label> [<label2> ...]` or when the user reports a PR was merged during conversation.
+Invoked as `/phoe:finalize landed <label> [<label2> ...]` (or the legacy alias `merged`), or when the user reports a PR was merged during conversation.
 
 ### 6a. Sync remote
 
@@ -382,13 +426,27 @@ If fast-forward fails (local main diverged from execute-phase merges), use:
 git pull --rebase origin main
 ```
 
-### 6b. Verify merge landed
+### 6b. Resolve task types
 
-For each label, check that the challenge's work is on remote main:
+For each label, determine whether it is a challenge or a bug. First check the handoff in
+`.claude/handoffs/finalize/` (the `Task type` field). If no handoff exists, probe both:
+
+```bash
+PHOE_ENV=${PHOE_ENV:-$([ -f /.dockerenv ] && echo container || echo host)}
+build-crucible-${PHOE_ENV}-release/bin/crucible challenge show --label=<LABEL> 2>/dev/null
+build-crucible-${PHOE_ENV}-release/bin/crucible bug show --label=<LABEL> 2>/dev/null
+```
+
+Use whichever returns a record. The branch prefix (`challenge/` vs `bug/`) is the secondary
+signal — they should agree.
+
+### 6c. Verify merge landed
+
+For each label, check that the work is on remote main, using the resolved branch name (`challenge/<label>` or `bug/<label>`):
 
 ```bash
 # Signal A — branch tip is ancestor of origin/main (merge-commit style)
-git merge-base --is-ancestor challenge/<label> origin/main 2>/dev/null && echo "confirmed via ancestry"
+git merge-base --is-ancestor <type>/<label> origin/main 2>/dev/null && echo "confirmed via ancestry"
 
 # Signal B — commit message references the label (squash-merge style)
 git log origin/main --oneline -i --grep="<label>" -5
@@ -396,36 +454,53 @@ git log origin/main --oneline -i --grep="<label>" -5
 
 If neither signal confirms, tell the user and ask for explicit confirmation before proceeding. Do not auto-mark.
 
-### 6c. Update Crucible
+### 6d. Update Crucible
+
+Use the type-correct terminal status:
 
 ```bash
 PHOE_ENV=${PHOE_ENV:-$([ -f /.dockerenv ] && echo container || echo host)}
+
+# Challenge
 build-crucible-${PHOE_ENV}-release/bin/crucible challenge move --label=<LABEL> merged
+
+# Bug
+build-crucible-${PHOE_ENV}-release/bin/crucible bug move --label=<LABEL> done
 ```
 
-### 6d. Clean up branches
+### 6e. Clean up branches and handoffs
 
 ```bash
-# Remote branch
-git push origin --delete challenge/<label> 2>/dev/null || true
+# Remote branch (use challenge/ or bug/ as appropriate)
+git push origin --delete <type>/<label> 2>/dev/null || true
 
 # Local branch
-git branch -D challenge/<label>
+git branch -D <type>/<label>
 
 # Associated worktree (if still present)
-git worktree remove .claude/worktrees/challenge-<label> 2>/dev/null || true
+git worktree remove .claude/worktrees/<type>-<label> 2>/dev/null || true
+
+# Handoff file (it's served its purpose)
+rm -f .claude/handoffs/finalize/<type>-<label>.md
 ```
 
-For combined PRs, also clean the finalization branch:
+For combined PRs, also clean the finalization branch and any combined-branch handoff:
 
 ```bash
 git push origin --delete land/<name> 2>/dev/null || true
 git branch -D land/<name> 2>/dev/null || true
+rm -f .claude/handoffs/finalize/<combined-branch-suffix>.md
 ```
 
-### 6e. Report
+After deletions, prune empty handoff state:
 
-Show what was marked and saga progress:
+```bash
+rmdir .claude/handoffs/finalize 2>/dev/null || true
+```
+
+### 6f. Report
+
+Show what was marked and saga progress (challenges only — bugs have no saga):
 
 ```bash
 build-crucible-${PHOE_ENV}-release/bin/crucible --json saga show --label=<SAGA_LABEL>
@@ -435,10 +510,11 @@ build-crucible-${PHOE_ENV}-release/bin/crucible --json saga show --label=<SAGA_L
 Finalized
 =========
 
-| Challenge | Status | Cleaned |
-|-----------|--------|---------|
-| add-viewport-resize | merged | branch deleted |
-| wire-canvas-events  | merged | branch deleted |
+| Task                | Type      | Status | Cleaned |
+|---------------------|-----------|--------|---------|
+| add-viewport-resize | challenge | merged | branch deleted |
+| wire-canvas-events  | challenge | merged | branch deleted |
+| windows-focus-loss  | bug       | done   | branch deleted |
 
 Saga: canvas-overhaul — 4/6 complete (was 2/6)
 
@@ -447,7 +523,7 @@ Remaining:
   2 challenges still in todo
 ```
 
-### 6f. Stacked PR maintenance
+### 6g. Stacked PR maintenance
 
 For stacked PRs, after merging one PR the next in the stack may need attention:
 
@@ -470,10 +546,10 @@ If the diff is unexpectedly large (significantly more additions/deletions than t
 
 ## 7. Workspace Reconciliation
 
-After all challenges from a finalization session are merged, local `main` may still carry the execute-phase merges and diverge from `origin/main`. Remind the user:
+After all tasks from a finalization session are merged, local `main` may still carry the execute-phase merges and diverge from `origin/main`. Remind the user:
 
 ```
-All challenges finalized. Local main may be out of sync with remote.
+All tasks finalized. Local main may be out of sync with remote.
 Run /phoe:reset-workspace to reconcile.
 ```
 

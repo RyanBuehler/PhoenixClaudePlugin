@@ -66,10 +66,46 @@ Leave worktrees whose branch is still live in place — they represent blocked o
 
 Also list any remaining local branches (excluding `main`) that still have a valid remote, so the user is aware of them — but do **not** delete these without being asked.
 
-## 5. Report
+## 5. Clean Build Directories
+
+Forge's profile system produces top-level `build-*/` directories (e.g. `build-editor-debug`,
+`build-crucible-host-release`, `build-forge-bootstrap`, `build-minimal`). These are regeneratable
+artifacts and frequently go stale after branch switches, toolchain updates, or environment
+swaps between host and container — removing them forces a clean reconfigure on the next
+`/phoe:build` run.
+
+List the candidates:
+
+```bash
+ls -d build-*/ 2>/dev/null
+```
+
+If any exist:
+
+- Show the list to the user with total disk size (`du -sh build-*/ 2>/dev/null`).
+- Warn that the next build in each profile will be a full cold build (~3–4 min per app).
+- Ask for explicit confirmation before deleting.
+
+On confirmation, remove all of them:
+
+```bash
+rm -rf build-*/
+```
+
+Do **not** delete build directories inside worktrees (`.claude/worktrees/*/build-*`) from this
+command — those belong to in-flight work and are cleaned when the worktree itself is removed.
+Only touch the main repo's top-level `build-*/` directories.
+
+If the working tree is a worktree itself (detect via `git rev-parse --is-inside-work-tree` plus
+`git rev-parse --git-common-dir` differing from `.git`), refuse this step and tell the user to
+run `/phoe:reset-workspace` from the main checkout — cleaning the main repo's build dirs from a
+worktree is surprising and error-prone.
+
+## 6. Report
 
 Tell the user what was done:
 - Files stashed/discarded/left
 - Branch switched
 - Commits pulled
 - Branches pruned
+- Build directories removed (or left in place)

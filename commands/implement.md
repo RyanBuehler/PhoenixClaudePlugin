@@ -199,6 +199,8 @@ If this challenge is complex (multiple modules, many affected files, or extensiv
 
 Enter plan mode, create an implementation plan, then execute it. Follow the project's normal development workflow — write code, follow conventions from CLAUDE.md. If the challenge has a `strategy` field, use it as a starting point for the implementation plan.
 
+When emplacing TODO comments during implementation, follow the discipline in the plugin's CLAUDE.md "TODO Comments" section: keep them to one line, describe the work itself, never embed file paths, line numbers, challenge labels, PR numbers, branch names, or dates (anything that can go stale), and never leave a TODO that narrates the refactor or rename you just performed.
+
 ### Unit Test Coverage
 
 After implementing the feature code, evaluate whether unit tests are needed. Tests are required when the implementation introduces:
@@ -261,6 +263,29 @@ Invoke the code reviewer as a **separate agent** to evaluate the implementation 
 
 Commit all changes on the challenge branch with a descriptive message referencing the challenge label.
 
+## 12a. Branch Continuation Decision
+
+Before moving the challenge to `review`, decide whether the *next* challenge (if the user
+continues with `/phoe:implement next`) should extend this branch or branch fresh from `main`.
+
+Default to **fresh branch per challenge** — it is the simpler, parallelizable, individually
+revertable choice and is what `/phoe:finalize` handles best.
+
+Prefer **extending this branch** only when *all* of the following hold:
+
+- This challenge belongs to a saga.
+- The very next challenge in the saga is `todo` (or just-unblocked) and shares the same scope.
+- The combined diff will still fit a single PR (typically ≤4 challenges in the chain).
+- The next challenge cannot run in parallel with anything else (extending forecloses parallel
+  execution by `/phoe:execute`).
+
+If extending, rename the branch and worktree to a saga-rooted name on the next invocation
+(`challenge/saga-<saga-label>`) so the branch identity does not depend on any one challenge
+label. If unclear, default to a fresh branch — finalize can still group separate branches into
+a single combined PR if needed.
+
+This decision is informational at this point — record it in the handoff written in step 14.
+
 ## 13. Move to Review — Required
 
 Immediately after the commit lands, move the challenge to `review`. This is a mandatory, non-skippable final workflow step — implementation is not considered complete until the challenge is in `review`:
@@ -299,6 +324,50 @@ If this challenge belongs to a saga, reconcile its siblings — the implementati
 
 Do not edit the implementation itself from this step — this is metadata reconciliation only. If the implementation surfaced a real scope problem in a later challenge (not a rename), note it in the report and let the user decide whether to re-plan.
 
+## 14a. Write Finalize Handoff
+
+Write a handoff file so `/phoe:finalize` can pick this challenge up without reconstructing context.
+
+Path: `.claude/handoffs/finalize/<branch-suffix>.md` where `<branch-suffix>` is the branch name
+with slashes replaced by dashes (`challenge/add-viewport-resize` →
+`challenge-add-viewport-resize`). Create the directory on first write:
+`mkdir -p .claude/handoffs/finalize`.
+
+If a handoff file for this branch already exists (because this invocation extended a prior
+challenge's branch per the 12a decision), overwrite it — the latest state is authoritative.
+
+```markdown
+# Finalize Handoff
+
+## Task type
+challenge
+
+## Branch
+challenge/<label>
+
+## Strategy
+branch-per-challenge
+
+## Tasks
+- <label> (status: review)
+
+## Saga
+<saga-label>                   # omit if not part of a saga
+
+## Summary
+<2–4 bullets describing what the branch accomplishes>
+
+## Verification
+Passed `/phoe:verify` (build + format + lint + test) and `invoke-code-reviewer` with zero
+CRITICAL findings before this handoff was written.
+
+## Source
+/phoe:implement run on <YYYY-MM-DD>
+```
+
+Do not include file paths, line numbers, PR numbers, or any detail that will go stale once the
+work is merged. The handoff is consumed and deleted by `/phoe:finalize`.
+
 ## 15. Report
 
 If the challenge belongs to a saga, show updated saga progress:
@@ -314,6 +383,7 @@ Tell the user:
 - Branch name: `challenge/<label>`
 - Saga progress (if applicable)
 - Follow-on sibling updates, if any (which siblings were updated and what fields changed)
+- Handoff written to `.claude/handoffs/finalize/<branch-suffix>.md` — run `/phoe:finalize` to publish
 - The challenge is now in `review` status — user inspects before marking merged
 
 **Do not merge or mark as merged.** The user will review and decide whether to merge, request changes, or mark merged.

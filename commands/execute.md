@@ -130,6 +130,36 @@ Worktrees are mandatory for every challenge — the plugin's `branch-worktree-ch
 
 Every worktree is an independent checkout with its own build dir. CMake caches absolute source paths per checkout, so each worktree pays a first-time build (~3–4 min). That cost is inherent to the isolation, not avoidable by branching on main — so the implementer subagent runs `/phoe:build` as its first concrete action (see 4b, step 5 of the subagent prompt).
 
+#### Branch strategy decision (per wave)
+
+Before creating worktrees, decide how challenges in the wave map onto branches. Two patterns:
+
+- **Branch-per-challenge** (default for parallel work) — every challenge gets its own
+  `challenge/<label>` branch and worktree. Required when challenges in the wave can run in
+  parallel (no dependency edges between them) — they need isolated checkouts to run
+  simultaneously without colliding. Each challenge ends up as its own PR, which finalize can
+  group or stack as needed.
+- **Combined branch** (for short, dependent runs) — multiple consecutive challenges share one
+  branch and one worktree. Only valid when the challenges form a strict dependency chain (each
+  must run after the previous), are intended to ship together, and total ≤4 challenges.
+  Long chains are still better as branch-per-challenge so an early failure does not block the
+  whole batch.
+
+Apply this rule to each wave:
+
+1. If the wave has more than one challenge that can run in parallel (i.e. the wave is parallel
+   by construction), use **branch-per-challenge** for every challenge in the wave. Combining is
+   not an option for parallel work.
+2. If the wave is a single challenge whose predecessor was the prior wave's only challenge
+   *and* both belong to the same saga *and* the prior challenge has not yet been merged to
+   `main`, prefer **combined branch** — extend the prior challenge's branch in the same
+   worktree rather than branching from main. The combined branch is named after the saga (e.g.
+   `challenge/saga-<saga-label>`) so its identity does not depend on any single challenge label.
+3. Cap any combined branch at 4 challenges. After 4, start a fresh branch for the next chunk.
+
+Record the chosen strategy per challenge — it determines what gets written to the finalize
+handoff in step 4g. Do not change strategy mid-wave.
+
 For each challenge in the wave:
 
 1. Read the full challenge JSON (run from the main repo root):
@@ -147,7 +177,11 @@ For each challenge in the wave:
    build-crucible-${PHOE_ENV}-release/bin/crucible challenge move --label=<LABEL> implementing
    ```
 
-Each worktree is an independent checkout; `main` is untouched until 4d.
+For challenges using the **combined branch** strategy (per the rule above), do NOT create a
+new worktree — reuse the existing combined worktree. Skip the `git worktree add` step and
+instead `cd` into the existing worktree. Move the challenge to `implementing` as normal.
+
+Each fresh worktree is an independent checkout; `main` is untouched until 4d.
 
 **Parallel-build caching note (bug 8 follow-on).** When a wave has multiple challenges running in parallel, each worktree does a cold build. Configuring ccache project-wide so shared objects are cache hits (~30s vs ~4min rebuild) is a separate optimization tracked outside this command — not part of /phoe:execute's responsibility. See CLAUDE.md "Build Commands" for the worktree build constraint.
 
@@ -211,6 +245,10 @@ Description: <description>
 - Use plain ASCII only -- no unicode characters
 - Use full descriptive variable names -- no abbreviations
 - Prefer sized integer types (int32_t, uint64_t) over platform-dependent types
+- TODO comments must follow the discipline in the plugin's CLAUDE.md "TODO Comments" section:
+  short, describe the work itself, never reference anything that can go stale (file paths, line
+  numbers, challenge labels, PR numbers, branch names, dates), and never narrate refactors you
+  just made. If a TODO needs more than one line, file it as a Crucible challenge instead.
 
 ## Workflow Friction Log
 At the end of your report, include a "## Workflow Friction" section listing any issues
@@ -333,7 +371,7 @@ Process challenges in **ID order** within the wave, and for each one:
 - **Quality WARNING only:** Proceed. Log warnings in the final report.
 - **Quality SUGGESTION:** Dispatch a suggestion-triage subagent with the full suggestion list. For each suggestion the subagent must decide:
   - **Implement it** if it is clearly in-scope, correct, and adds value -- apply the change directly.
-  - **Defer it** if it raises a real question, is ambiguous, or is out of scope for this challenge -- emplace a `// TODO(<challenge-label>): <one-line summary of the suggestion>` comment at the most relevant code location so it can be evaluated later.
+  - **Defer it** if it raises a real question, is ambiguous, or is out of scope for this challenge -- emplace a `// TODO: <one-line description of the work that needs doing>` comment at the most relevant code location so it can be evaluated later. Follow the TODO discipline in the plugin's CLAUDE.md: describe the work, not where the note came from; never embed the challenge label, a PR number, a file path, a line number, a branch name, or any other reference that can go stale.
 
   Suggestions must never be silently dropped. The triage subagent commits any changes (implementations and TODOs) to main. Wait for it to finish. After it returns, re-run `/phoe:verify`. Do NOT re-dispatch the reviewers. Log the triage outcome (implemented / deferred counts) in the final report.
 - **Quality NOTE:** Proceed. Log notes in the final report.
@@ -348,10 +386,63 @@ For each successfully reviewed challenge:
    2. For each later sibling, `build-crucible-${PHOE_ENV}-release/bin/crucible --json challenge show --label=<SIBLING_LABEL>` and scan its text against the committed diff for stale references: renamed types / functions / files, changed signatures, moved modules, replaced concepts.
    3. For each sibling with stale references, `build-crucible-${PHOE_ENV}-release/bin/crucible challenge update --label=<SIBLING_LABEL> [--field=...]` (run `--help` for flags). Keep edits surgical -- update only stale references; do not rewrite scope.
    4. Record sibling updates for the final report (which siblings, which fields). If a later sibling's scope is genuinely broken (not just a rename), do not rewrite it -- flag it as a blocked-follow-on in the report and let the user re-plan.
-3. Clean up the worktree: `git worktree remove .claude/worktrees/challenge-<label>`.
-4. **Keep the branch** -- do not delete. The user reviews and decides when to clean up.
+3. Write the finalize handoff (see 4h below).
+4. Clean up the worktree:
+   - **branch-per-challenge:** `git worktree remove .claude/worktrees/challenge-<label>` after the last challenge referencing that worktree has been processed.
+   - **combined branch:** only remove the shared worktree after the *last* challenge in the combined chain has been processed.
+5. **Keep the branch** -- do not delete. The user reviews and decides when to clean up.
 
 **Blocked challenge policy:** Never revert branches or discard commits from blocked challenges. Partial work is valuable context for human resumption via `/phoe:implement <label>`. Always keep branches, commits, and checkpoint files intact.
+
+### 4h. Write finalize handoff
+
+After every challenge that reaches `review` (and once per combined-branch group, after all its
+challenges are in `review`), write a handoff file so `/phoe:finalize` knows exactly what landed
+and how it should be published.
+
+Path: `.claude/handoffs/finalize/<branch-suffix>.md` — where `<branch-suffix>` is the branch name
+with slashes replaced by dashes (`challenge/add-viewport-resize` → `challenge-add-viewport-resize`).
+One file per branch. Combined branches hold multiple challenges in a single file.
+
+Create the directory on first write: `mkdir -p .claude/handoffs/finalize`.
+
+```markdown
+# Finalize Handoff
+
+## Task type
+challenge
+
+## Branch
+challenge/<label-or-saga-chain-name>
+
+## Strategy
+branch-per-challenge | combined-branch
+
+## Tasks
+- <label-1> (status: review)
+- <label-2> (status: review)   # only if combined-branch
+
+## Saga
+<saga-label>                   # omit if not part of a saga
+
+## Summary
+<2–4 bullets: what the branch accomplishes, at a level a reviewer can skim>
+
+## Verification
+All challenges passed `/phoe:verify` (build + format + lint + test) before this handoff was
+written. Spec and quality review both passed. Any triage outcomes are recorded below.
+
+## Triage outcomes
+- <challenge-label>: <implemented count> implemented, <deferred count> deferred as TODOs
+   (omit this section if no SUGGESTIONs were triaged)
+
+## Source
+/phoe:execute run on <YYYY-MM-DD>
+```
+
+Do not include file paths, line numbers, PR numbers, or any detail that will go stale once the
+work is merged. The handoff is read once by `/phoe:finalize`, used to pick a publish strategy,
+then deleted.
 
 ## 5. Subagent Feedback Log
 
@@ -396,6 +487,7 @@ Blocked Challenges:
   Resume with: /phoe:implement forge-compiler
 
 Stats: 2 completed, 1 blocked, 0 skipped
+Handoffs written to: .claude/handoffs/finalize/ (run /phoe:finalize to publish)
 Feedback logged to: .claude/SUBAGENT_FEEDBACK.md
 ```
 
@@ -405,4 +497,5 @@ Include:
 - Full explanation for each blocked challenge
 - Reference to checkpoint files and how to resume
 - Total stats (completed, blocked, skipped)
+- The branch strategy chosen per challenge (branch-per-challenge or combined-branch) and the resulting handoff filenames
 - Reference to the feedback log
