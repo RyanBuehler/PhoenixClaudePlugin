@@ -142,6 +142,11 @@ stay useful as the codebase moves around them.
 - **Keep them short.** One line, one sentence. If a TODO needs a paragraph, the work needs a
   Crucible challenge or bug, not a comment.
 - **Describe the work, not the origin.** State what needs to happen, not where the note came from.
+- **No parenthesized prefix.** Write `// TODO: ...`, never `// TODO(anything): ...`. The
+  `TODO(label):` form is forbidden regardless of what the label is — Crucible labels, saga names,
+  PR numbers, owner handles, ticket IDs, dates, and file-path shorthand all belong somewhere else
+  (commit message, PR description, tracker). A grep for `TODO(` in source files should return zero
+  hits.
 - **Never reference anything that can go stale.** No file paths, no line numbers, no Crucible
   labels, no PR numbers, no branch names, no commit hashes, no agent names, no date. All of those
   drift the moment something is renamed, rebased, squashed, archived, or merged. The TODO should
