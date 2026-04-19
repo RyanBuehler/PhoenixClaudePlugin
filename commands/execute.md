@@ -241,7 +241,7 @@ Description: <description>
 - Do NOT enter plan mode
 - Do NOT ask the user questions -- if you need information, read the codebase
 - Do NOT modify files outside the challenge's scope unless absolutely necessary
-- Follow the project's coding conventions (CLAUDE.md)
+- Follow the project's coding conventions (CLAUDE.md) — **and before writing any C++, read `references/code-style.md` plus the "Code Guidelines" and "Code Style" sections of the project root `CLAUDE.md`** so the implementation conforms to enforced conventions (namespaces, return-value handling, `auto`, scope spacing, naming, tooling)
 - Use plain ASCII only -- no unicode characters
 - Use full descriptive variable names -- no abbreviations
 - Prefer sized integer types (int32_t, uint64_t) over platform-dependent types

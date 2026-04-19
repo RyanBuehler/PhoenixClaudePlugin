@@ -197,7 +197,7 @@ If this challenge is complex (multiple modules, many affected files, or extensiv
 
 ## 8. Plan and Implement
 
-Enter plan mode, create an implementation plan, then execute it. Follow the project's normal development workflow — write code, follow conventions from CLAUDE.md. If the challenge has a `strategy` field, use it as a starting point for the implementation plan.
+Enter plan mode, create an implementation plan, then execute it. Follow the project's normal development workflow — write code, follow conventions from CLAUDE.md. **Before writing any C++**, read `references/code-style.md` and the "Code Guidelines" + "Code Style" sections of the project root `CLAUDE.md` so the implementation conforms to the enforced conventions (namespaces, return-value handling, `auto`, scope spacing, naming, tooling). If the challenge has a `strategy` field, use it as a starting point for the implementation plan.
 
 When emplacing TODO comments during implementation, follow the discipline in the plugin's CLAUDE.md "TODO Comments" section: keep them to one line, describe the work itself, never embed file paths, line numbers, challenge labels, PR numbers, branch names, or dates (anything that can go stale), and never leave a TODO that narrates the refactor or rename you just performed.
 

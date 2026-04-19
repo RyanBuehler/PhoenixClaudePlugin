@@ -130,12 +130,20 @@ new_code();
 
 ## Project-Specific Considerations
 
-When reviewing, also check the project's CLAUDE.md or style guide for:
-- Indentation preferences (tabs vs spaces)
-- Naming conventions
-- Exception policy (some projects forbid exceptions)
-- Platform abstraction requirements
-- Any project-specific patterns or idioms
+Before reviewing, read `references/code-style.md` and the "Code Guidelines" + "Code Style"
+sections of the project root `CLAUDE.md`. Flag any change that violates them. Specifically
+check for:
+- Anonymous, "Detail"-named, or generically-named namespaces (must be purpose-named, no
+  collisions with existing classes/structs/namespaces)
+- `(void)`, `std::ignore`, or `[[maybe_unused]]` discarding the result of an error-bearing
+  type (`std::expected`, `std::optional`, status enums) — caller must inspect and log via
+  `Scribe` on the unexpected branch
+- `auto` declarations where the type could and should have been spelled out — especially on
+  `std::expected` and `std::optional`
+- Missing blank line after a `}` that closes a scope (function, class, namespace,
+  control-flow block, lambda, etc.) before the next non-`}`/`else`/`;` token
+- Indentation (tabs, width 4), naming conventions, exception/RTTI bans, platform-isolation
+  rules, and any other project-specific patterns documented in those files
 
 ### This Repository's Requirements
 

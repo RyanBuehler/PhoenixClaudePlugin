@@ -113,6 +113,15 @@ For all code style and design practices, follow `Docs/StyleGuide.md`.
 - Follow the style of surrounding code.
 - Always give namespaces explicit names; anonymous namespaces break our unity builds.
 - Never introduce namespaces whose names contain the word "Detail".
+- Never leave a namespace name empty or generic. Pick a name that describes what the contents
+  *do*. For UI/Mosaic helpers, prefer existing scopes such as `UI::Helpers`, `UI::Tile::Helpers`,
+  etc. Before introducing a new namespace, grep the codebase to confirm the name does not
+  collide with an existing class, struct, or namespace at the same scope.
+- Do not silence return values that callers are expected to consume. Forbidden patterns include
+  `(void) Foo();`, `[[maybe_unused]] auto _ = Foo();`, and `std::ignore = Foo();` when `Foo`
+  returns an error-bearing type (`std::expected`, `std::optional`, status enums, etc.). Inspect
+  the result and, on the unexpected branch, log via `Scribe` at the appropriate severity
+  (`Warning` for recoverable conditions, `Error` for ones that compromise correctness).
 - Do not use C++ exceptions. The keywords `try`, `catch`, `throw`, and `noexcept` are forbidden.
 - RTTI is disabled. Do not use `dynamic_cast`, `typeid`, or `reinterpret_cast`.
 - Do not use deprecated attributes or mark code as deprecated. The `[[deprecated]]` attribute is forbidden.
