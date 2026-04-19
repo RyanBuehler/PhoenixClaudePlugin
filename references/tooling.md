@@ -1,76 +1,7 @@
-# Code Style Reference
+# C++ Tooling Reference
 
-Tool locations, formatting rules, and linting configuration for the Phoenix Engine.
-
-## C++ Source Conventions
-
-These rules apply to every `.cpp` / `.h` file and are not enforced by clang-format or
-clang-tidy — reviewers and authors must hold the line.
-
-### Type Declarations: Avoid `auto`
-
-Do not use `auto` for variable declarations. Spell out the actual type so reviewers see the
-contract at a glance.
-
-The only acceptable exceptions are types a human cannot reasonably write out:
-- Iterator types (`Container::const_iterator` is fine if you prefer it, but `auto` is allowed)
-- Lambda types
-- Deeply nested template instantiations where the spelled-out type harms readability
-
-This rule is **especially strict for error-bearing types**. The following must always be
-declared with the full type, never `auto`, so the obligation to check the result is visible at
-the declaration site:
-- `std::expected<T, E>`
-- `std::optional<T>`
-- Status / result enums and any other type whose unhappy path the caller must handle
-
-```cpp
-// Required:
-std::expected<Texture, LoadError> Result = LoadTexture(Path);
-std::optional<Entity> Found = Registry.Find(Id);
-
-// Forbidden:
-auto Result = LoadTexture(Path);
-auto Found = Registry.Find(Id);
-```
-
-### Blank Line After Scope Close
-
-Insert a blank line after every closing brace `}` that ends a scope (function, class, struct,
-namespace, enum, control-flow block, lambda body, etc.) before the next non-`}` token.
-
-Exceptions — no blank line is required when the next token is:
-- Another closing brace of an enclosing scope
-- An `else` / `else if` continuation of the just-closed `if`
-- A trailing `;` (e.g. closing a struct or lambda definition)
-
-```cpp
-// Required:
-void DoThing()
-{
-    if (Condition)
-    {
-        HandleIt();
-    }
-
-    NextStep();
-}
-
-void NextFunction() { ... }
-
-// Forbidden (missing blank line between scopes):
-void DoThing()
-{
-    if (Condition)
-    {
-        HandleIt();
-    }
-    NextStep();
-}
-void NextFunction() { ... }
-```
-
-This keeps scopes visually separated and makes diff hunks easier to read.
+Tool locations, formatter/linter configuration, and command reference for the Phoenix Engine.
+For code style and design rules, see `references/style-guide.md`.
 
 ## Tool Locations
 

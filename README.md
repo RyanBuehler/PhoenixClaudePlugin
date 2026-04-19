@@ -105,7 +105,8 @@ Quick-reference documents for agents to consult.
 | `modern-python.md` | Python 3.12+ features for build tooling |
 | `modern-vulkan.md` | Dynamic rendering, descriptor buffers, sync2 |
 | `cpp-portability.md` | Cross-platform pitfalls and portable solutions |
-| `code-style.md` | Formatting stack, clang-format/clang-tidy config, tool architecture |
+| `style-guide.md` | Authoritative code style and design guide |
+| `tooling.md` | Formatter/linter configuration and command reference |
 
 ## Project Conventions
 

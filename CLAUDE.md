@@ -105,79 +105,22 @@ Test labels are derived from `MODULE_CATEGORY`, a target property set automatica
 
 ## Code Guidelines
 
-For all code style and design practices, follow `Docs/StyleGuide.md`.
+For all code style and design practices — formatting, naming, language features, comments,
+TODOs, error handling, design practices — follow `references/style-guide.md`. For tooling
+mechanics (formatter/linter configuration, commands, troubleshooting), see
+`references/tooling.md`.
 
-- Only make cosmetic changes to code you explicitly modify or add.
-- Never reformat code unless you're already modifying it. When reformatting, follow
-  `Docs/StyleGuide.md` for style.
-- Follow the style of surrounding code.
-- Always give namespaces explicit names; anonymous namespaces break our unity builds.
-- Never introduce namespaces whose names contain the word "Detail".
-- Never leave a namespace name empty or generic. Pick a name that describes what the contents
-  *do*. For UI/Mosaic helpers, prefer existing scopes such as `UI::Helpers`, `UI::Tile::Helpers`,
-  etc. Before introducing a new namespace, grep the codebase to confirm the name does not
-  collide with an existing class, struct, or namespace at the same scope.
-- Do not silence return values that callers are expected to consume. Forbidden patterns include
-  `(void) Foo();`, `[[maybe_unused]] auto _ = Foo();`, and `std::ignore = Foo();` when `Foo`
-  returns an error-bearing type (`std::expected`, `std::optional`, status enums, etc.). Inspect
-  the result and, on the unexpected branch, log via `Scribe` at the appropriate severity
-  (`Warning` for recoverable conditions, `Error` for ones that compromise correctness).
-- Do not use C++ exceptions. The keywords `try`, `catch`, `throw`, and `noexcept` are forbidden.
-- RTTI is disabled. Do not use `dynamic_cast`, `typeid`, or `reinterpret_cast`.
-- Do not use deprecated attributes or mark code as deprecated. The `[[deprecated]]` attribute is forbidden.
-- Keep platform-specific logic (for example, Linux-only behavior) confined to
-  the corresponding platform liaison sources so code for other platforms remains
-  encapsulated and unaffected.
-- Apply const correctness by default: const local variables, const reference parameters, const member functions for accessors.
-- For every use of `std::memory_order`, add a nearby comment explaining why that ordering is required.
-- After changing C/C++ code, run `python Tools/format.py --files=staged`
-  to apply `clang-format`, then `python Tools/format.py --files=staged -error`
-  to verify formatting. Run `python Tools/tidy.py` to check for clang-tidy
-  warnings. If the script reports a missing compilation database, regenerate
-  it once per build directory with `python Tools/tidy.py --compdb` (optionally
-  keeping your `--filter` arguments); this leaves `build/compile_commands.json`
-  in place for subsequent tidy runs. Test sources matching `*Trials.cpp` may
-  be skipped by passing `--filter *Trials.cpp`. Note: the `build/` directory
-  that `Tools/tidy.py --compdb` creates is a tooling-scratch dir for the
-  compilation database only — it is *not* the project's Forge-managed build
-  dir (which is always profile-suffixed, e.g. `build-editor-debug/`). Don't
-  run cmake/ctest against `build/`; only `Tools/tidy.py` reads from it.
-
-## TODO Comments
-
-TODOs in code are notes to a future programmer who has none of today's context. Write them so they
-stay useful as the codebase moves around them.
-
-- **Keep them short.** One line, one sentence. If a TODO needs a paragraph, the work needs a
-  Crucible challenge or bug, not a comment.
-- **Describe the work, not the origin.** State what needs to happen, not where the note came from.
-- **No parenthesized prefix.** Write `// TODO: ...`, never `// TODO(anything): ...`. The
-  `TODO(label):` form is forbidden regardless of what the label is — Crucible labels, saga names,
-  PR numbers, owner handles, ticket IDs, dates, and file-path shorthand all belong somewhere else
-  (commit message, PR description, tracker). A grep for `TODO(` in source files should return zero
-  hits.
-- **Never reference anything that can go stale.** No file paths, no line numbers, no Crucible
-  labels, no PR numbers, no branch names, no commit hashes, no agent names, no date. All of those
-  drift the moment something is renamed, rebased, squashed, archived, or merged. The TODO should
-  still make sense a year later when none of that context exists.
-- **Do not annotate work you just did.** TODOs that explain a refactor, justify a recent rename,
-  or narrate a decision belong in the commit message and PR description — not the source. Future
-  readers see only the current code; commentary about what *used* to be there is noise.
-- **Do not annotate trivially obvious follow-ups.** "TODO: also update the header" is something
-  you do now, not later.
-
-Good:
-
-    // TODO: handle UTF-8 surrogate pairs in token splitter
-
-Bad:
-
-    // TODO(execute-saga-canvas-overhaul): per code review on PR #312, see Modules/Mosaic/Canvas.cpp:142
-    // TODO: previously this used a raw pointer, switched to CanvasLease in this commit
-    // TODO: address feedback from challenge `add-viewport-resize`
-
-This discipline applies to TODOs added by humans, by `/phoe:implement`, by `/phoe:bugfix`, by
-`/phoe:execute` review-triage subagents, and by any other agent that touches the source.
+After changing C/C++ code, run `python Tools/format.py --files=staged` to apply
+`clang-format`, then `python Tools/format.py --files=staged -error` to verify formatting.
+Run `python Tools/tidy.py` to check for clang-tidy warnings. If the script reports a missing
+compilation database, regenerate it once per build directory with `python Tools/tidy.py
+--compdb` (optionally keeping your `--filter` arguments); this leaves
+`build/compile_commands.json` in place for subsequent tidy runs. Test sources matching
+`*Trials.cpp` may be skipped by passing `--filter *Trials.cpp`. Note: the `build/` directory
+that `Tools/tidy.py --compdb` creates is a tooling-scratch dir for the compilation database
+only — it is *not* the project's Forge-managed build dir (which is always profile-suffixed,
+e.g. `build-editor-debug/`). Don't run cmake/ctest against `build/`; only `Tools/tidy.py`
+reads from it.
 
 ## Crucible Lifecycle Reference
 
@@ -364,7 +307,8 @@ The `references/` directory contains quick-reference guides that agents can cons
 - `modern-python.md` — Python 3.12+ features, pathlib, type hints, CLI patterns
 - `modern-vulkan.md` — Dynamic rendering, descriptor buffers, synchronization2, timeline semaphores
 - `cpp-portability.md` — Cross-platform pitfalls, fixed-width types, alignment, char signedness
-- `code-style.md` — Formatting stack, clang-format/clang-tidy configuration, tool architecture
+- `style-guide.md` — Authoritative code style and design guide (formatting, naming, comments, design practices)
+- `tooling.md` — Formatter/linter configuration and command reference
 
 ## Permissions
 

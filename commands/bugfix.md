@@ -159,9 +159,9 @@ If diagnosis is consuming significant context, write a checkpoint before impleme
 
 ## 8. Fix
 
-Implement the fix. Follow the project's normal development workflow — write code, follow conventions from CLAUDE.md. **Before writing any C++**, read `references/code-style.md` and the "Code Guidelines" + "Code Style" sections of the project root `CLAUDE.md` so the fix conforms to the enforced conventions (namespaces, return-value handling, `auto`, scope spacing, naming, tooling).
+Implement the fix. Follow the project's normal development workflow — write code, follow conventions from CLAUDE.md. **Before writing any C++**, read `references/style-guide.md` and `references/tooling.md` so the fix conforms to the enforced conventions (formatting, naming, comments, namespaces, return-value handling, `auto`, scope spacing, tooling).
 
-When emplacing TODO comments during the fix, follow the discipline in the plugin's CLAUDE.md "TODO Comments" section: keep them to one line, describe the work itself, never embed file paths, line numbers, bug labels, PR numbers, branch names, or dates (anything that can go stale), and never leave a TODO that narrates the change you just made.
+When emplacing TODO comments during the fix, follow the discipline in `references/style-guide.md` (TODO Comments section): keep them to one line, describe the work itself, never embed file paths, line numbers, bug labels, PR numbers, branch names, or dates (anything that can go stale), and never leave a TODO that narrates the change you just made.
 
 ## 9. Verify
 

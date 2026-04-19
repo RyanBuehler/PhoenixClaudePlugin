@@ -130,9 +130,8 @@ new_code();
 
 ## Project-Specific Considerations
 
-Before reviewing, read `references/code-style.md` and the "Code Guidelines" + "Code Style"
-sections of the project root `CLAUDE.md`. Flag any change that violates them. Specifically
-check for:
+Before reviewing, read `references/style-guide.md` and `references/tooling.md`. Flag any
+change that violates them. Specifically check for:
 - Anonymous, "Detail"-named, or generically-named namespaces (must be purpose-named, no
   collisions with existing classes/structs/namespaces)
 - `(void)`, `std::ignore`, or `[[maybe_unused]]` discarding the result of an error-bearing
@@ -142,6 +141,11 @@ check for:
   `std::expected` and `std::optional`
 - Missing blank line after a `}` that closes a scope (function, class, namespace,
   control-flow block, lambda, etc.) before the next non-`}`/`else`/`;` token
+- Comment-discipline violations per the "Comments" section of `references/style-guide.md`:
+  restating what the code does, decorative banners, temporal narration ("previously", "now",
+  "new", "legacy", "refactored", "was", "used to"), author/date/ticket tags, file paths or
+  line numbers in comments, stacked `//` lines in place of a `/* ... */` multi-line block,
+  or a public-header declaration with no descriptive comment
 - Indentation (tabs, width 4), naming conventions, exception/RTTI bans, platform-isolation
   rules, and any other project-specific patterns documented in those files
 
