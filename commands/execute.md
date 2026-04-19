@@ -258,6 +258,18 @@ you encountered that slowed you down or required workarounds:
 - Codebase patterns that were hard to discover
 - Files that were harder to find than expected
 - Permission issues or sandbox limitations
+- **Context bloat** -- tools or defaults that flooded your context window with low-signal output.
+  Call these out specifically so they can be tuned. Examples:
+  - CMake configure/build emitting hundreds or thousands of lines of trace/debug output when
+    only pass/fail + errors are needed
+  - The engine running with verbose trace logging on by default, producing a wall of breadcrumbs
+    on every launch (Scribe traces, Vulkan validation spam, asset loader chatter, etc.)
+  - Test runners printing full per-test logs instead of a summary on success
+  - `ctest`, `ninja`, or other tools defaulting to verbose mode and burying the actual failure
+  - Any tool whose default output is so noisy that you had to grep/head/tail it to stay useful
+  When you flag a context-bloat item, name the specific tool/flag/subsystem so the fix is
+  actionable (e.g. "CMake `--log-level=VERBOSE` is on by default in the Forge wrapper" rather
+  than "build output was noisy").
 - Anything that would help future autonomous runs go smoother
 
 ## Report Format
