@@ -224,6 +224,11 @@ is undefined. Custom types should follow this convention.
 
 ## Related Agents
 
+Invoke `invoke-include-analyzer` as a subagent whenever review surfaces include-shaped
+symptoms — missing STL headers, forward-decl vs full-include mismatches, circular-include
+fragility, or wrong module-local header variants. Do not reason about include graphs by hand;
+the analyzer is the SSOT. Cite its output in the "Suggested fix" block.
+
 After reviewing, consider running:
 - `invoke-include-analyzer` - Check include hygiene and dependency graph
 - `invoke-lint-agent` - Run clang-tidy for additional static analysis

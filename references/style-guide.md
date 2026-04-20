@@ -138,6 +138,14 @@ auto Found = Registry.Find(Id);
 Apply by default: `const` local variables, `const` reference parameters, `const` member
 functions for accessors.
 
+### `Move` / `Forward`
+
+Use the project's `Move()` and `Forward()` helpers (exported from the `Phoenix` C++20
+module) instead of `std::move` and `std::forward`. The wrappers add a `[[nodiscard]]`
+return and a `const`-rejection `static_assert` that catches miscasts the standard helpers
+allow through. A grep for `std::move` or `std::forward` in Phoenix source should return
+zero hits.
+
 ### `std::memory_order`
 
 For every use of `std::memory_order`, add a nearby comment explaining why that ordering is

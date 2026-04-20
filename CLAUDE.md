@@ -47,6 +47,15 @@ Engine interacts with modules ONLY through `ModuleRegistry` and `IModuleBase`. I
 services through non-template subsystem interfaces (`ITerminalService`, `IInputService`), not
 concrete module types.
 
+### When to create a subsystem
+
+A subsystem is a **projection** of a module's public API — it selects and names the subset of
+operations a specific consumer should see. Subsystems do not expand a module's API surface,
+introduce new types of their own, or wrap a module reference for handoff. Multiple subsystems
+may front the same module (e.g. `Sonic` exposing `ISFX` for gameplay and `IMusic` for score).
+If a proposed subsystem adds new types or methods the module does not expose, it is a module,
+not a subsystem.
+
 ## Subsystem Interface Design
 
 Subsystem interfaces must be **intent-based**, not lazy accessors. Every method on an
@@ -61,6 +70,14 @@ Follow `IArbiterSubsystem` as the canonical example: it exposes `SubmitTask` /
 `WaitForCompletion` rather than `GetArbiter`. Interfaces that degenerate into a single
 `GetX()` accessor are a code smell — replace them with the operations the consumer actually
 needs to perform.
+
+**No object handoff across modules.** Module A must not receive a reference or pointer to a
+concrete type owned by Module B. Cross-module communication goes through subsystem interfaces
+only — never by threading `FooModule&`/`FooModule*` across the boundary.
+
+**Internals-returning accessors are a smell everywhere, not just in subsystems.** A `GetFoo()`
+that hands back a reference to an owned member bypasses the owner's invariants. Expose
+operations (`ApplyFoo`, `PostFoo`) instead.
 
 ## Engine Independence
 
