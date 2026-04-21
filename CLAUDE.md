@@ -37,6 +37,21 @@ If the cited construct is absent from the referenced line and its neighborhood, 
 
 Blind action on a misread review comment ships a wrong change; asking once is cheap.
 
+### Working directory: use absolute paths or an explicit `cd` per Bash call
+
+Every Bash invocation starts a fresh shell at the user's primary working directory. A `cd` from a prior Bash call does **not** carry forward. Mentally tracking "which directory am I in" across separate Bash calls silently runs commands in the wrong tree.
+
+Use one of the two safe patterns on every invocation:
+
+- **Absolute paths for every argument.** `ls /absolute/path/to/worktree/build-editor-debug`.
+- **Explicit `cd` prefix in the same invocation.** `cd /absolute/path/to/worktree && cmake --build build-dispatch-verify --target Dispatch`.
+
+Failure modes this rule prevents include running cmake or ninja in the wrong tree, sourcing the wrong `.env`, editing the wrong file, and grepping a stale copy that does not reflect pending edits.
+
+Worktrees are the highest-risk setting: the main repo and `.claude/worktrees/<branch>` are two independent checkouts. A cmake build invoked in the wrong tree can report success against code that does not include the current changes, masking a compile failure that only surfaces in CI. Whenever a session has an active worktree, every Bash call that touches the checkout must name the worktree path explicitly.
+
+The `cd`-and-`git` prohibition in **Hard Requirements** is a stricter variant of this rule: git in particular must never be paired with a `cd` into an untrusted directory. For non-git commands the `cd` prefix is fine and is the preferred form when arguments are relative.
+
 ## Branch & Worktree Workflow
 
 All work happens on a dedicated branch in a dedicated worktree. Branch names are `<type>/<label>` where both segments are lowercase kebab-case (`^[a-z0-9][a-z0-9-]*$`). Slash-less branch names are rejected.
