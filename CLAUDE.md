@@ -17,6 +17,26 @@ If the search returns no results, say "I did not find X" rather than "X does not
 
 Minimal example: before claiming Phoenix lacks reflection, run `grep -r reflection Core/ Modules/` — Phoenix in fact ships a reflection system in `Core/Public/Reflection/Reflective.cppm`, and an unchecked absence claim on a public PR thread has to be walked back by hand.
 
+### Verify review-comment code claims before acting
+
+When a code-review comment names a specific C++ construct, verify the construct is actually present on the referenced line or in the immediate neighborhood before making any change. GitHub diff views shift line numbers across PR updates, and reviewers occasionally conflate related concepts — the cited line number is a hint, not a contract.
+
+Constructs that warrant this verification include:
+
+- RTTI (`dynamic_cast`, `typeid`, `type_info`)
+- `reinterpret_cast`, `const_cast`, C-style casts
+- Exceptions (`throw`, `try`, `catch`, `noexcept`)
+- Macros
+- Virtual inheritance
+- Templates, concepts, coroutines
+- C++20 module keywords (`import`, `export`, `module`)
+
+If the cited construct is absent from the referenced line and its neighborhood, do not guess at intent and do not make a change that might not match. Reply with:
+
+> "I do not see `<construct>` on `<file>:<line>`; the line uses `<actual-construct>`. Did you mean X, or were you looking at an earlier draft?"
+
+Blind action on a misread review comment ships a wrong change; asking once is cheap.
+
 ## Branch & Worktree Workflow
 
 All work happens on a dedicated branch in a dedicated worktree. Branch names are `<type>/<label>` where both segments are lowercase kebab-case (`^[a-z0-9][a-z0-9-]*$`). Slash-less branch names are rejected.
