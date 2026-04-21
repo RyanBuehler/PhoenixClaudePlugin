@@ -218,6 +218,22 @@ Worktrees follow at `.claude/worktrees/<type>-<label>` (slashes converted to das
 ### YAML
 - Use two spaces for indentation.
 
+## pImpl Decision Gate
+
+Never introduce pImpl (`std::unique_ptr<Impl>` + forward-declared `Impl` struct) in new Phoenix types unless at least one of the following holds:
+
+1. **ABI stability across a dynamic linker boundary** where consumers do not rebuild when the type's representation changes. This is what pImpl is actually for in library codebases.
+2. **A private type that is genuinely forbidden in the public TU set** — a vendored third-party SDK header that drags in incompatible macros, or an OS header whose leakage would poison callers.
+3. **Runtime strategy or state polymorphism** where `Impl` will have multiple concrete subclasses selected at construction time.
+
+"Header weight" — avoiding transitive includes like `Json/JsonValue.h` — is **NOT** a sufficient justification in this codebase. `import Phoenix;` already re-exports the standard surface, the engine rebuilds everything on every change, and every peer shared-lib class (Engine, Ledger, LedgerModule, Archive, Vigil, Soulforge, WorkQueue, GameCycleGraph) uses direct value members. Matching habits from ABI-stable library projects pattern-matches on the wrong codebase shape.
+
+If none of the three justifications applies, pick one of:
+
+- **(a) Flatten to direct value members.** Default choice. The type goes straight on the class like every peer.
+- **(b) Forward-declare + `std::unique_ptr<T>` for one specific heavy field.** Use when exactly one member is genuinely heavy; do not upgrade this into a full pImpl.
+- **(c) Request a bypass on the PR.** If the work genuinely needs pImpl and does not match (1)–(3), say so in the PR description with the justification so the reviewer can evaluate.
+
 ## Build Commands
 
 - **NEVER** use `-j$(nproc)` or `-j` with cmake. Always use `cmake --build <dir> --parallel`. The `$()` subshell triggers permission prompts and `-j` is generator-specific.
