@@ -5,6 +5,18 @@
 - **NEVER mention Claude Code in commit messages.** No "Generated with Claude Code", no Co-Authored-By Claude, nothing. Commit messages should look like they were written by a human developer.
 - **Never combine `cd` and `git` in a compound command** (e.g. `cd /some/dir && git status`). Changing into an untrusted directory before running git exposes you to bare repository attacks where a malicious `.git` config can execute arbitrary code. Always run git commands using absolute paths or from the known working directory.
 
+## Agent Conduct
+
+### Search before claiming the codebase lacks something
+
+Before asserting the codebase does not contain a feature, type, pattern, or convention, search the codebase first using Grep, Glob, or an equivalent search tool. This rule is a hard directive, not a suggestion.
+
+Guarded failure modes include any phrasing of "Phoenix has no X", "there is no existing Y", "this would be the first Z", and "we lack support for W". The rule applies to PR review replies, architectural recommendations, design discussions, and any communication where the codebase's current state is being characterized.
+
+If the search returns no results, say "I did not find X" rather than "X does not exist". One statement is an observation; the other is a claim that a reviewer can falsify.
+
+Minimal example: before claiming Phoenix lacks reflection, run `grep -r reflection Core/ Modules/` — Phoenix in fact ships a reflection system in `Core/Public/Reflection/Reflective.cppm`, and an unchecked absence claim on a public PR thread has to be walked back by hand.
+
 ## Branch & Worktree Workflow
 
 All work happens on a dedicated branch in a dedicated worktree. Branch names are `<type>/<label>` where both segments are lowercase kebab-case (`^[a-z0-9][a-z0-9-]*$`). Slash-less branch names are rejected.
