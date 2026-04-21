@@ -37,6 +37,27 @@ All build dirs and binary invocations in this document are written as `build-<ta
 
 This table is the source of truth. Bump a row whenever the corresponding `ApplicationsManifest.json` version changes, in lockstep with the plugin's `marketplace.json` version.
 
+## Cross-Checkout Staleness
+
+`CMakeCache.txt` records the absolute source path used at configure time. If a build directory was generated against one checkout and is now sitting next to a different checkout — for example, a workspace snapshot was restored to a new path, the directory was copied between worktrees, or the same physical tree is mounted at a different path inside a container vs the host — every subsequent cmake or Forge configure invocation fails with `The current CMakeCache.txt directory ... is different than the directory ... where CMakeCache.txt was created`. Treat that condition as staleness and reset the build dir before configuring.
+
+The check is one grep against `<build-dir>/CMakeCache.txt` and runs cheaply on every `/phoe:build` invocation:
+
+```bash
+PHOE_ENV=${PHOE_ENV:-$([ -f /.dockerenv ] && echo container || echo host)}
+CACHE=<build-dir>/CMakeCache.txt
+if [ -f "$CACHE" ]; then
+  CACHE_HOME=$(grep -m1 '^CMAKE_HOME_DIRECTORY:' "$CACHE" | cut -d= -f2)
+  CURRENT_HOME=$(pwd)
+  if [ "$CACHE_HOME" != "$CURRENT_HOME" ]; then
+    echo "stale: $CACHE was configured from $CACHE_HOME, current is $CURRENT_HOME — removing <build-dir>"
+    rm -rf <build-dir>
+  fi
+fi
+```
+
+Substitute the appropriate `<build-dir>` for the target being built — `build-<target>-${PHOE_ENV}-release` for tool targets, or `build-<profile>` (e.g. `build-editor-debug`) for engine profiles. Run this check before any cmake or `forge configure` step in both procedures below.
+
 ## Procedure for Tool Targets (`forge`, `crucible`, `vigil`)
 
 Substitute the target's values from the table for `<target>`, `<flag>`, and `<build-dir>` — where `<build-dir>` expands to `build-<target>-${PHOE_ENV}-release`.
@@ -53,6 +74,7 @@ Treat the binary as **stale** (and rebuild) if any of the following is true:
 - The binary file does not exist.
 - The command exits non-zero (broken binary, missing dependency, cross-environment shared-library mismatch).
 - The output does not match `<Target> <expected-version>` (e.g. `Forge 2026.0.0`).
+- The build dir's `CMakeCache.txt` was configured from a different absolute source path — see [Cross-Checkout Staleness](#cross-checkout-staleness) for the check and the cleanup it triggers. Run that check before the version probe so a wrong-checkout cache is removed before any cmake step touches it.
 
 If the binary is current, the build is a no-op — report "already current" and exit successfully.
 
@@ -96,7 +118,11 @@ Detect the active profile from existing build directories:
 - If `build-editor-debug` exists, use `editor-debug`.
 - Otherwise default to `editor-debug`.
 
-### 3. Build with Forge
+### 3. Cross-Checkout Cache Check
+
+Run the [Cross-Checkout Staleness](#cross-checkout-staleness) check against `build-<profile>/` before invoking Forge. If the cache was configured from a different absolute path, this removes the build dir so the next step reconfigures cleanly instead of failing with cmake's "CMakeCache.txt directory is different" error.
+
+### 4. Build with Forge
 
 ```bash
 PHOE_ENV=${PHOE_ENV:-$([ -f /.dockerenv ] && echo container || echo host)}
@@ -104,7 +130,7 @@ build-forge-${PHOE_ENV}-release/bin/forge configure <profile>
 build-forge-${PHOE_ENV}-release/bin/forge build <profile>
 ```
 
-## 4. Report
+## 5. Report
 
 Tell the user the result: which target was built, which environment (`host` or `container`), whether it rebuilt from scratch or was already current, and the first error if the build failed.
 
