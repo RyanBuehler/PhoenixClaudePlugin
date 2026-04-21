@@ -269,6 +269,23 @@ If none of the three justifications applies, pick one of:
 - **(b) Forward-declare + `std::unique_ptr<T>` for one specific heavy field.** Use when exactly one member is genuinely heavy; do not upgrade this into a full pImpl.
 - **(c) Request a bypass on the PR.** If the work genuinely needs pImpl and does not match (1)–(3), say so in the PR description with the justification so the reviewer can evaluate.
 
+## clang-tidy NOLINT Policy
+
+NOLINT is rare. Every use must carry a one-line justification naming the specific reason neither a code change nor a `.clang-tidy` tuning was viable.
+
+Decision order, strictly:
+
+1. **Fix the code.** Restructure so the check does not fire. This is the default answer.
+2. **Tune `.clang-tidy`.** If a whole category of false positives is firing across the codebase, disable or narrow the check in configuration. A check that fires on every file is the wrong check for the project; its noise belongs in configuration, not in comments sprinkled through source.
+3. **Narrow NOLINT, last resort only.** A single inline `// NOLINT(check-name): <one-line reason>` on the specific line, nowhere wider.
+
+Hard forbiddings:
+
+- **No file-wide `NOLINTBEGIN`/`NOLINTEND` blocks for style-level checks.** If `readability-convert-member-functions-to-static` (or any similar style check) is firing on every file, the check is wrong for the project and belongs in `.clang-tidy` configuration, not wrapped around whole translation units.
+- **No multi-line comment rationale.** One short line or the NOLINT does not ship. If the justification needs a paragraph, the code needs to be restructured instead.
+
+Canonical legitimate case: the `std::byte*` ↔ `char*` I/O boundary. Bridging `std::byte` buffers to string or stream APIs requires `reinterpret_cast`, and `cppcoreguidelines-pro-type-reinterpret-cast` is correctly disabled at the repository level; any remaining narrow casts go through one of the project's byte/char helpers with a single-line NOLINT at the helper site.
+
 ## Build Commands
 
 - **NEVER** use `-j$(nproc)` or `-j` with cmake. Always use `cmake --build <dir> --parallel`. The `$()` subshell triggers permission prompts and `-j` is generator-specific.
