@@ -155,15 +155,15 @@ required. This is the canonical example of a non-obvious *why* that belongs in a
 
 ### Namespaces
 
-Namespaces mirror the directory tree. Every segment names a domain or capability;
-none are generic buckets. Before introducing a new namespace, grep the codebase to
+Namespaces mirror the directory tree. Every segment names a domain or capability —
+never a generic bucket. Before introducing a new namespace, grep the codebase to
 confirm the name does not collide with an existing class, struct, or namespace at
 the same scope.
 
-**Anonymous namespaces are forbidden.** They break our unity builds. Always name
-every namespace.
+Anonymous namespaces are forbidden — they break our unity builds. Always name every
+namespace.
 
-**Directory depth equals namespace depth.** Each level of the directory tree adds a
+Directory depth equals namespace depth. Each level of the directory tree adds a
 segment:
 
 | Location | Namespace |
@@ -175,28 +175,26 @@ segment:
 | `Core/Image/PNG/Deflate.h` | `Core::Image::PNG::Deflate` |
 | `Applications/Crucible/Source/Server.h` | `Crucible` |
 
-**Engine modules nest under their category.** Multi-module categories
-(`Rendering`, `Input`, `Audio`, `Platform`) group their modules as
-`<Category>::<Module>` (e.g. `Rendering::Mosaic`, `Input::Conduit`). Single-module
-categories stay flat (`Json`, `Ledger`, `Dispatch`, `Script`).
+Engine modules nest under their category. Multi-module categories (`Rendering`,
+`Input`, `Audio`, `Platform`) group their modules as `<Category>::<Module>` — for
+example `Rendering::Mosaic`, `Input::Conduit`. Single-module categories stay flat
+(`Json`, `Ledger`, `Dispatch`, `Script`). Inside a module namespace, no class or
+struct may share the module segment's name; `class Mosaic` inside `namespace
+Rendering::Mosaic` is forbidden — pick a name that describes the type's role.
 
-**Inside a module namespace, no class or struct may share the module segment's
-name.** For example, `class Mosaic` is forbidden inside `namespace
-Rendering::Mosaic`. Pick a name that describes the type's role.
-
-**Applications use their brand name as a flat top-level namespace.** `namespace
+Applications use their brand name as a flat top-level namespace: `namespace
 Crucible`, `namespace Vigil`, `namespace Editor`, `namespace Forge`, `namespace
-Game`, `namespace Minimal`. Do not wrap apps in an `Application::` parent. Do not
-use a generic `namespace Application` — it carries no information and is
+Game`, `namespace Minimal`. Do not wrap apps in an `Application::` parent and do
+not use a generic `namespace Application` — it carries no information and is
 indistinguishable across binaries in logs and stack traces.
 
-**Log channels nest under their owning module as `::Log`.** For example,
-`Rendering::Mosaic::Log`, `Ledger::Log`, `Platform::Log`. Call sites may
-introduce a local alias (`namespace Log = Rendering::Mosaic::Log;`) where the
-fully-qualified name hurts readability in hot code.
+Log channels nest under their owning module as `::Log`, such as
+`Rendering::Mosaic::Log`, `Ledger::Log`, `Platform::Log`. Call sites may introduce
+a local alias (`namespace Log = Rendering::Mosaic::Log;`) where the fully-qualified
+name hurts readability in hot code.
 
-**Forbidden namespace segment names.** These describe nothing about what the code
-does and are rejected in review:
+The following namespace segment names are forbidden — they describe nothing about
+what the code does:
 
 - `Detail`
 - `Internal`
@@ -206,29 +204,25 @@ does and are rejected in review:
 - `Common`
 
 Replace them with a name that describes the contents. `UI::Helpers` might split
-into `UI::HitTest` and `UI::ClipRect`. `Trials::Helpers` becomes `Trials::Assertions`.
-`Dispatch::Tools` stays (it names a real domain). When in doubt, ask: *what do
-these symbols do?* — that's the namespace name.
+into `UI::HitTest` and `UI::ClipRect`. `Trials::Helpers` becomes
+`Trials::Assertions`. `Dispatch::Tools` stays (it names a real domain). When in
+doubt, ask: *what do these symbols do?* — that's the namespace name.
 
 ### `using namespace`
 
 Scoped `using namespace` directives shorten call sites without hiding the
-underlying type names. Follow these rules:
+underlying type names. They are forbidden in headers (`.h`, `.hpp`, `.ixx`, and
+any header-like file), because the directive leaks into every translation unit
+that includes the header.
 
-- **Forbidden in headers.** A `using namespace` in a `.h`, `.hpp`, `.ixx`, or any
-  header-like file leaks into every translation unit that includes it. Never do
-  this.
-- **Allowed at file scope in `.cpp` files.** This is the idiomatic way to pull
-  in a log channel for the whole translation unit (e.g. `using namespace
-  Ledger::Log;` at the top of `Ledger.cpp`). Place it after the includes and
-  before any definitions.
-- **Allowed inside a function body when the namespace is referenced twice or
-  more.** If a function calls into `Trials::Performance::` more than once,
-  introduce `using namespace Trials::Performance;` at the top of that function
-  and drop the prefix on subsequent uses. For a single reference, just
-  fully-qualify — the `using` buys nothing.
-- **Never at namespace scope inside a header or module interface unit.** The
-  leak rule applies anywhere a consumer can include you.
+At file scope in a `.cpp` file they are allowed, and this is the idiomatic way
+to pull in a log channel for the whole translation unit (e.g. `using namespace
+Ledger::Log;` at the top of `Ledger.cpp`, placed after the includes and before
+any definitions).
+
+Inside a function body, use `using namespace` only when the namespace is
+referenced twice or more. For a single reference, fully-qualify — the `using`
+buys nothing.
 
 ### Platform Isolation
 
