@@ -163,6 +163,23 @@ Implement the fix. Follow the project's normal development workflow — write co
 
 When emplacing TODO comments during the fix, follow the discipline in `references/style-guide.md` (TODO Comments section): keep them to one line, describe the work itself, never embed file paths, line numbers, bug labels, PR numbers, branch names, or dates (anything that can go stale), and never leave a TODO that narrates the change you just made.
 
+### Regression Test Evaluation
+
+After implementing the fix, evaluate whether a regression trial is warranted. The goal is to guard against the *class* of flaw recurring — not to mechanically add a test for every bug. Skip when:
+
+- The fix is obviously correct and self-contained (typo, missing null check on a one-off path, wrong literal).
+- The bug was in glue or wiring code that will be rewritten rather than maintained.
+- The reproduction is inherently unmechanizable (requires specific hardware, manual user interaction, or a platform-only path).
+
+Add a trial when the bug exposes a flaw that could plausibly recur:
+
+- The root cause is a pattern that exists elsewhere in the codebase (e.g., a missed lifetime check, an unhandled enum case, a race on a shared field) — cover the fixed site, and consider whether sibling sites warrant coverage too.
+- The fix is subtle enough that a future refactor could silently re-break it.
+- The bug stems from a contract or invariant that isn't otherwise enforced by the type system or asserts.
+- The repro is mechanizable and cheap to encode as a trial.
+
+When a trial is warranted, launch `invoke-test-engineer` as a subagent to write it. Provide the fix diff, the root cause, and the reproduction steps so the trial exercises the specific flaw — not just the surrounding happy path — and follows Trials conventions.
+
 ## 9. Verify
 
 All verification must pass before proceeding:
