@@ -9,7 +9,7 @@ Format staged C++ files and verify the result matches CI expectations.
 Apply formatting to staged files:
 
 ```bash
-python Tools/format.py --files=staged
+python3 Tools/format.py --files=staged
 ```
 
 ## 2. Verify
@@ -17,7 +17,7 @@ python Tools/format.py --files=staged
 Check that formatting passes (mirrors CI behavior):
 
 ```bash
-python Tools/format.py --files=staged -error
+python3 Tools/format.py --files=staged -error
 ```
 
 If verification fails after formatting, investigate the issue. If there are no staged files, inform the user.

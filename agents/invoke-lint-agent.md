@@ -22,10 +22,10 @@ When invoked, you will:
 
 ```bash
 # Ensure compilation database exists
-python Tools/tidy.py --compdb
+python3 Tools/tidy.py --compdb
 
 # Run clang-tidy on a specific file
-python Tools/tidy.py --files=branch --filter '*OtherFiles*'
+python3 Tools/tidy.py --files=branch --filter '*OtherFiles*'
 
 # Or run clang-tidy directly
 clang-tidy -p build path/to/file.cpp
@@ -41,7 +41,7 @@ ls build/compile_commands.json
 
 If missing, generate it:
 ```bash
-python Tools/tidy.py --compdb
+python3 Tools/tidy.py --compdb
 ```
 
 ### Step 2: Run Linting
@@ -50,7 +50,7 @@ python Tools/tidy.py --compdb
 clang-tidy -p build path/to/file.cpp
 
 # Using the project wrapper (respects .clang-tidy settings)
-python Tools/tidy.py --files=staged
+python3 Tools/tidy.py --files=staged
 ```
 
 ### Step 3: Interpret Results

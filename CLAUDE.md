@@ -174,10 +174,10 @@ TODOs, error handling, design practices — follow `references/style-guide.md`. 
 mechanics (formatter/linter configuration, commands, troubleshooting), see
 `references/tooling.md`.
 
-After changing C/C++ code, run `python Tools/format.py --files=staged` to apply
-`clang-format`, then `python Tools/format.py --files=staged -error` to verify formatting.
-Run `python Tools/tidy.py` to check for clang-tidy warnings. If the script reports a missing
-compilation database, regenerate it once per build directory with `python Tools/tidy.py
+After changing C/C++ code, run `python3 Tools/format.py --files=staged` to apply
+`clang-format`, then `python3 Tools/format.py --files=staged -error` to verify formatting.
+Run `python3 Tools/tidy.py` to check for clang-tidy warnings. If the script reports a missing
+compilation database, regenerate it once per build directory with `python3 Tools/tidy.py
 --compdb` (optionally keeping your `--filter` arguments); this leaves
 `build/compile_commands.json` in place for subsequent tidy runs. Test sources matching
 `*Trials.cpp` may be skipped by passing `--filter *Trials.cpp`. Note: the `build/` directory

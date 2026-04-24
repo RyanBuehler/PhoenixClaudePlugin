@@ -14,13 +14,13 @@ Create a new module using the project's scaffolding tool. Supports interactive a
 **Interactive mode** (no arguments):
 
 ```bash
-python Tools/create_module.py
+python3 Tools/create_module.py
 ```
 
 **Non-interactive mode** (arguments provided):
 
 ```bash
-python Tools/create_module.py --name <NAME> --type <TYPE>
+python3 Tools/create_module.py --name <NAME> --type <TYPE>
 ```
 
 Additional flags for non-interactive mode:

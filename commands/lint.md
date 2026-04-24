@@ -9,13 +9,13 @@ Run clang-tidy on changed files, generating the compilation database first if mi
 If `build/compile_commands.json` is missing, generate it:
 
 ```bash
-python Tools/tidy.py --compdb
+python3 Tools/tidy.py --compdb
 ```
 
 ## 2. Lint
 
 ```bash
-python Tools/tidy.py
+python3 Tools/tidy.py
 ```
 
 Test files (`*Trials.cpp`) may be skipped with `--filter '*Trials.cpp'` if the user requests.

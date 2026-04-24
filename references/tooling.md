@@ -20,27 +20,27 @@ For code style and design rules, see `references/style-guide.md`.
 
 ```bash
 # Format staged files and verify
-python Tools/format.py --files=staged
-python Tools/format.py --files=staged -error
+python3 Tools/format.py --files=staged
+python3 Tools/format.py --files=staged -error
 
 # Format files changed since branching from main
-python Tools/format.py --files=branch
-python Tools/format.py --files=branch -error
+python3 Tools/format.py --files=branch
+python3 Tools/format.py --files=branch -error
 
 # Dry run (preview without modifying)
-python Tools/format.py --files=staged -n
+python3 Tools/format.py --files=staged -n
 
 # Run clang-tidy on branch changes
-python Tools/tidy.py --files=branch
+python3 Tools/tidy.py --files=branch
 
 # Generate compilation database first (required for tidy)
-python Tools/tidy.py --compdb
+python3 Tools/tidy.py --compdb
 
 # Skip test files
-python Tools/tidy.py --filter '*Trials.cpp'
+python3 Tools/tidy.py --filter '*Trials.cpp'
 
 # Adjust warning limit
-python Tools/tidy.py --limit 10
+python3 Tools/tidy.py --limit 10
 ```
 
 ## The Formatting Stack
@@ -215,7 +215,7 @@ ensure_tool(exe, package)  # Auto-install via pip if missing
 
 ### "Compilation database not found"
 ```bash
-python Tools/tidy.py --compdb
+python3 Tools/tidy.py --compdb
 # Or manually:
 cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DTESTS=ON
 ```

@@ -605,8 +605,8 @@ Before submitting build changes:
 - [ ] Configure succeeds: `cmake -S . -B build -DTESTS=ON`
 - [ ] Build completes: `cmake --build build --config Release`
 - [ ] Tests pass: `ctest --test-dir build -C Release --output-on-failure`
-- [ ] Format check passes: `python Tools/format.py --files=staged -error`
-- [ ] Clang-tidy passes: `python Tools/tidy.py`
+- [ ] Format check passes: `python3 Tools/format.py --files=staged -error`
+- [ ] Clang-tidy passes: `python3 Tools/tidy.py`
 - [ ] Works on Linux AND Windows
 - [ ] No new warnings introduced
 - [ ] CI pipeline passes on all platforms

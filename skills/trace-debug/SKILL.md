@@ -169,7 +169,7 @@ The cleanup is not honor-system. The audit grep is the source of truth.
 5. Format any files you touched:
 
     ```bash
-    python Tools/format.py --files=staged
+    python3 Tools/format.py --files=staged
     ```
 
 6. Rebuild once to confirm the code compiles without the instrumentation. A compile error here means you deleted a brace along with a marker.

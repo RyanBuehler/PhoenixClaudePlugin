@@ -232,7 +232,7 @@ Empty sections are omitted. If a run finds nothing, emit the clean-case form:
 
 If audit applied any mechanical fixes, finish with:
 
-1. `python Tools/format.py --files=staged` on the touched files (audit's mechanical fixes
+1. `python3 Tools/format.py --files=staged` on the touched files (audit's mechanical fixes
    can leave formatting slightly off — let clang-format finalize).
 2. A single-line confirmation in the report: *"Formatted N files after audit fixes."*
 
