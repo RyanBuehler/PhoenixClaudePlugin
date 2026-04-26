@@ -5,6 +5,13 @@ allowed-tools: Read, Bash, Glob, Grep, Agent
 
 Clean up the current workspace by working through these steps in order. Each step involves investigation before action — confirm with the user before anything destructive.
 
+## Arguments
+
+- *(no argument)* — clean git state only (unstaged files, branches, worktrees). Leave `build-*/` directories untouched so subsequent builds stay incremental.
+- **`all`** — additionally wipe top-level `build-*/` directories. Use after toolchain swaps, branch churn that produced stale CMake caches, or before disk-space cleanup.
+
+Treat any argument other than the literal `all` as no argument (do not invent partial modes).
+
 ## 1. Investigate Unstaged and Untracked Files
 
 Run `git status` to see the current state. If there are:
@@ -68,6 +75,11 @@ Also list any remaining local branches (excluding `main`) that still have a vali
 
 ## 5. Clean Build Directories
 
+**Skip this step entirely unless the user passed the `all` argument.** Build directories are
+expensive to regenerate (~3–4 min per app for a cold build), and the default reset is meant to
+preserve incremental build state. If no argument was passed, say "leaving build directories in
+place — pass `all` to wipe them" and continue to step 6.
+
 Forge's profile system produces top-level `build-*/` directories (e.g. `build-editor-debug`,
 `build-crucible-host-release`, `build-forge-bootstrap`, `build-minimal`). These are regeneratable
 artifacts and frequently go stale after branch switches, toolchain updates, or environment
@@ -108,4 +120,4 @@ Tell the user what was done:
 - Branch switched
 - Commits pulled
 - Branches pruned
-- Build directories removed (or left in place)
+- Build directories removed (only when invoked with `all`) or left in place
