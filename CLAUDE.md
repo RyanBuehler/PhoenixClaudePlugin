@@ -224,6 +224,28 @@ Worktrees follow at `.claude/worktrees/<type>-<label>` (slashes converted to das
 - When constructing colors from 8-bit inputs (e.g., hex codes, UI pickers), divide each
   channel by 255.0f before storing.
 
+## Module Imports
+
+Phoenix consumes the standard library through `import Phoenix;`, which re-exports `Std`.
+The rules below are surface conventions for that module — habits carried over from
+header-only C++ get them wrong.
+
+- **`Move` / `Forward`, not `std::move` / `std::forward`.** `Core/Public/Std.cppm` exports
+  Phoenix's own `Move` and `Forward` templates. Use them unqualified. Unqualified
+  `std::move` / `std::forward` resolve unreliably across module boundaries.
+- **Drop `std::` on common types.** `string`, `string_view`, `vector`, `unordered_map`,
+  `unordered_set`, `shared_ptr`, `unique_ptr`, `optional`, `expected`, `function`, etc. are
+  exported unqualified through `Std`. Writing `std::vector` compiles but is project-style
+  noise; unqualified is the convention.
+- **Use `Label` for identifiers.** Names, keys, tags, dispatch tokens, and event/action
+  identifiers use `Label`. `string`/`string_view` is for free-form textual content only.
+  See "Labels and Identifiers" above for the full rule.
+- **Range algorithms still need an explicit include.** `Std.cppm` exposes the `ranges`
+  namespace alias and `<ranges>` itself but does not pull in `<algorithm>` or `<numeric>`.
+  `ranges::sort`, `ranges::find`, `ranges::iota`, and similar algorithms require an
+  explicit `#include <algorithm>` (or `<numeric>` for `iota`) in the consuming TU even
+  with `import Phoenix;`.
+
 ## Code Style
 
 ### C++
