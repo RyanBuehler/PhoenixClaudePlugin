@@ -64,17 +64,18 @@ If **unreachable** (`REMOTE_REACHABLE=0`), emit a single warning line to the use
 
 **If argument is a number N or "next":**
 
-Use saga-aware priority logic to select N eligible challenges:
+Use saga-aware priority logic to select N eligible challenges. The candidate pool is the union of saga-attached `todo` challenges and orphan `todo` challenges (challenges that belong to no saga). Both are first-class — orphans have no themed-saga lineage but participate in priority/dependency selection just like saga members.
 
 1. List all sagas: `build-crucible-${PHOE_ENV}-release/bin/crucible --json saga list`
 2. List all todo challenges: `build-crucible-${PHOE_ENV}-release/bin/crucible --json challenge list --status=todo`
-3. Auto-unblock any blocked challenges whose blockers are now merged:
+3. Note which of those are orphans for downstream filters: `build-crucible-${PHOE_ENV}-release/bin/crucible --json challenge list --status=todo --no-saga`. Orphans are challenges with no saga membership; they trivially pass the same-saga ordering check (no predecessors) but still participate in the cross-saga blocker scan and priority selection.
+4. Auto-unblock any blocked challenges whose blockers are now merged:
    ```bash
    build-crucible-${PHOE_ENV}-release/bin/crucible --json challenge list --status=blocked
    ```
    For each, check if the `blocked_by` challenge is now merged. If so: `build-crucible-${PHOE_ENV}-release/bin/crucible challenge unblock <ID> todo`
-4. For each candidate, check saga ordering -- only pick challenges whose saga predecessors are all `merged` or `canceled`.
-5. **Scan for implicit cross-saga blockers (precision-first).** Same-saga ordering only catches explicit dependencies; a challenge may reference a symbol or file from an *unmerged* challenge in a *different* saga via prose. The goal here is to catch the obvious cases (A says "Loads via `Canvas::LoadLayout`" where `Canvas::LoadLayout` is introduced by an unmerged B), **not** to out-smart the implementer. A false-positive skip strands an eligible challenge; a missed implicit blocker becomes one verification failure later — so lean heavily toward letting candidates through.
+5. For each candidate, check saga ordering -- only pick challenges whose saga predecessors are all `merged` or `canceled`. Orphans skip this check (no saga, no predecessors).
+6. **Scan for implicit cross-saga blockers (precision-first).** Same-saga ordering only catches explicit dependencies; a challenge may reference a symbol or file from an *unmerged* challenge in a *different* saga via prose. The goal here is to catch the obvious cases (A says "Loads via `Canvas::LoadLayout`" where `Canvas::LoadLayout` is introduced by an unmerged B), **not** to out-smart the implementer. A false-positive skip strands an eligible challenge; a missed implicit blocker becomes one verification failure later — so lean heavily toward letting candidates through. This filter applies to orphans too — they can implicitly block on saga work and vice-versa.
 
    For each remaining candidate, apply these three filters in order and skip only when **all three** match against the same unmerged challenge:
 
@@ -84,9 +85,9 @@ Use saga-aware priority logic to select N eligible challenges:
 
    **C. File overlap.** The candidate's `affected_files` must also overlap with the unmerged challenge's `affected_files`. Two challenges that discuss the same symbol but touch disjoint files are not actually coupled.
 
-   Only when A, B, and C all match the same unmerged challenge should the candidate be skipped. Record the skip as: `"blocked by <other-label> (saga #<id>) via <Token> in <file>"`. Do not auto-mark as blocked in Crucible — this is a scheduling hint, not a state change, and the user may judge the dependency is stale. Include the full skip reason in the final report so the user can override if the heuristic was wrong.
-6. Among the candidates that pass both explicit and implicit blocker checks, pick by: priority (critical > high > medium > low), then lowest ID.
-7. Repeat until N challenges are selected. Skip challenges that would be blocked by other challenges in the candidate list.
+   Only when A, B, and C all match the same unmerged challenge should the candidate be skipped. Record the skip as: `"blocked by <other-label> (saga #<id> or orphan) via <Token> in <file>"`. Do not auto-mark as blocked in Crucible — this is a scheduling hint, not a state change, and the user may judge the dependency is stale. Include the full skip reason in the final report so the user can override if the heuristic was wrong.
+7. Among the candidates that pass both explicit and implicit blocker checks, pick by: priority (critical > high > medium > low), then lowest ID.
+8. Repeat until N challenges are selected. Skip challenges that would be blocked by other challenges in the candidate list.
 
 Report skipped candidates (both the implicit-blocker reason and priority/wave-already-full reasons) in the final execute summary so the user can see the selection trail.
 
@@ -96,7 +97,7 @@ Report skipped candidates (both the implicit-blocker reason and priority/wave-al
 build-crucible-${PHOE_ENV}-release/bin/crucible --json saga show --label=<SAGA_LABEL>
 ```
 
-Collect all todo challenges in saga order. These will be executed sequentially.
+Collect all todo challenges in saga order. These will be executed sequentially. Saga-scoped mode is explicitly bounded — orphans are NOT included even when otherwise eligible.
 
 If no eligible challenges exist, report this and stop.
 
@@ -492,6 +493,7 @@ Print a summary table:
 
 Saga Progress:
   synthetic-input: 3/6 complete (was 2/6)
+  (orphan): 1 challenge processed this run
 
 Blocked Challenges:
   forge-compiler: Build failure in ForgeCompiler.cpp:42 -- missing include for <filesystem>.
