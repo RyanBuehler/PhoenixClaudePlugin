@@ -4,7 +4,7 @@ description: Full CI-mirror verification sequence — configure, build, format c
 
 Run the full CI-mirror verification sequence. Stop on the first failure.
 
-`/phoe:build` is the single source of truth for building executables — it ensures Forge is present, at the expected version, and built for the current environment (host vs container). It rebuilds from scratch when any of those fail. On a fresh worktree or a first-time environment switch, the first step will rebuild Forge; subsequent runs are instant.
+`/phoe:build` is the single source of truth for building executables — it ensures Forge is present and at the expected version. It rebuilds from scratch when either of those fails. On a fresh worktree, the first step will rebuild Forge; subsequent runs are instant.
 
 Run this **before committing**. A commit made without passing verification is considered incomplete work.
 

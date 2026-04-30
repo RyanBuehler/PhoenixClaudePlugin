@@ -81,10 +81,9 @@ preserve incremental build state. If no argument was passed, say "leaving build 
 place — pass `all` to wipe them" and continue to step 6.
 
 Forge's profile system produces top-level `build-*/` directories (e.g. `build-editor-debug`,
-`build-crucible-host-release`, `build-forge-bootstrap`, `build-minimal`). These are regeneratable
-artifacts and frequently go stale after branch switches, toolchain updates, or environment
-swaps between host and container — removing them forces a clean reconfigure on the next
-`/phoe:build` run.
+`build-crucible-release`, `build-forge-bootstrap`, `build-minimal`). These are regeneratable
+artifacts and frequently go stale after branch switches or toolchain updates — removing them
+forces a clean reconfigure on the next `/phoe:build` run.
 
 List the candidates:
 

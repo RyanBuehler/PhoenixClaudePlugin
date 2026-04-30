@@ -10,12 +10,11 @@ Plan a feature from idea to actionable Crucible Challenges grouped under a Saga.
 
 ## 1. Bootstrap
 
-Run `/phoe:build crucible` to ensure both `crucible` and `crucible-server` exist under `build-crucible-${PHOE_ENV}-release/bin/` and match the expected version. A fresh worktree, or a first-time switch between host and container environments, will trigger a one-time clean build; subsequent invocations are no-ops. If `/phoe:build crucible` stops with a version mismatch, stop here and report it to the user.
+Run `/phoe:build crucible` to ensure both `crucible` and `crucible-server` exist under `build-crucible-release/bin/` and match the expected version. A fresh worktree triggers a one-time clean build; subsequent invocations are no-ops. If `/phoe:build crucible` stops with a version mismatch, stop here and report it to the user.
 
 Resolve the environment suffix for subsequent invocations (include this line at the top of every bash block that touches a binary):
 
 ```bash
-PHOE_ENV=${PHOE_ENV:-$([ -f /.dockerenv ] && echo container || echo host)}
 ```
 
 The Crucible server is a user-managed process outside the plugin's scope — do not start it. If the CLI can't reach a server, the first `crucible` call below will fail with a clear error; surface that to the user and stop.
@@ -23,19 +22,19 @@ The Crucible server is a user-managed process outside the plugin's scope — do 
 Confirm Crucible is reachable and initialized for this project:
 
 ```bash
-build-crucible-${PHOE_ENV}-release/bin/crucible status
+build-crucible-release/bin/crucible status
 ```
 
 If that fails with "not initialized", ask the user for the project name and run:
 
 ```bash
-build-crucible-${PHOE_ENV}-release/bin/crucible init --project="<NAME>"
+build-crucible-release/bin/crucible init --project="<NAME>"
 ```
 
 If a `<saga_label>` argument was provided, verify it exists:
 
 ```bash
-build-crucible-${PHOE_ENV}-release/bin/crucible saga show --label=<SAGA_LABEL>
+build-crucible-release/bin/crucible saga show --label=<SAGA_LABEL>
 ```
 
 If the saga is not found, stop and tell the user.
@@ -114,26 +113,26 @@ All list-style flags use `|` as the separator. Verification entries are intent s
 **Create each challenge:**
 
 ```bash
-build-crucible-${PHOE_ENV}-release/bin/crucible challenge create --title="<TITLE>" --description="<DESC>" --priority="<PRIORITY>" --tags="<T1>|<T2>" --acceptance-criteria="<C1>|<C2>" --strategy="<S1>|<S2>|<S3>" --verification="<V1>|<V2>" --affected-files="<F1>|<F2>" --references="<R1>|<R2>"
-build-crucible-${PHOE_ENV}-release/bin/crucible challenge move --label=<LABEL> todo
+build-crucible-release/bin/crucible challenge create --title="<TITLE>" --description="<DESC>" --priority="<PRIORITY>" --tags="<T1>|<T2>" --acceptance-criteria="<C1>|<C2>" --strategy="<S1>|<S2>|<S3>" --verification="<V1>|<V2>" --affected-files="<F1>|<F2>" --references="<R1>|<R2>"
+build-crucible-release/bin/crucible challenge move --label=<LABEL> todo
 ```
 
 **Create a new saga** (if not extending):
 
 ```bash
-build-crucible-${PHOE_ENV}-release/bin/crucible saga create --title="<TITLE>" --description="<DESC>" --challenges="label1|label2|..." --label="<OPTIONAL_LABEL>"
+build-crucible-release/bin/crucible saga create --title="<TITLE>" --description="<DESC>" --challenges="label1|label2|..." --label="<OPTIONAL_LABEL>"
 ```
 
 **Extend an existing saga** (if `<saga_label>` was provided):
 
 ```bash
-build-crucible-${PHOE_ENV}-release/bin/crucible saga add <SAGA_LABEL> <CHALLENGE_LABEL>
+build-crucible-release/bin/crucible saga add <SAGA_LABEL> <CHALLENGE_LABEL>
 ```
 
 **Verify the result:**
 
 ```bash
-build-crucible-${PHOE_ENV}-release/bin/crucible saga show --label=<SAGA_LABEL>
+build-crucible-release/bin/crucible saga show --label=<SAGA_LABEL>
 ```
 
 ## 7. Report

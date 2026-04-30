@@ -16,7 +16,7 @@ fi
 
 **If the engine is not running** (one-shot capture):
 
-Detect the active Forge profile from existing build directories and launch the editor via its profile-suffixed path. The engine's build dirs are profile-suffixed (`build-editor-debug/`, `build-editor-release/`), not `${PHOE_ENV}`-suffixed — only the tool binaries (Forge, Crucible, Vigil) use the env suffix. Do not add `${PHOE_ENV}` to an engine path:
+Detect the active Forge profile from existing build directories and launch the editor via its profile-suffixed path (`build-editor-debug/`, `build-editor-release/`):
 
 ```bash
 for PROFILE in editor-release editor-debug; do

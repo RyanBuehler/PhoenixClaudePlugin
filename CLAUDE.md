@@ -190,8 +190,8 @@ reads from it.
 
 The plugin's Crucible workflows operate on three task types. Match status names exactly — the CLI
 rejects unknown statuses, and using the wrong terminal status (e.g. `merged` for a bug, `done` for
-a challenge) causes silent reconciliation failures across `/phoe:implement`, `/phoe:execute`,
-`/phoe:bugfix`, and `/phoe:finalize`.
+a challenge) causes silent reconciliation failures across `/phoe:implement`, `/phoe:execute`, and
+`/phoe:bugfix`.
 
 | Task type | Statuses (in order)                                              | Terminal |
 |-----------|------------------------------------------------------------------|----------|
@@ -341,10 +341,9 @@ Before running `git push` or `gh pr create`:
 - To verify compilation and run all tests locally, mirror the CI pipeline.
 - It is mandatory to execute the full verification suite before committing. Run
   `/phoe:verify` — it drives Forge through build + format + lint + test using the
-  active profile and the environment-suffixed tool paths, producing the same
-  pass/fail signal as the `Linux: Build & Test (Incremental)` CI job. Do not
-  invoke cmake/ctest directly; a bare `build/` directory does not exist in this
-  project.
+  active profile, producing the same pass/fail signal as the `Linux: Build &
+  Test (Incremental)` CI job. Do not invoke cmake/ctest directly; a bare
+  `build/` directory does not exist in this project.
 - When presenting solutions, always ensure the project builds cleanly in Release
   and Headless configurations, and run all appropriate tests beforehand.
 

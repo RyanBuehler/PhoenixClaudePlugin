@@ -15,20 +15,14 @@ Determine which mode by checking if the argument is a number, "next", or a strin
 
 ## 1. Bootstrap
 
-Run `/phoe:build crucible` to ensure both `crucible` and `crucible-server` exist under `build-crucible-${PHOE_ENV}-release/bin/` and match the expected version. A fresh worktree, or a first-time switch between host and container environments, will trigger a one-time clean build; subsequent invocations are no-ops. If `/phoe:build crucible` stops with a version mismatch, stop here and report it to the user.
-
-Resolve the environment suffix for subsequent invocations (include this line at the top of every bash block that touches a binary):
-
-```bash
-PHOE_ENV=${PHOE_ENV:-$([ -f /.dockerenv ] && echo container || echo host)}
-```
+Run `/phoe:build crucible` to ensure both `crucible` and `crucible-server` exist under `build-crucible-release/bin/` and match the expected version. A fresh worktree triggers a one-time clean build; subsequent invocations are no-ops. If `/phoe:build crucible` stops with a version mismatch, stop here and report it to the user.
 
 The Crucible server is a user-managed process outside the plugin's scope — do not start it. If the CLI can't reach a server, the first `crucible` call below will fail with a clear error; surface that to the user and stop.
 
 Confirm Crucible is reachable and initialized for this project:
 
 ```bash
-build-crucible-${PHOE_ENV}-release/bin/crucible status
+build-crucible-release/bin/crucible status
 ```
 
 Verify workspace is clean:
@@ -66,14 +60,14 @@ If **unreachable** (`REMOTE_REACHABLE=0`), emit a single warning line to the use
 
 Use saga-aware priority logic to select N eligible challenges. The candidate pool is the union of saga-attached `todo` challenges and orphan `todo` challenges (challenges that belong to no saga). Both are first-class — orphans have no themed-saga lineage but participate in priority/dependency selection just like saga members.
 
-1. List all sagas: `build-crucible-${PHOE_ENV}-release/bin/crucible --json saga list`
-2. List all todo challenges: `build-crucible-${PHOE_ENV}-release/bin/crucible --json challenge list --status=todo`
-3. Note which of those are orphans for downstream filters: `build-crucible-${PHOE_ENV}-release/bin/crucible --json challenge list --status=todo --no-saga`. Orphans are challenges with no saga membership; they trivially pass the same-saga ordering check (no predecessors) but still participate in the cross-saga blocker scan and priority selection.
+1. List all sagas: `build-crucible-release/bin/crucible --json saga list`
+2. List all todo challenges: `build-crucible-release/bin/crucible --json challenge list --status=todo`
+3. Note which of those are orphans for downstream filters: `build-crucible-release/bin/crucible --json challenge list --status=todo --no-saga`. Orphans are challenges with no saga membership; they trivially pass the same-saga ordering check (no predecessors) but still participate in the cross-saga blocker scan and priority selection.
 4. Auto-unblock any blocked challenges whose blockers are now merged:
    ```bash
-   build-crucible-${PHOE_ENV}-release/bin/crucible --json challenge list --status=blocked
+   build-crucible-release/bin/crucible --json challenge list --status=blocked
    ```
-   For each, check if the `blocked_by` challenge is now merged. If so: `build-crucible-${PHOE_ENV}-release/bin/crucible challenge unblock <ID> todo`
+   For each, check if the `blocked_by` challenge is now merged. If so: `build-crucible-release/bin/crucible challenge unblock <ID> todo`
 5. For each candidate, check saga ordering -- only pick challenges whose saga predecessors are all `merged` or `canceled`. Orphans skip this check (no saga, no predecessors).
 6. **Scan for implicit cross-saga blockers (precision-first).** Same-saga ordering only catches explicit dependencies; a challenge may reference a symbol or file from an *unmerged* challenge in a *different* saga via prose. The goal here is to catch the obvious cases (A says "Loads via `Canvas::LoadLayout`" where `Canvas::LoadLayout` is introduced by an unmerged B), **not** to out-smart the implementer. A false-positive skip strands an eligible challenge; a missed implicit blocker becomes one verification failure later — so lean heavily toward letting candidates through. This filter applies to orphans too — they can implicitly block on saga work and vice-versa.
 
@@ -94,7 +88,7 @@ Report skipped candidates (both the implicit-blocker reason and priority/wave-al
 **If argument is a saga label:**
 
 ```bash
-build-crucible-${PHOE_ENV}-release/bin/crucible --json saga show --label=<SAGA_LABEL>
+build-crucible-release/bin/crucible --json saga show --label=<SAGA_LABEL>
 ```
 
 Collect all todo challenges in saga order. These will be executed sequentially. Saga-scoped mode is explicitly bounded — orphans are NOT included even when otherwise eligible.
@@ -138,8 +132,7 @@ Before creating worktrees, decide how challenges in the wave map onto branches. 
 - **Branch-per-challenge** (default for parallel work) — every challenge gets its own
   `challenge/<label>` branch and worktree. Required when challenges in the wave can run in
   parallel (no dependency edges between them) — they need isolated checkouts to run
-  simultaneously without colliding. Each challenge ends up as its own PR, which finalize can
-  group or stack as needed.
+  simultaneously without colliding. Each challenge ends up as its own PR.
 - **Combined branch** (for short, dependent runs) — multiple consecutive challenges share one
   branch and one worktree. Only valid when the challenges form a strict dependency chain (each
   must run after the previous), are intended to ship together, and total ≤4 challenges.
@@ -158,15 +151,15 @@ Apply this rule to each wave:
    `challenge/saga-<saga-label>`) so its identity does not depend on any single challenge label.
 3. Cap any combined branch at 4 challenges. After 4, start a fresh branch for the next chunk.
 
-Record the chosen strategy per challenge — it determines what gets written to the finalize
-handoff in step 4g. Do not change strategy mid-wave.
+Record the chosen strategy per challenge — it determines whether each challenge becomes its
+own PR or whether the wave shares a single combined PR (see step 4g). Do not change strategy
+mid-wave.
 
 For each challenge in the wave:
 
 1. Read the full challenge JSON (run from the main repo root):
    ```bash
-   PHOE_ENV=${PHOE_ENV:-$([ -f /.dockerenv ] && echo container || echo host)}
-   build-crucible-${PHOE_ENV}-release/bin/crucible --json challenge show --label=<LABEL>
+   build-crucible-release/bin/crucible --json challenge show --label=<LABEL>
    ```
 2. Create the worktree and branch from the main repo root:
    ```bash
@@ -174,8 +167,7 @@ For each challenge in the wave:
    ```
 3. Move to implementing (run from the main repo root so the crucible binary resolves):
    ```bash
-   PHOE_ENV=${PHOE_ENV:-$([ -f /.dockerenv ] && echo container || echo host)}
-   build-crucible-${PHOE_ENV}-release/bin/crucible challenge move --label=<LABEL> implementing
+   build-crucible-release/bin/crucible challenge move --label=<LABEL> implementing
    ```
 
 For challenges using the **combined branch** strategy (per the rule above), do NOT create a
@@ -302,7 +294,7 @@ For each returning subagent:
 When marking a challenge blocked:
 
 ```bash
-build-crucible-${PHOE_ENV}-release/bin/crucible challenge move --label=<LABEL> blocked
+build-crucible-release/bin/crucible challenge move --label=<LABEL> blocked
 ```
 
 Write a checkpoint file:
@@ -389,73 +381,72 @@ Process challenges in **ID order** within the wave, and for each one:
   Suggestions must never be silently dropped. The triage subagent commits any changes (implementations and TODOs) to main. Wait for it to finish. After it returns, re-run `/phoe:verify`. Do NOT re-dispatch the reviewers. Log the triage outcome (implemented / deferred counts) in the final report.
 - **Quality NOTE:** Proceed. Log notes in the final report.
 
-### 4g. Finalize
+### 4g. Move to Review
 
 For each successfully reviewed challenge:
 
-1. Move to review: `build-crucible-${PHOE_ENV}-release/bin/crucible challenge move --label=<LABEL> review`
+1. Move to review: `build-crucible-release/bin/crucible challenge move --label=<LABEL> review`
 2. **Propagate changes to follow-on saga siblings** -- if the challenge belongs to a saga, reconcile later siblings whose specs may have been invalidated by this implementation (e.g., a rename or API change in this challenge leaves a later sibling's `description`, `strategy`, `affected_files`, or `acceptance_criteria` referring to the old name).
-   1. `build-crucible-${PHOE_ENV}-release/bin/crucible --json saga show --label=<SAGA_LABEL>` to list remaining todo + blocked siblings after this challenge's position.
-   2. For each later sibling, `build-crucible-${PHOE_ENV}-release/bin/crucible --json challenge show --label=<SIBLING_LABEL>` and scan its text against the committed diff for stale references: renamed types / functions / files, changed signatures, moved modules, replaced concepts.
-   3. For each sibling with stale references, `build-crucible-${PHOE_ENV}-release/bin/crucible challenge update --label=<SIBLING_LABEL> [--field=...]` (run `--help` for flags). Keep edits surgical -- update only stale references; do not rewrite scope.
+   1. `build-crucible-release/bin/crucible --json saga show --label=<SAGA_LABEL>` to list remaining todo + blocked siblings after this challenge's position.
+   2. For each later sibling, `build-crucible-release/bin/crucible --json challenge show --label=<SIBLING_LABEL>` and scan its text against the committed diff for stale references: renamed types / functions / files, changed signatures, moved modules, replaced concepts.
+   3. For each sibling with stale references, `build-crucible-release/bin/crucible challenge update --label=<SIBLING_LABEL> [--field=...]` (run `--help` for flags). Keep edits surgical -- update only stale references; do not rewrite scope.
    4. Record sibling updates for the final report (which siblings, which fields). If a later sibling's scope is genuinely broken (not just a rename), do not rewrite it -- flag it as a blocked-follow-on in the report and let the user re-plan.
-3. Write the finalize handoff (see 4h below).
-4. Clean up the worktree:
-   - **branch-per-challenge:** `git worktree remove .claude/worktrees/challenge-<label>` after the last challenge referencing that worktree has been processed.
-   - **combined branch:** only remove the shared worktree after the *last* challenge in the combined chain has been processed.
-5. **Keep the branch** -- do not delete. The user reviews and decides when to clean up.
 
 **Blocked challenge policy:** Never revert branches or discard commits from blocked challenges. Partial work is valuable context for human resumption via `/phoe:implement <label>`. Always keep branches, commits, and checkpoint files intact.
 
-### 4h. Write finalize handoff
+### 4h. Publish
 
-After every challenge that reaches `review` (and once per combined-branch group, after all its
-challenges are in `review`), write a handoff file so `/phoe:finalize` knows exactly what landed
-and how it should be published.
+For every reviewed challenge in the wave, push its branch and open a pull request. Group by
+strategy:
 
-Path: `.claude/handoffs/finalize/<branch-suffix>.md` — where `<branch-suffix>` is the branch name
-with slashes replaced by dashes (`challenge/add-viewport-resize` → `challenge-add-viewport-resize`).
-One file per branch. Combined branches hold multiple challenges in a single file.
+- **branch-per-challenge:** push the challenge branch and create a single-challenge PR.
+- **combined-branch:** wait until every challenge in the chain has reached `review`, then push
+  the shared branch once and create one PR that lists all the challenges it carries.
 
-Create the directory on first write: `mkdir -p .claude/handoffs/finalize`.
-
-```markdown
-# Finalize Handoff
-
-## Task type
-challenge
-
-## Branch
-challenge/<label-or-saga-chain-name>
-
-## Strategy
-branch-per-challenge | combined-branch
-
-## Tasks
-- <label-1> (status: review)
-- <label-2> (status: review)   # only if combined-branch
-
-## Saga
-<saga-label>                   # omit if not part of a saga
-
+```bash
+# branch-per-challenge
+git push -u origin challenge/<label>
+gh pr create \
+  --head challenge/<label> \
+  --base main \
+  --title "<challenge title>" \
+  --body "$(cat <<'EOF'
 ## Summary
-<2–4 bullets: what the branch accomplishes, at a level a reviewer can skim>
+<2-4 bullets describing what the branch accomplishes>
 
-## Verification
-All challenges passed `/phoe:verify` (build + format + lint + test) before this handoff was
-written. Spec and quality review both passed. Any triage outcomes are recorded below.
-
-## Triage outcomes
-- <challenge-label>: <implemented count> implemented, <deferred count> deferred as TODOs
-   (omit this section if no SUGGESTIONs were triaged)
-
-## Source
-/phoe:execute run on <YYYY-MM-DD>
+Crucible: <label>
+EOF
+)"
 ```
 
-Do not include file paths, line numbers, PR numbers, or any detail that will go stale once the
-work is merged. The handoff is read once by `/phoe:finalize`, used to pick a publish strategy,
-then deleted.
+```bash
+# combined-branch
+git push -u origin challenge/saga-<saga-label>
+gh pr create \
+  --head challenge/saga-<saga-label> \
+  --base main \
+  --title "<saga title>" \
+  --body "$(cat <<'EOF'
+## Summary
+<bullets covering all challenges in the chain>
+
+Crucible: <label-1>, <label-2>, <label-3>
+EOF
+)"
+```
+
+Record each PR URL for the final report.
+
+After the wave's PRs are open, clean up worktrees (the branches and commits stay until the
+user removes them):
+
+- **branch-per-challenge:** `git worktree remove .claude/worktrees/challenge-<label>` after
+  pushing.
+- **combined-branch:** only remove the shared worktree after the chain's PR has been pushed.
+
+If a PR comment loop later requests fixes, check out the branch, apply the change, rebuild
+(full `/phoe:verify` only when changes are significant), commit with a brief
+"Address review: …" message, and push.
 
 ## 5. Subagent Feedback Log
 
@@ -501,7 +492,6 @@ Blocked Challenges:
   Resume with: /phoe:implement forge-compiler
 
 Stats: 2 completed, 1 blocked, 0 skipped
-Handoffs written to: .claude/handoffs/finalize/ (run /phoe:finalize to publish)
 Feedback logged to: .claude/SUBAGENT_FEEDBACK.md
 ```
 
@@ -511,5 +501,11 @@ Include:
 - Full explanation for each blocked challenge
 - Reference to checkpoint files and how to resume
 - Total stats (completed, blocked, skipped)
-- The branch strategy chosen per challenge (branch-per-challenge or combined-branch) and the resulting handoff filenames
+- The branch strategy chosen per challenge (branch-per-challenge or combined-branch) and the resulting PR URLs
 - Reference to the feedback log
+
+After each PR lands on remote main, mark the corresponding challenge merged:
+
+```bash
+build-crucible-release/bin/crucible challenge move --label=<LABEL> merged
+```
