@@ -182,16 +182,33 @@ example `Rendering::Mosaic`, `Input::Conduit`. Single-module categories stay fla
 struct may share the module segment's name; `class Mosaic` inside `namespace
 Rendering::Mosaic` is forbidden — pick a name that describes the type's role.
 
+The IModule integration class for a module follows a uniform suffix: module
+`<Module>` exposes `class <Module>Module` and that class lives at **global scope**,
+not inside the module namespace. Examples: `VigilModule`, `SpatialModule`,
+`SoulforgeModule`, `ArbiterModule`, `ArchiveModule`, `EngineModule`. The module
+namespace (`namespace Vigil`, `namespace Soulforge`, etc.) holds support types —
+components, helpers, internal data structures — never the integration class
+itself. This sidesteps the class/namespace name collision and keeps the module
+class visible to consumers under one consistent path (`shared_ptr<EngineModule>`,
+`IEngineSubsystem<EngineModule>`, `Subsystem::Metadata<EngineModule>`).
+
 Applications use their brand name as a flat top-level namespace: `namespace
 Crucible`, `namespace Vigil`, `namespace Editor`, `namespace Forge`, `namespace
 Game`, `namespace Minimal`. Do not wrap apps in an `Application::` parent and do
 not use a generic `namespace Application` — it carries no information and is
 indistinguishable across binaries in logs and stack traces.
 
-Log channels nest under their owning module as `::Log`, such as
-`Rendering::Mosaic::Log`, `Ledger::Log`, `Platform::Log`. Call sites may introduce
-a local alias (`namespace Log = Rendering::Mosaic::Log;`) where the fully-qualified
-name hurts readability in hot code.
+Log channels live in flat top-level namespaces named `<Module>Log`: `EngineLog`,
+`RealmLog`, `DispatchLog`, `ArbiterLog`, `ScribeLog`, etc. Each lives in
+`<Module>Log.h` next to its module sources and pulls in the shared
+`Logging/Log.inl` template for the `Trace` / `Log` / `Warn` / `Error` / `Fatal`
+API. Source files acquire their channel with a file-scope `using namespace
+ArbiterLog;` (or similar) after the includes. The eventual target is to nest log
+channels under their owning module as `::Log` (`Rendering::Mosaic::Log`,
+`Ledger::Log`), but until a cross-codebase migration converts every channel at
+once, individual modules must not flip independently — that yields a half-and-half
+codebase where readers cannot predict the spelling. Stay flat until the migration
+ships.
 
 The following namespace segment names are forbidden — they describe nothing about
 what the code does:
