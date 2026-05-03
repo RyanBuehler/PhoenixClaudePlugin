@@ -155,37 +155,46 @@ required. This is the canonical example of a non-obvious *why* that belongs in a
 
 ### Namespaces
 
-Namespaces mirror the directory tree. Every segment names a domain or capability —
-never a generic bucket. Before introducing a new namespace, grep the codebase to
-confirm the name does not collide with an existing class, struct, or namespace at
-the same scope.
+Namespaces name domains or capabilities — never generic buckets. Before
+introducing a new namespace, grep the codebase to confirm the name does not
+collide with an existing class, struct, or namespace at the same scope.
 
 Anonymous namespaces are forbidden — they break our unity builds. Always name every
 namespace.
 
-Directory depth equals namespace depth. Each level of the directory tree adds a
-segment:
+Modules sit at the root namespace. A module's namespace is its own module name,
+without any parent-directory prefix — `Modules/Rendering/Mosaic/Source/Public/Tile.h`
+lives in `namespace Mosaic`, not `Rendering::Mosaic`. The directory grouping
+(`Rendering/`, `Input/`, `Audio/`, `Platform/`) is filesystem-only and does not
+contribute a namespace segment. Directory layout is a soft convention; the module
+rule wins when the two conflict.
 
 | Location | Namespace |
 | --- | --- |
-| `Modules/Rendering/Mosaic/Source/Public/Tile.h` | `Rendering::Mosaic` |
-| `Modules/Rendering/Mosaic/Source/Public/Layout/Sorting.h` | `Rendering::Mosaic::Layout::Sorting` |
-| `Modules/Audio/Sonic/Source/Public/Voice.h` | `Audio::Sonic` |
+| `Modules/Rendering/Mosaic/Source/Public/Tile.h` | `Mosaic` |
+| `Modules/Audio/Sonic/Source/Public/Voice.h` | `Sonic` |
+| `Modules/Platform/LinuxAudio/Source/Public/AlsaBridge.h` | `LinuxAudio` |
 | `Modules/Json/Source/Public/Parser.h` | `Json` |
 | `Core/Image/PNG/Deflate.h` | `Core::Image::PNG::Deflate` |
 | `Applications/Crucible/Source/Server.h` | `Crucible` |
 
-Engine modules nest under their category. Multi-module categories (`Rendering`,
-`Input`, `Audio`, `Platform`) group their modules as `<Category>::<Module>` — for
-example `Rendering::Mosaic`, `Input::Conduit`. Single-module categories stay flat
-(`Json`, `Ledger`, `Dispatch`, `Script`). Inside a module namespace, no class or
-struct may share the module segment's name; `class Mosaic` inside `namespace
-Rendering::Mosaic` is forbidden — pick a name that describes the type's role.
+Inside a module namespace, no class or struct may share the module's name —
+`class Mosaic` inside `namespace Mosaic` is forbidden. Pick a name that
+describes the type's role.
 
-The IModule integration class for a module is named `<Module>Module` and lives
-at global scope, not inside the module namespace — `VigilModule`,
-`SoulforgeModule`, `ArbiterModule`, `EngineModule`. The module namespace holds
+The IModule integration class is named `<Module>Module` and lives at global
+scope, *not* inside the module namespace — `VigilModule`, `SoulforgeModule`,
+`ArbiterModule`, `EngineModule`, `LinuxAudioModule`, `PlatformLiaisonModule`.
+Module classes are never wrapped in any namespace. The module namespace holds
 support types only.
+
+Cross-cutting helpers that don't belong to any single module may sit in a
+shared root namespace named for the domain. The canonical example is
+`namespace Platform`, which holds the inter-module factory used by the
+platform liaison modules (`Platform::CreatePlatformLiaisonBackend`,
+`Platform::LiaisonFactory::Create`). A shared namespace is appropriate when
+multiple modules collaborate around a single concept; do not create one just
+to bucket a module's internal types.
 
 Applications use their brand name as a flat top-level namespace: `namespace
 Crucible`, `namespace Vigil`, `namespace Editor`, `namespace Forge`, `namespace
@@ -193,13 +202,17 @@ Game`, `namespace Minimal`. Do not wrap apps in an `Application::` parent and do
 not use a generic `namespace Application` — it carries no information and is
 indistinguishable across binaries in logs and stack traces.
 
-Log channels live in flat top-level `<Module>Log` namespaces — `EngineLog`,
-`RealmLog`, `DispatchLog`, `ArbiterLog`. Each lives in `<Module>Log.h` and pulls
-in `Logging/Log.inl` for the `Trace` / `Log` / `Warn` / `Error` / `Fatal` API.
-Source files pull in their channel with a file-scope `using namespace XxxLog;`
-after the includes. A future bulk migration will nest these under their owning
-module (`Rendering::Mosaic::Log`, `Ledger::Log`); until that ships, individual
-modules do not flip — staggered renames produce a half-and-half codebase.
+Log channels are migrating from flat top-level `<Module>Log` namespaces
+(`EngineLog`, `RealmLog`, `DispatchLog`, `ArbiterLog`) into nested
+`<Module>::Log` namespaces. The Platform-tier modules have flipped
+(`PlatformLiaison::Log`, `LinuxInput::Log`, `LinuxPane::Log`, `WindowsAudio::Log`,
+`WindowsInput::Log`, `WindowsLiaison::Log`); the rest remain in the flat
+`<Module>Log` form pending follow-on migration. Each channel lives in
+`<Module>Log.h` (filename unchanged) and pulls in `Logging/Log.inl` for the
+`Trace` / `Log` / `Warn` / `Error` / `Fatal` API. Source files pull in their
+channel with a file-scope `using namespace <channel>;` after the includes.
+Modules do not flip individually outside a planned migration step — staggered
+renames produce a half-and-half codebase.
 
 The following namespace segment names are forbidden — they describe nothing about
 what the code does:
