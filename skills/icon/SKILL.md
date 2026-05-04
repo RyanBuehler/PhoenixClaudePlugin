@@ -1,18 +1,17 @@
 ---
 name: icon
-description: Use when adding, replacing, or auditing Phosphor icons in the Phoenix Editor. Activates on phrases like "add a save icon", "find a Phosphor icon for X", "vendor a new icon", "swap the X icon for Y", "what icon should I use for Z", "/phoe:icon save", or any direct interaction with Applications/Editor/Content/Icons/. Teaches the catalog cache, search heuristic, vendoring URL pattern, attribution discipline, and the per-tessera icon-name table consumers map onto.
+description: Use when adding, replacing, or auditing Phosphor icons in the Phoenix Editor. Activates on phrases like "add a save icon", "find a Phosphor icon for X", "vendor a new icon", "swap the X icon for Y", "what icon should I use for Z", "/phoe:icon save", or any direct interaction with Applications/Editor/Content/Icons/. Teaches the catalog cache, search heuristic, vendoring URL pattern, naming conventions, default-weight rationale, and the manual-add fallback.
 ---
 
 # /phoe:icon — Vend a Phosphor icon into the Editor
 
-This skill adds or replaces a Phosphor icon end-to-end: search the catalog, pick a name, fetch all five non-duotone weights, place them in the engine tree, update attribution, and print a usage snippet. It is conversational — you (the model) execute the steps below; there is no compiled binary.
+This skill adds or replaces a Phosphor icon end-to-end: search the catalog, pick a name, fetch all five non-duotone weights, place them in the engine tree, and print a usage snippet. It is conversational — you (the model) execute the steps below; there is no compiled binary.
 
 ## Hard rules
 
-- **Phosphor only.** Other icon families (Lucide, Feather, Material) are intentionally not supported. A new family means a new sibling directory under `Applications/Editor/Content/Icons/` with its own LICENSE and ATTRIBUTION entry — propose that as a separate change, not via this skill.
+- **Phosphor only.** Other icon families (Lucide, Feather, Material) are intentionally not supported. A new family means a new sibling directory under `Applications/Editor/Content/Icons/` with its own LICENSE — propose that as a separate change, not via this skill.
 - **All five non-duotone weights.** Every vendored icon ships in `regular`, `light`, `bold`, `thin`, and `fill`. Duotone is out of scope: the Editor's R8 SDF atlas cannot represent two-opacity paths.
 - **Refuse to overwrite without `--force`.** If the destination filename already exists in any of the five weight directories, stop and ask. Stale icons stay until explicitly replaced.
-- **Update ATTRIBUTION.md.** Every vendored icon name must appear in the table at `Applications/Editor/Content/Icons/ATTRIBUTION.md`. No silent additions.
 - **Bump the plugin version on a change to this skill** (PATCH bump in `PhoenixClaudePlugin/.claude-plugin/marketplace.json`). Vendoring icons does NOT require a plugin version bump — the version tracks the skill itself, not its uses.
 - **Never edit the SVG content.** The vendored file is byte-for-byte what Phosphor publishes. The parser handles arcs and curves; do not pre-process.
 - **Refuse if the engine repo has uncommitted changes**, unless the user explicitly asks to vendor on top of in-progress work. The vendoring step touches the engine tree; staging a clean baseline first prevents unrelated diff noise.
@@ -25,11 +24,6 @@ Phosphor publishes its icons as SVGs at GitHub:
 https://raw.githubusercontent.com/phosphor-icons/core/main/assets/<weight>/<filename>
 ```
 
-Filenames follow Phosphor's convention:
-
-- `regular`: `<name>.svg` — for example, `floppy-disk.svg`
-- other weights: `<name>-<weight>.svg` — for example, `floppy-disk-bold.svg`
-
 The catalog (icon names + aliases + tags + categories) lives at:
 
 ```
@@ -40,10 +34,8 @@ The Editor's vendored tree mirrors Phosphor's directory structure:
 
 ```
 Applications/Editor/Content/Icons/
-  ATTRIBUTION.md
-  README.md
   phosphor/
-    LICENSE
+    LICENSE              MIT, verbatim from upstream
     regular/<name>.svg
     light/<name>-light.svg
     bold/<name>-bold.svg
@@ -51,7 +43,20 @@ Applications/Editor/Content/Icons/
     fill/<name>-fill.svg
 ```
 
-Runtime: `IconRegistry::Get().GetIcon("<name>")` returns an `optional<IconHandle>`. The Editor builds the registry from `Content/Icons/phosphor/regular/` at startup; other weights are not loaded at runtime today (the registry only reads the `regular/` directory). Vendoring all five weights still matters because it preserves the option to switch the registry's default weight without a re-fetch.
+Runtime: `IconRegistry::GetIcon("<name>")` returns an `optional<IconHandle>`. The Editor builds the registry from `Content/Icons/phosphor/regular/` at startup; other weights are not loaded at runtime today (the registry only reads the `regular/` directory). Vendoring all five weights still matters because it preserves the option to switch the registry's default weight without a re-fetch.
+
+## Naming convention
+
+Phosphor's filenames are preserved exactly as upstream:
+
+- Regular weight: `<name>.svg` — for example, `floppy-disk.svg`
+- Other weights: `<name>-<weight>.svg` — for example, `floppy-disk-bold.svg`, `arrow-left-thin.svg`
+
+Names are kebab-case. The same `<name>` appears in every weight directory; only the suffix differs. The runtime registry keys icons by `<name>` plus a weight enum, never by filename.
+
+## Default weight: regular
+
+`regular` is Phosphor's design baseline — every other weight is a variant of it. Choosing regular as the runtime default keeps consumer call sites short (`GetIcon("floppy-disk")` rather than `GetIcon("floppy-disk", IconWeight::Regular)`) and matches Phosphor's own documentation. The other four weights ship for parity with Phosphor's official packaging and so a future change to the registry's default weight does not need a re-fetch.
 
 ## Skill flows
 
@@ -145,20 +150,7 @@ Given a confirmed icon name (e.g. `floppy-disk`):
      vendoring (delete the partial files) and report which weight is missing — do not ship a
      partial set.
 
-4. **Update `Applications/Editor/Content/Icons/ATTRIBUTION.md`.** Add a row to the
-   "Vendored Icons" table. The table is markdown; insert in alphabetical order by name. If
-   the table doesn't yet have a header row (placeholder), replace the placeholder with a
-   real markdown table. Each row format:
-
-   ```
-   | <name> | <consumer or rationale> |
-   ```
-
-   The consumer column is one short line about why this icon was added — for example,
-   "File menu Save action" or "Inspector pane delete button". If the user did not provide
-   a rationale, ask before vendoring.
-
-5. **Print the usage snippet.** Once vendored, surface what the consumer code needs:
+4. **Print the usage snippet.** Once vendored, surface what the consumer code needs:
 
    ```cpp
    // In a panel constructor (after Editor::UI threads its IconRegistry in):
@@ -184,9 +176,19 @@ Given a confirmed icon name (e.g. `floppy-disk`):
    If the consumer is a layout file (JSON), point at the `IconImage` tessera type that's
    registered in `Modules/Rendering/Mosaic/Source/Private/Layout/TesseraFactory.cpp`.
 
-6. **Do not rebuild the editor.** The IconRegistry rebuilds its atlas on next launch — the
+5. **Do not rebuild the editor.** The IconRegistry rebuilds its atlas on next launch — the
    user re-runs `/phoe:build engine` (or just relaunches) when they want the icon visible.
    If the user explicitly asks for a build, defer to `/phoe:build`.
+
+## Manual-add fallback
+
+If the skill is unavailable (e.g. the user is on a different machine or wants to vendor offline), the steps reduce to:
+
+1. Pick a name from https://phosphoricons.com — for example, `floppy-disk`.
+2. Download all five non-duotone weights from the URL pattern above. Save each into the matching weight directory under `Applications/Editor/Content/Icons/phosphor/`.
+3. Rebuild the Editor; the IconRegistry rebuilds the atlas on next startup.
+
+The manual flow skips the catalog cache and the search heuristic but produces the same on-disk result.
 
 ## Conventions
 
@@ -195,10 +197,9 @@ Given a confirmed icon name (e.g. `floppy-disk`):
 - Filename suffix matches the weight directory: `regular/<name>.svg`, `light/<name>-light.svg`,
   etc. Don't strip the suffix or rename to a single canonical form — Phosphor's tooling
   expects this layout.
-- ATTRIBUTION.md uses kebab-case names too. Keep the table alphabetized.
-- The `/phoe:icon` skill is the only sanctioned entry point for adding a Phosphor icon.
-  Hand-vendoring is technically allowed (see the README in the icons directory) but skips
-  the attribution + usage-snippet discipline; prefer this skill.
+- The `/phoe:icon` skill is the sanctioned entry point for adding a Phosphor icon.
+  Hand-vendoring works (see [Manual-add fallback](#manual-add-fallback)) but skips the
+  search-and-confirm step; prefer this skill.
 
 ## Quirks
 
@@ -225,7 +226,6 @@ Given a confirmed icon name (e.g. `floppy-disk`):
 - Do NOT cache fetched SVGs anywhere except the engine tree (no `~/.cache/phoenix/svg/`).
 - Do NOT add files to weight directories that don't have all five matching siblings — the
   per-weight count must stay equal.
-- Do NOT update ATTRIBUTION.md in a way that drops existing entries.
 - Do NOT bump the plugin version unless this skill itself changed (this is the plugin's
   general version-bump rule; vendoring icons is engine-side work).
 
@@ -234,5 +234,4 @@ Given a confirmed icon name (e.g. `floppy-disk`):
 - The query has no clear top hit (top score < 2× second).
 - The destination already exists and `--force` was not provided.
 - A weight 404s during fetch (do not ship a partial set without explicit confirmation).
-- The consumer rationale is not obvious (the user hasn't said why this icon is being added).
 - The engine repo has uncommitted changes and the user did not say "on top of WIP".
