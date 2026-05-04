@@ -322,18 +322,9 @@ If PR review comments come back later, check out the branch, apply fixes, rebuil
 they compile (full `/phoe:verify` only when changes are significant — new logic, API changes,
 new files), commit with a brief "Address review: …" message, and push.
 
-## 15.5. Watch CI (cache-warm merge handoff)
+## 15.5. Watch CI
 
-Once the PR has been pushed, run the CI watch loop described in
-`references/ci-watch.md` against the new PR. The protocol covers the timing
-(270 s initial timer, up to 3 snoozes), the per-iteration check, the
-flashy/bell-ringing message format, and the terminal states. Do not improvise
-the cadence -- 270 s is chosen to stay inside the prompt-cache TTL so the
-user's eventual merge doesn't pay a fresh context re-read.
-
-Skip the watch only when one of the explicit skip conditions in the reference
-applies (push declined, all checks already passed at push time, or user
-opted out for this run).
+If a PR was pushed, run the watch loop in `references/ci-watch.md` against it.
 
 ## 16. Report
 

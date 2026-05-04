@@ -510,19 +510,6 @@ After each PR lands on remote main, mark the corresponding challenge merged:
 build-crucible-release/bin/crucible challenge move --label=<LABEL> merged
 ```
 
-## 7. Watch CI (cache-warm merge handoff)
+## 7. Watch CI
 
-After the final report prints, run the CI watch loop described in
-`references/ci-watch.md` against every PR opened during this run. The
-protocol covers the timing (270 s initial timer, up to 3 snoozes), the
-per-iteration check, the flashy/bell-ringing message format, and the
-multi-PR roll-up rules (exit on first PR ready, so the user can start
-merging while the cache is warm).
-
-The 270 s cadence is deliberate -- it stays inside the prompt-cache TTL so
-the user's eventual review/merge does not pay a fresh context re-read. Do
-not extend the timer or split it into shorter polls.
-
-Skip the watch only when no PRs were pushed this run (e.g., every challenge
-was blocked or the user declined every push) or when all checks on every
-pushed PR were already passing at push time.
+If any PRs were pushed this run, run the watch loop in `references/ci-watch.md` against them.
