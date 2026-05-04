@@ -414,7 +414,8 @@ gh pr create \
 ## Summary
 <2-4 bullets describing what the branch accomplishes>
 
-Crucible: <label>
+Crucible: #<id> <label>
+Saga: #<saga-id> <saga-label>
 EOF
 )"
 ```
@@ -430,10 +431,13 @@ gh pr create \
 ## Summary
 <bullets covering all challenges in the chain>
 
-Crucible: <label-1>, <label-2>, <label-3>
+Crucible: #<id-1> <label-1>, #<id-2> <label-2>, #<id-3> <label-3>
+Saga: #<saga-id> <saga-label>
 EOF
 )"
 ```
+
+`Crucible:` and `Saga:` trailers are mandatory; pull IDs from the JSON already fetched in Step 2. Combined-branch PRs list every challenge in the chain. Drop the `Saga:` line for orphans.
 
 Record each PR URL for the final report.
 

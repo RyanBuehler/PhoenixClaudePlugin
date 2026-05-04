@@ -309,10 +309,13 @@ gh pr create \
 ## Summary
 <2-4 bullet points describing what the branch accomplishes>
 
-Crucible: <label>
+Crucible: #<id> <label>
+Saga: #<saga-id> <saga-label>
 EOF
 )"
 ```
+
+`Crucible:` and `Saga:` trailers are mandatory; pull IDs from the JSON already fetched in Step 2/3. Drop the `Saga:` line for orphans.
 
 Compose the summary from the challenge title and the key changes — keep it concise; the
 challenge spec in Crucible is the detailed record. If the user declines to push, leave the
