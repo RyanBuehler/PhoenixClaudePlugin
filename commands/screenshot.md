@@ -4,6 +4,8 @@ description: Capture a screenshot from the Phoenix engine, either via console pi
 
 Capture a screenshot from the engine using whichever method is available.
 
+**NEVER use external screenshot apps** (`gnome-screenshot`, `scrot`, `import`, `grim`, `spectacle`, `flameshot`, etc.) — they capture window chrome and race the swapchain. **ALWAYS use the engine's internal `aurora.screenshot` capture path** described below.
+
 ## 1. Capture
 
 **If the engine is running** (console pipe exists):

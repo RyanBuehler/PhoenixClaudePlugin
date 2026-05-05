@@ -5,6 +5,8 @@ description: Auto-activates after UI code changes to capture screenshots and ver
 
 After completing a logical chunk of UI, widget, or rendering code changes, verify visual correctness by rebuilding, capturing a screenshot, and evaluating the result.
 
+Capture only via the internal path — `/phoe:screenshot` or the `invoke-screenshot-agent`. See `commands/screenshot.md` for the rule prohibiting external screenshot apps.
+
 ## Auto-activation criteria
 
 Activate when ALL of these are true:
