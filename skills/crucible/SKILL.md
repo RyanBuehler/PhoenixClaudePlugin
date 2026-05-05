@@ -1,6 +1,6 @@
 ---
 name: crucible
-description: Use when querying, creating, or modifying Crucible sagas, challenges, or bugs via the Crucible CLI. Activates on phrases like "list sagas", "create a challenge", "promote saga X", "move challenge to review", "show bug Y", "add a comment to challenge Z", or any direct interaction with Crucible state. Teaches CLI binary location, the hyphen-flag convention that makes underscore-style attempts fail, identifier resolution, status vocabulary, list-field append/replace semantics, and the quirks (saga has no status flag, saga create silently drops --challenges, blocked_by uses underscore, server is externally managed).
+description: Use for ANY question or action involving Crucible, sagas, challenges, or bugs — including read-only status queries. Activates on phrases like "saga status", "what is the status of (all) sagas", "what's in review", "what bugs are open", "list sagas", "show challenge X", "create a challenge", "promote saga X", "move challenge to review", "add a comment to challenge Z", or any mention of crucible/saga/challenge/bug. The Crucible CLI is the source of truth — never grep the filesystem or pgrep the server to answer status questions. Teaches CLI binary location, the hyphen-flag convention that makes underscore-style attempts fail, identifier resolution, status vocabulary, list-field append/replace semantics, and the quirks (saga has no status flag, saga create silently drops --challenges, blocked_by uses underscore, server is externally managed).
 ---
 
 # Crucible CLI — How to Talk to the Project Tracker
