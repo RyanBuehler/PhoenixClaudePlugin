@@ -1,6 +1,6 @@
 ---
 name: icon
-description: Use when adding, replacing, or auditing Phosphor icons in the Phoenix Editor. Activates on phrases like "add a save icon", "find a Phosphor icon for X", "vendor a new icon", "swap the X icon for Y", "what icon should I use for Z", "/phoe:icon save", or any direct interaction with Applications/Editor/Content/Icons/. Teaches the catalog cache, search heuristic, vendoring URL pattern, naming conventions, default-weight rationale, and the manual-add fallback.
+description: Use when adding, replacing, or auditing Phosphor icons in the Phoenix Editor. Activates on phrases like "add a save icon", "find a Phosphor icon for X", "vendor a new icon", "swap the X icon for Y", "what icon should I use for Z", "/phoe:icon save", or any direct interaction with Applications/Editor/Content/Icons/.
 ---
 
 # /phoe:icon — Vend a Phosphor icon into the Editor

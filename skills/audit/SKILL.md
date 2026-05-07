@@ -1,6 +1,6 @@
 ---
 name: audit
-description: Use when auditing a cold Phoenix C++ file, a set of files, or a module for drift from project conventions — style-guide violations, naming inconsistencies, comment hygiene, Phoenix-specific antipatterns, and subsystem-design smells that slip past clang-tidy and per-change review. Auto-activates on phrases like "audit this file", "audit this module", "sweep for style drift", "check for convention drift", "consistency pass"; also invocable directly via `/phoe:audit`. Not for per-change review (use `invoke-code-reviewer`), not for UI-architecture review (use `ui-design-review`), not for include hygiene (use `invoke-include-analyzer`), and not a gate — `/phoe:verify` remains the commit precondition.
+description: Use when auditing a cold Phoenix C++ file, a set of files, or a module for drift from project conventions — style-guide violations, naming inconsistencies, comment hygiene, Phoenix-specific antipatterns, and subsystem-design smells that slip past clang-tidy and per-change review. Auto-activates on phrases like "audit this file", "audit this module", "sweep for style drift", "check for convention drift", "consistency pass"; also invocable directly via `/phoe:audit`. Not for per-change review (use `invoke-code-reviewer`), not for UI-architecture review (use `ui-design-review`), not for include/module-import hygiene (use `invoke-lint-agent`), and not a gate — `/phoe:verify` remains the commit precondition.
 ---
 
 # Audit — Phoenix Consistency Sweeper
@@ -140,8 +140,8 @@ you know where to look.
   - Include groups misordered or unsorted within their group (case-insensitive).
 
 Include-graph correctness (missing includes, forward-decl vs include choice, circular
-includes) is **out of scope for audit** — delegate to `invoke-include-analyzer` when
-symptoms surface.
+includes, module-import hygiene) is **out of scope for audit** — delegate to
+`invoke-lint-agent` when symptoms surface.
 
 ### 4. Classify severity
 
@@ -257,8 +257,8 @@ For interactive one-off audits, drop the flags and run `/phoe:audit <target>`.
 ## What audit does NOT do
 
 - **Per-change review** — use `invoke-code-reviewer`. Audit is for cold files.
-- **Include-graph analysis** — use `invoke-include-analyzer`. Audit does not reason about
-  include correctness.
+- **Include-graph or module-import analysis** — use `invoke-lint-agent`. Audit does not
+  reason about include or import correctness.
 - **UI / Mosaic / Ledger architecture review** — use `ui-design-review`. Audit covers
   engine-wide conventions; UI has its own rulebook.
 - **Gating commits** — use `/phoe:verify`. Audit findings are drift notes, not blockers.
@@ -281,9 +281,8 @@ For interactive one-off audits, drop the flags and run `/phoe:audit <target>`.
 ## Related skills and agents
 
 - `invoke-code-reviewer` — per-change review with a bugs/UB/performance lens
-- `invoke-include-analyzer` — include-graph analysis (delegated to from both audit and
-  code-reviewer when symptoms surface)
-- `invoke-lint-agent` — clang-tidy driver
+- `invoke-lint-agent` — clang-tidy plus include/module-import dependency analysis
+  (delegated to from both audit and code-reviewer when symptoms surface)
 - `ui-design-review` — UI-architecture review for Tessera/Emblema/Ledger code
 - `/phoe:verify` — the actual commit gate
 - `/phoe:format`, `/phoe:lint` — the per-change style tools audit does **not** replace

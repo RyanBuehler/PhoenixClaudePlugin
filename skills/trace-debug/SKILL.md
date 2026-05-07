@@ -32,7 +32,7 @@ Activate when ALL of these are true:
 Do **not** activate for:
 - Crashes, segfaults, or any bug with a usable stack trace → use `invoke-debugger-agent`.
 - Non-reproducible / flaky failures → stabilize first (Phase 1.1), or escalate to `invoke-concurrency-agent` if race-related.
-- Visual / rendering regressions → use the `frontend-validate` skill.
+- Visual / rendering regressions → use `/phoe:screenshot` to capture and inspect, then `invoke-rendering-designer` or `invoke-vulkan-agent` for the fix.
 - Bugs you already understand from reading → just fix them; bisection has no signal when you know the answer.
 
 ## Phase 1 — Frame the Hunt

@@ -1,6 +1,6 @@
 ---
 name: pr-fixup
-description: Use when addressing review feedback on an open PR — pulls main, resolves any merge conflicts, triages and addresses review comments, reconciles resolved threads, then verifies via local build before pushing so CI can start as early as possible. Auto-activates on phrases like "address PR feedback", "fix the review comments", "handle PR review", "respond to reviewers".
+description: Use when addressing review feedback on an open PR — pulls main, resolves any merge conflicts, triages and addresses review comments, reconciles resolved threads, then verifies via local build before pushing. Auto-activates on phrases like "address PR feedback", "fix the review comments", "handle PR review", "respond to reviewers".
 ---
 
 # PR Fixup — Address Review Feedback

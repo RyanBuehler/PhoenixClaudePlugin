@@ -12,7 +12,7 @@ git clone git@github.com:RyanBuehler/PhoenixClaudePlugin.git
 claude plugin add ./PhoenixClaudePlugin
 ```
 
-## Agents (16)
+## Agents (13)
 
 Specialized subagents for different aspects of engine development.
 
@@ -20,8 +20,7 @@ Specialized subagents for different aspects of engine development.
 | Agent | Description |
 |-------|-------------|
 | `invoke-code-reviewer` | C++ code review — bugs, UB, style, portability, modern C++23 |
-| `invoke-lint-agent` | clang-tidy static analysis |
-| `invoke-include-analyzer` | IWYU, circular includes, PCH optimization |
+| `invoke-lint-agent` | clang-tidy static analysis plus include/module-import dependency hygiene |
 
 ### Architecture & Design
 | Agent | Description |
@@ -39,8 +38,7 @@ Specialized subagents for different aspects of engine development.
 ### Platform
 | Agent | Description |
 |-------|-------------|
-| `invoke-linux-agent` | Linux/POSIX development |
-| `invoke-windows-agent` | Windows/Win32 development |
+| `invoke-platform-agent` | Linux/POSIX and Windows/Win32 development, liaison modules |
 
 ### Testing & Debugging
 | Agent | Description |
@@ -54,11 +52,6 @@ Specialized subagents for different aspects of engine development.
 |-------|-------------|
 | `invoke-perf-agent` | CPU profiling and optimization |
 | `invoke-concurrency-agent` | Thread safety, lock-free algorithms |
-
-### Capture
-| Agent | Description |
-|-------|-------------|
-| `invoke-screenshot-agent` | Engine screenshot capture and analysis |
 
 ## Commands (12)
 
@@ -79,13 +72,12 @@ Slash commands for common workflows.
 | `/reset-workspace` | Clean up the workspace — resolve unstaged files, switch to main, pull latest, prune branches |
 | `/edit-plugin` | Edit the PhoenixClaudePlugin source — add/modify commands, agents, hooks, skills, or references and bump the version |
 
-## Skills (2)
+## Skills (1)
 
 Auto-activating skills that trigger based on context.
 
 | Skill | Description |
 |-------|-------------|
-| `frontend-validate` | Auto-captures and evaluates screenshots after UI code changes; annotation playground for marking issues |
 | `trace-debug` | Auto-activates when investigating reproducible Phoenix bugs; instruments with Scribe breadcrumbs and bisects the suspect region by judgment |
 
 ## Hooks

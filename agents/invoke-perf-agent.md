@@ -640,7 +640,7 @@ echo "$(date),$(grep 'cycles' perf_stats.txt | awk '{print $1}')" >> metrics.csv
 ## Related Agents
 
 - `invoke-debugger-agent` - GDB/LLDB for debugging issues found during profiling
-- `invoke-include-analyzer` - Build time reduction through include optimization
+- `invoke-lint-agent` - Build time reduction through include/module-import dependency hygiene
 - `invoke-vulkan-agent` - GPU profiling via Vulkan timestamp queries
 - `invoke-memory-agent` - Heap profiling and memory optimization
 - `invoke-concurrency-agent` - Parallel performance and contention analysis

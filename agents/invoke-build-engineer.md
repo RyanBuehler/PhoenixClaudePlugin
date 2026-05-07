@@ -613,9 +613,8 @@ Before submitting build changes:
 
 ## Related Agents
 
-- `invoke-include-analyzer` - IWYU analysis and include optimization to reduce build times
-- `invoke-linux-agent` - Linux platform-specific build and development issues
-- `invoke-windows-agent` - Windows platform-specific build and development issues
+- `invoke-lint-agent` - IWYU analysis and include/module-import optimization to reduce build times
+- `invoke-platform-agent` - Linux and Windows platform-specific build and development issues
 - `references/style-guide.md` - Authoritative code style and design guide
 - `references/tooling.md` - Formatter/linter tool configuration
 

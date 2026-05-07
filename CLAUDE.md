@@ -382,8 +382,7 @@ The following agents are available for specialized tasks. Each is defined in `ag
 
 ### Core Development
 - `invoke-code-reviewer` — C++ code review for bugs, UB, style, portability, and modern C++23 improvements
-- `invoke-lint-agent` — Runs clang-tidy for static analysis and bug detection
-- `invoke-include-analyzer` — IWYU analysis, circular include detection, PCH optimization
+- `invoke-lint-agent` — clang-tidy static analysis plus include/module-import dependency hygiene
 
 ### Architecture & Design
 - `invoke-systems-designer` — Cross-platform module architecture and interface design
@@ -395,8 +394,7 @@ The following agents are available for specialized tasks. Each is defined in `ag
 - `invoke-shader-expert` — GLSL/SPIR-V compilation, debugging, validation, and optimization
 
 ### Platform
-- `invoke-linux-agent` — Linux platform C++ development, POSIX APIs, and liaison modules
-- `invoke-windows-agent` — Windows platform C++ development, Win32 APIs, and liaison modules
+- `invoke-platform-agent` — Linux/POSIX and Windows/Win32 platform C++ development and liaison modules
 
 ### Testing & Debugging
 - `invoke-test-engineer` — Test setup, strategy, coverage, debugging failing tests
@@ -406,9 +404,6 @@ The following agents are available for specialized tasks. Each is defined in `ag
 ### Performance
 - `invoke-perf-agent` — CPU profiling, cache analysis, benchmarking, optimization
 - `invoke-concurrency-agent` — Thread safety, lock-free algorithms, synchronization
-
-### Capture & Analysis
-- `invoke-screenshot-agent` — Screenshot capture and visual analysis of the running engine
 
 ### Display Requirements
 
