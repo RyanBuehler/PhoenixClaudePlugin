@@ -192,6 +192,8 @@ If this challenge is complex (multiple modules, many affected files, or extensiv
 
 Enter plan mode, create an implementation plan, then execute it. Follow the project's normal development workflow — write code, follow conventions from CLAUDE.md. **Before writing any C++**, read `references/style-guide.md` and `references/tooling.md` so the implementation conforms to the enforced conventions (formatting, naming, comments, namespaces, return-value handling, `auto`, scope spacing, tooling). If the challenge has a `strategy` field, use it as a starting point for the implementation plan.
 
+Comments: default to none. Prefer one line; two or three for the genuinely complex. *Why*, not *what*. Paragraphs belong in the commit message. Full rules in `references/style-guide.md` §Comments.
+
 When emplacing TODO comments during implementation, follow the discipline in `references/style-guide.md` (TODO Comments section): keep them to one line, describe the work itself, never embed file paths, line numbers, challenge labels, PR numbers, branch names, or dates (anything that can go stale), and never leave a TODO that narrates the refactor or rename you just performed.
 
 ### Unit Test Coverage

@@ -75,6 +75,7 @@ Suggest modern alternatives when they improve clarity or safety:
 - Dead code and unused variables
 - Overly clever code that obscures intent
 - Missing or misleading comments
+- Verbose or what-restating comments — if it doesn't state a non-obvious *why*, delete it.
 - Inconsistent formatting
 
 ### 5. Design & Architecture
@@ -141,11 +142,14 @@ change that violates them. Specifically check for:
   `std::expected` and `std::optional`
 - Missing blank line after a `}` that closes a scope (function, class, namespace,
   control-flow block, lambda, etc.) before the next non-`}`/`else`/`;` token
-- Comment-discipline violations per the "Comments" section of `references/style-guide.md`:
-  restating what the code does, decorative banners, temporal narration ("previously", "now",
-  "new", "legacy", "refactored", "was", "used to"), author/date/ticket tags, file paths or
-  line numbers in comments, stacked `//` lines in place of a `/* ... */` multi-line block,
-  or a public-header declaration with no descriptive comment
+- Comment-discipline violations per `references/style-guide.md` §Comments. Flag aggressively — verbose comments are the dominant drift in this codebase:
+  - Verbose paragraphs / stacked-`//` blocks — prefer one line; two or three only for the genuinely complex. Otherwise compress or delete.
+  - What-comments that restate the code (`// increment counter`).
+  - Comments that don't tell the reader something the code can't — delete.
+  - Decorative banners (`// ===== Helpers =====`, ASCII rules).
+  - Temporal narration: "previously", "now", "new", "legacy", "was", "used to".
+  - Author/date/ticket tags, file paths, line numbers, labels, PR/commit refs.
+  - Public-header declarations missing a purpose comment.
 - Indentation (tabs, width 4), naming conventions, exception/RTTI bans, platform-isolation
   rules, and any other project-specific patterns documented in those files
 

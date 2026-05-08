@@ -238,6 +238,7 @@ Description: <description>
 - Use plain ASCII only -- no unicode characters
 - Use full descriptive variable names -- no abbreviations
 - Prefer sized integer types (int32_t, uint64_t) over platform-dependent types
+- Comments: default to none. Prefer one line; two or three for the genuinely complex. *Why*, not *what*. Paragraphs belong in the commit message. Full rules in `references/style-guide.md` §Comments.
 - TODO comments must follow the discipline in the plugin's CLAUDE.md "TODO Comments" section:
   short, describe the work itself, never reference anything that can go stale (file paths, line
   numbers, challenge labels, PR numbers, branch names, dates), and never narrate refactors you
