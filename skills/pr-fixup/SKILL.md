@@ -41,13 +41,19 @@ Group comments into:
 - **Disagreement** — the reviewer's request conflicts with intent or another constraint; surface to the user before acting.
 - **Out of scope** — file a Crucible follow-up rather than expanding the PR.
 
+**No comment falls through the cracks.** Every comment must end in one of two terminal states:
+1. **Fix landed + thread resolved** (Actionable that was addressed).
+2. **Reply drafted, thread left unresolved** (Question, Disagreement, Out-of-scope, or Actionable-but-deferred).
+
+A resolved thread without a fix, or an unaddressed comment without a drafted reply, is a bug in this workflow.
+
 For each actionable comment, **verify the cited code claim** per the plugin CLAUDE.md "Verify review-comment code claims before acting" rule — line numbers drift across PR updates. If the cited construct isn't on the referenced line or nearby, stop and ask the reviewer instead of guessing.
 
 ### 4. Address actionable items
 
 Make the requested changes, one comment at a time. Keep edits scoped — a fixup commit isn't a refactor opportunity.
 
-For questions and disagreements, draft replies but don't post them yet — the user reviews phrasing before anything goes out.
+For every non-actionable comment (Question, Disagreement, Out-of-scope, or Actionable-but-deferred), **draft a reply** explaining the answer, the disagreement rationale, or the Crucible follow-up label. Drafts stay local; the user posts. A non-actionable comment with no drafted reply is incomplete work.
 
 ### 5. Reconcile threads
 
@@ -62,7 +68,12 @@ gh api graphql -f query='
   }' -f threadId="<thread-id>"
 ```
 
-Look up `threadId` values via the GraphQL `pullRequest.reviewThreads` query. Only resolve threads whose underlying ask was actually addressed in a commit; don't auto-resolve questions or disagreements.
+Look up `threadId` values via the GraphQL `pullRequest.reviewThreads` query.
+
+**Resolution invariants:**
+- Resolve a thread only if a commit in this fixup actually addresses the ask. Verify the diff before resolving — never resolve speculatively.
+- Never resolve Question, Disagreement, or Out-of-scope threads. Those carry drafted replies and stay open for the user.
+- Before finishing this step, audit: every Actionable thread → resolved with a fix; every other thread → unresolved with a drafted reply.
 
 ### 6. Build to verify
 
@@ -83,8 +94,9 @@ If the build fails, fix the failure, rebuild, and push once it's green. Repeat u
 ### 8. Report
 
 Tell the user:
-- Which comments were addressed (with thread IDs / file:line).
-- Which were left for the user (questions, disagreements, drafted replies).
+- Which comments were addressed and resolved (thread IDs / file:line).
+- Which have drafted replies awaiting the user (questions, disagreements, deferred, out-of-scope) — include the draft text inline.
+- Confirmation that every comment is in one terminal state — fixed+resolved or drafted+unresolved.
 - Build status and the pushed commit.
 - Any out-of-scope items filed as Crucible follow-ups.
 
