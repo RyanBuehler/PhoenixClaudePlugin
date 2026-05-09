@@ -8,15 +8,24 @@ import sys
 
 KEBAB = r'[a-z0-9][a-z0-9-]*'
 BRANCH_RE = re.compile(r'^(' + KEBAB + r')/(' + KEBAB + r')$')
-SEPARATOR = re.compile(r'&&|\|\||;|\n')
+SEPARATOR = re.compile(r'&&|\|\|?|;|\n')
+REDIRECT_RE = re.compile(r'^[0-9]*[<>]+&?[0-9-]*$|^&>+$')
 
 NON_CREATE_BRANCH_FLAGS = {
 	"-d", "-D", "--delete",
 	"-m", "-M", "--move",
 	"-c", "-C", "--copy",
 	"-l", "--list",
+	"-a", "--all",
+	"-r", "--remotes",
+	"-v", "-vv", "--verbose",
+	"-q", "--quiet",
+	"--column", "--no-column",
 	"--show-current", "--edit-description",
 	"--set-upstream-to", "--unset-upstream",
+	"--contains", "--no-contains",
+	"--merged", "--no-merged",
+	"--points-at",
 }
 
 MSG_USE_WORKTREE = (
@@ -128,6 +137,7 @@ def main():
 			tokens = shlex.split(piece)
 		except ValueError:
 			continue
+		tokens = [token for token in tokens if not REDIRECT_RE.match(token)]
 		if not tokens or tokens[0] != "git":
 			continue
 		inspect_git(tokens[1:])

@@ -4,25 +4,40 @@ description: Full CI-mirror verification sequence — configure, build, format c
 
 Run the full CI-mirror verification sequence. Stop on the first failure.
 
-`/phoe:build` is the single source of truth for building executables — it ensures Forge is present and at the expected version. It rebuilds from scratch when either of those fails. On a fresh worktree, the first step will rebuild Forge; subsequent runs are instant.
-
 Run this **before committing**. A commit made without passing verification is considered incomplete work.
+
+The commands below are the inline equivalents of `/phoe:build`, `/phoe:format`, `/phoe:lint`,
+`/phoe:test`. Run them directly to avoid nested skill invocations. Use the sub-skills when
+debugging a single phase.
 
 ## 1. Build
 
-Run `/phoe:build` — ensures Forge is ready, then configures and builds the project.
+Run `/phoe:build` — it owns version-mismatch handling and profile detection, so don't inline it.
+On a fresh worktree the first call rebuilds Forge; subsequent calls are no-ops.
 
 ## 2. Format
 
-Run `/phoe:format` — format staged files and verify.
+```bash
+python3 Tools/format.py --files=staged
+python3 Tools/format.py --files=staged -error
+```
 
 ## 3. Lint
 
-Run `/phoe:lint` — run clang-tidy on changed files.
+```bash
+[ -f build/compile_commands.json ] || python3 Tools/tidy.py --compdb
+python3 Tools/tidy.py
+```
 
 ## 4. Test
 
-Run `/phoe:test` — run the test suite via Forge.
+Pick the first profile with `tests_enabled: true` (`editor-debug`, then `editor-release`).
+Currently `editor-release` has tests disabled, so this resolves to `editor-debug` in nearly all
+cases. See `commands/test.md` if the default isn't right.
+
+```bash
+build-forge-release/bin/forge test editor-debug --output-on-failure
+```
 
 ## 5. Report
 

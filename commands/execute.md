@@ -161,11 +161,14 @@ For each challenge in the wave:
    ```bash
    build-crucible-release/bin/crucible --json challenge show --label=<LABEL>
    ```
-2. Create the worktree and branch from the main repo root:
+2. Re-confirm status is still `todo` (parse from the JSON above). Another agent's parallel
+   `/phoe:execute` may have claimed it since Step 2. If status is anything else, drop the
+   challenge, log "Pre-empted by parallel agent" in the final report, and continue.
+3. Create the worktree and branch from the main repo root:
    ```bash
    git worktree add .claude/worktrees/challenge-<label> -b challenge/<label>
    ```
-3. Move to implementing (run from the main repo root so the crucible binary resolves):
+4. Move to implementing (run from the main repo root so the crucible binary resolves):
    ```bash
    build-crucible-release/bin/crucible challenge move --label=<LABEL> implementing
    ```
@@ -371,6 +374,11 @@ CRITICAL/WARNING/SUGGESTION/NOTE severity levels.
 
 **Serialization rule.** Any subagent in this step commits to `main` (the post-merge state from 4d). If a wave has multiple challenges that need fix or triage subagents, **dispatch them one at a time, not in parallel** — each subagent must finish (commits landed, verify passed) before the next one starts. Parallel dispatch would force each subagent to stash-and-restore its siblings' unstaged edits, a silent data-loss risk if the restore ever fails.
 
+**Direct-main-commit exception.** Steps 4d–4f land commits on `main` directly — an intentional
+exception to the "no direct commits to main" memory rule, justified by the work having already
+passed verify (4d) and review (4e). If a fix would materially change the shape of the work
+rather than touch it up, mark the challenge blocked instead and let the user re-plan.
+
 Process challenges in **ID order** within the wave, and for each one:
 
 - **Spec FAIL or quality CRITICAL:** Dispatch a fix subagent with combined feedback from both reviewers. Wait for it to finish. Re-run `/phoe:verify`. Re-dispatch both reviewers. On second failure: mark blocked with reviewer feedback. **Keep all branches and commits intact.** Skip this challenge and move to the next one in the wave.
@@ -397,8 +405,26 @@ For each successfully reviewed challenge:
 
 ### 4h. Publish
 
-For every reviewed challenge in the wave, push its branch and open a pull request. Group by
-strategy:
+**Pre-push race check.** Before pushing, re-fetch and check origin/main for equivalent work — a
+parallel agent may have landed a similar PR. Otherwise the rebase drops your commits as
+cherry-pick-equivalent and leaves an empty PR.
+
+```bash
+git fetch origin main
+git log origin/main --oneline -i --grep="<label>" -10
+```
+
+If matches exist, mark merged, clean up the branch/worktree, log "Pre-empted by parallel agent"
+in the final report, and skip to the next challenge:
+
+```bash
+build-crucible-release/bin/crucible challenge move --label=<LABEL> merged
+git worktree remove .claude/worktrees/challenge-<label>  # branch-per-challenge only
+git branch -D challenge/<label>
+```
+
+For every reviewed challenge that survives the pre-push check, push its branch and open a pull
+request. Group by strategy:
 
 - **branch-per-challenge:** push the challenge branch and create a single-challenge PR.
 - **combined-branch:** wait until every challenge in the chain has reached `review`, then push
