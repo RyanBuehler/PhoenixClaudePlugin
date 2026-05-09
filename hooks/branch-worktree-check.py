@@ -2,6 +2,7 @@
 """PreToolUse hook: enforce <type>/<label> branch naming and worktree-only creation."""
 
 import json
+import os
 import re
 import shlex
 import sys
@@ -10,6 +11,14 @@ KEBAB = r'[a-z0-9][a-z0-9-]*'
 BRANCH_RE = re.compile(r'^(' + KEBAB + r')/(' + KEBAB + r')$')
 SEPARATOR = re.compile(r'&&|\|\|?|;|\n')
 REDIRECT_RE = re.compile(r'^[0-9]*[<>]+&?[0-9-]*$|^&>+$')
+
+# Registry of opt-in path-override mappings. A file at
+# .claude/worktrees/.branches/<basename> whose contents equal a target branch
+# tells the hook to permit `git worktree add .claude/worktrees/<basename> -b
+# <target-branch>` even when <basename> != <branch>.replace('/', '-').
+# The file lives outside the to-be-created worktree directory so it doesn't
+# collide with `git worktree add`'s requirement of an empty target dir.
+BRANCH_REGISTRY_DIR = ".claude/worktrees/.branches"
 
 NON_CREATE_BRANCH_FLAGS = {
 	"-d", "-D", "--delete",
@@ -43,12 +52,48 @@ MSG_INVALID_BRANCH = (
 
 MSG_MISMATCH = (
 	"Worktree path and branch do not match.\n"
-	"Branch {branch} must live at {expected}."
+	"Branch {branch} must live at {expected}.\n"
+	"To opt a shortened/combined path in, write the branch name into\n"
+	"  .claude/worktrees/.branches/<basename>\n"
+	"before running `git worktree add`."
 )
 
 
 def expected_path(branch):
 	return ".claude/worktrees/" + branch.replace("/", "-")
+
+
+def registered_branch_for_path(path):
+	"""Return the branch this worktree path is opted in to, or None.
+
+	Reads BRANCH_REGISTRY_DIR/<basename(path)> if present and returns its
+	stripped contents. Any I/O error returns None — the hook then falls back
+	to strict basename↔branch matching.
+	"""
+	if not path:
+		return None
+	basename = os.path.basename(path.rstrip("/"))
+	if not basename:
+		return None
+	registry_file = os.path.join(BRANCH_REGISTRY_DIR, basename)
+	try:
+		with open(registry_file, "r", encoding="utf-8") as handle:
+			return handle.read().strip()
+	except OSError:
+		return None
+
+
+def path_matches_branch(path, branch):
+	"""True when `path` is an acceptable worktree location for `branch`.
+
+	Default rule: basename equals branch.replace('/', '-'). Opt-in: a registry
+	file at .claude/worktrees/.branches/<basename> whose contents equal the
+	branch name unblocks shortened or combined-branch paths.
+	"""
+	if path == expected_path(branch):
+		return True
+	registered = registered_branch_for_path(path)
+	return registered is not None and registered == branch
 
 
 def block(reason):
@@ -86,7 +131,7 @@ def check_worktree_add(tokens):
 		return
 	if not BRANCH_RE.match(branch):
 		block(MSG_INVALID_BRANCH.format(name=branch))
-	if path is None or path != expected_path(branch):
+	if path is None or not path_matches_branch(path, branch):
 		block(MSG_MISMATCH.format(branch=branch, expected=expected_path(branch)))
 
 
