@@ -254,11 +254,30 @@ Invoke the code reviewer as a **separate agent** to evaluate the implementation 
 4. **WARNING findings** are included in the final report for user review but do not block the commit.
 5. **SUGGESTION and NOTE findings** are omitted from the report unless particularly insightful.
 
-## 12. Commit Changes
+## 12. Adversarial Review — Required Before PR
+
+After the standard review passes, dispatch an **adversarial** reviewer subagent. The standard review asks "is this code well-formed?"; the adversarial review asks "how does this break?". A PR cannot be opened until this gate has run and any CRITICAL findings are resolved.
+
+Launch `invoke-code-reviewer` as a fresh subagent with the prompt:
+
+> Adversarially review the staged diff (`git diff --cached`) for challenge `<LABEL>`. Your job is to attack this implementation, not validate it. Assume the standard review already passed — do not duplicate it. Hunt for:
+>
+> - **Edge cases the implementation does not handle** — empty input, max-size input, unicode, negative values, NaN, integer overflow, signed/unsigned mismatches, off-by-one at boundaries.
+> - **Concurrency hazards** — races, reentrancy, ordering assumptions across threads or subsystems, lifetime invariants not enforced by the type system.
+> - **Silent failure modes** — code paths that swallow errors, no-op on the unexpected branch, or fail to log via Scribe (violates the no-silent-failures rule).
+> - **Hidden coupling** — state shared across modules, ownership confusion, assumptions about call order or initialization sequence.
+> - **Performance pathologies under realistic load** — allocation in hot paths, O(n²) under expected n, lock contention, cache-hostile access patterns.
+> - **Spec gaps** — acceptance criteria that pass for the easy case but fail in plausible variations the spec did not enumerate. If the spec itself is the weak link, say so.
+>
+> Report only findings that represent real failure modes, not stylistic concerns. Use CRITICAL/WARNING/SUGGESTION/NOTE severity. If you find nothing actionable, say so explicitly — a clean adversarial pass is a valid result.
+
+**Gate on zero CRITICAL adversarial findings.** Treat them the same as Step 11: fix, re-run `/phoe:verify`, re-run acceptance criteria evaluation, then re-run **both** the standard and adversarial reviews until both pass. Include any WARNING findings in the final report alongside the standard-review WARNINGs.
+
+## 13. Commit Changes
 
 Commit all changes on the challenge branch with a descriptive message referencing the challenge label.
 
-## 13. Move to Review — Required
+## 14. Move to Review — Required
 
 Immediately after the commit lands, move the challenge to `review`. This is a mandatory, non-skippable final workflow step — implementation is not considered complete until the challenge is in `review`:
 
@@ -268,7 +287,7 @@ build-crucible-release/bin/crucible challenge move --label=<LABEL> review
 
 If this move fails (server down, label mismatch, Crucible not initialized), **stop and surface the error to the user**. Do not report the challenge as done, and do not continue to the report step, until the move has succeeded.
 
-## 14. Propagate Changes to Follow-on Challenges
+## 15. Propagate Changes to Follow-on Challenges
 
 If this challenge belongs to a saga, reconcile its siblings — the implementation may have invalidated assumptions baked into later challenge specs (e.g., this challenge renamed a core type that a later challenge references by its old name, or changed a file path, function signature, or module boundary that a later challenge's `description`, `strategy`, `acceptance_criteria`, or `affected_files` mentions explicitly).
 
@@ -296,7 +315,7 @@ If this challenge belongs to a saga, reconcile its siblings — the implementati
 
 Do not edit the implementation itself from this step — this is metadata reconciliation only. If the implementation surfaced a real scope problem in a later challenge (not a rename), note it in the report and let the user decide whether to re-plan.
 
-## 15. Publish
+## 16. Publish
 
 Push the branch and open a pull request. Confirm with the user before pushing or running
 `gh pr create` — these are shared-state actions per CLAUDE.md's Push & Pull Request Workflow.
@@ -327,11 +346,11 @@ If PR review comments come back later, check out the branch, apply fixes, rebuil
 they compile (full `/phoe:verify` only when changes are significant — new logic, API changes,
 new files), commit with a brief "Address review: …" message, and push.
 
-## 15.5. Watch CI
+## 16.5. Watch CI
 
 If a PR was pushed, run the watch loop in `references/ci-watch.md` against it.
 
-## 16. Report
+## 17. Report
 
 If the challenge belongs to a saga, show updated saga progress:
 

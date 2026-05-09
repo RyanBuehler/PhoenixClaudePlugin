@@ -81,11 +81,32 @@ Challenges must be:
 - **Self-contained** — can be verified independently
 - **Ordered** — respects dependencies (earlier challenges don't depend on later ones)
 
-## 5. Review
+## 5. Subagent Spec Review
+
+Before presenting the draft to the user, dispatch a spec reviewer subagent to audit the saga and its challenges for spec quality. The agent that drafted the plan is rarely the best judge of its own gaps — a fresh reader catches ambiguity, missing context, and ordering mistakes that the drafter has already rationalized away.
+
+Launch `invoke-spec-reviewer` as a subagent with the prompt:
+
+> Audit the following draft Crucible saga and challenges for **spec quality** — there is no implementation yet, so this is a forward-looking review of the contract, not a compliance check. For each challenge, evaluate:
+>
+> - **Completeness** — are description, acceptance criteria, strategy, verification, and affected_files concrete enough to brief a capable engineer who cannot ask questions? `/phoe:execute` runs these specs autonomously, so missing context is a future failure.
+> - **Ambiguity** — are any criteria phrased so they admit multiple correct implementations, or in ways that cannot be mechanically verified? Verification entries must be intent strings, never literal shell commands.
+> - **Ordering** — do dependencies implied by strategy, affected_files, or referenced symbols match the current sequence? Earlier challenges must not depend on later ones.
+> - **Missing context** — which file paths, prior-art references, or project conventions need to be cited for the implementer to ground their approach in Phoenix patterns?
+> - **Scope** — is each challenge commit-sized? Is anything bundled that should split, or split that should bundle?
+> - **Cross-challenge coherence** — does any challenge reference a symbol, file, or concept not introduced by an earlier challenge in this saga and not already present in the codebase?
+>
+> Report findings as a per-challenge punch list with severity: **BLOCKER** (spec is unusable as written), **CONCERN** (spec is risky and should be revised), or **SUGGESTION** (refinement).
+
+Read the report. For every BLOCKER and CONCERN, revise the affected challenge fields before continuing. Apply SUGGESTIONs at your judgment. If the reviewer flags an ordering or scope issue that requires re-decomposing, return to step 4 and re-run this review on the revised draft. Record which challenges were revised and the gist of each change — surface this in the step 6 review summary so the user sees what the audit caught.
+
+## 6. Review
 
 Present the saga and all proposed challenges for review.
 
 If extending an existing saga, show its current challenges first for context.
+
+If the step 5 audit produced revisions, lead with a brief summary of what the spec reviewer caught and which challenges were updated in response. The user should see the revised draft, not the pre-audit draft, but should know what changed since they last saw it.
 
 **Saga:**
 
@@ -104,7 +125,7 @@ Ask the user to confirm, adjust, add, remove, or reorder challenges before proce
 
 If only a single challenge results, offer to create just a standalone challenge without a saga.
 
-## 6. Create
+## 7. Create
 
 After approval, create the challenges and saga using the CLI.
 
@@ -135,7 +156,7 @@ build-crucible-release/bin/crucible saga add <SAGA_LABEL> <CHALLENGE_LABEL>
 build-crucible-release/bin/crucible saga show --label=<SAGA_LABEL>
 ```
 
-## 7. Report
+## 8. Report
 
 Present a summary table:
 

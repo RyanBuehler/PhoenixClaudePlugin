@@ -336,9 +336,11 @@ For each completed challenge:
 
 5. On verify failure: dispatch a fix subagent with the error output. The fix subagent works on main. Re-run `/phoe:verify`. On second failure: mark blocked with the verify error output. **Keep the branch and merged state intact.** Skip.
 
-### 4e. Review (spec + quality in parallel per challenge)
+### 4e. Review (spec + quality + adversarial in parallel per challenge)
 
-Process challenges in ID order. For each challenge, dispatch both reviewers simultaneously (they are read-only, so parallel dispatch is safe), wait for both to return, then move to the next challenge. Do NOT dispatch reviewers for multiple challenges in parallel — that would let 4f's fix-subagents (which commit to main) race against each other, violating the serialization rule stated in 4f below.
+Process challenges in ID order. For each challenge, dispatch all three reviewers simultaneously (they are read-only, so parallel dispatch is safe), wait for all to return, then move to the next challenge. Do NOT dispatch reviewers for multiple challenges in parallel — that would let 4f's fix-subagents (which commit to main) race against each other, violating the serialization rule stated in 4f below.
+
+The adversarial reviewer is a **mandatory pre-PR gate** — no challenge advances to 4h without it. The standard quality reviewer asks "is this code well-formed?"; the adversarial reviewer asks "how does this break?". Both are required because they catch different failure modes, and `/phoe:execute` ships PRs without human judgment in the loop, so the adversarial pass is the last line of defense before the diff lands on `origin`.
 
 For each verified challenge:
 
@@ -370,6 +372,34 @@ and project convention compliance. Report findings using
 CRITICAL/WARNING/SUGGESTION/NOTE severity levels.
 ```
 
+**Adversarial reviewer** -- launch a second `invoke-code-reviewer` agent (fresh, no shared context with the quality reviewer) with this prompt:
+
+```
+Adversarially review the diff (git diff HEAD~1..HEAD) for challenge: <label>.
+Your job is to attack this implementation, not validate it. Assume the
+quality review is happening in parallel — do not duplicate it. Hunt for:
+
+- Edge cases the implementation does not handle (empty input, max-size
+  input, unicode, negative values, NaN, integer overflow, signed/unsigned
+  mismatches, off-by-one at boundaries).
+- Concurrency hazards: races, reentrancy, ordering assumptions across
+  threads or subsystems, lifetime invariants not enforced by the type
+  system.
+- Silent failure modes: paths that swallow errors, no-op on the
+  unexpected branch, or fail to log via Scribe.
+- Hidden coupling: state shared across modules, ownership confusion,
+  assumptions about call order or initialization sequence.
+- Performance pathologies under realistic load (allocation in hot paths,
+  O(n²) under expected n, lock contention, cache-hostile patterns).
+- Spec gaps: acceptance criteria that pass for the easy case but fail in
+  plausible variations the spec did not enumerate.
+
+Report only findings that represent real failure modes, not stylistic
+concerns. Use CRITICAL/WARNING/SUGGESTION/NOTE severity. If you find
+nothing actionable, say so explicitly — a clean adversarial pass is a
+valid result.
+```
+
 ### 4f. Handle Review Results
 
 **Serialization rule.** Any subagent in this step commits to `main` (the post-merge state from 4d). If a wave has multiple challenges that need fix or triage subagents, **dispatch them one at a time, not in parallel** — each subagent must finish (commits landed, verify passed) before the next one starts. Parallel dispatch would force each subagent to stash-and-restore its siblings' unstaged edits, a silent data-loss risk if the restore ever fails.
@@ -381,14 +411,16 @@ rather than touch it up, mark the challenge blocked instead and let the user re-
 
 Process challenges in **ID order** within the wave, and for each one:
 
-- **Spec FAIL or quality CRITICAL:** Dispatch a fix subagent with combined feedback from both reviewers. Wait for it to finish. Re-run `/phoe:verify`. Re-dispatch both reviewers. On second failure: mark blocked with reviewer feedback. **Keep all branches and commits intact.** Skip this challenge and move to the next one in the wave.
-- **Quality WARNING only:** Proceed. Log warnings in the final report.
-- **Quality SUGGESTION:** Dispatch a suggestion-triage subagent with the full suggestion list. For each suggestion the subagent must decide:
+- **Spec FAIL, quality CRITICAL, or adversarial CRITICAL:** Dispatch a fix subagent with combined feedback from every reviewer that flagged a blocker (spec, quality, adversarial — whichever fired). Wait for it to finish. Re-run `/phoe:verify`. Re-dispatch **all three** reviewers (a fix can introduce new adversarial-class regressions). On second failure: mark blocked with reviewer feedback. **Keep all branches and commits intact.** Skip this challenge and move to the next one in the wave.
+- **Quality WARNING or adversarial WARNING:** Proceed. Log warnings (tagged with their source — quality vs adversarial) in the final report.
+- **Quality SUGGESTION or adversarial SUGGESTION:** Dispatch a suggestion-triage subagent with the combined suggestion list (both sources merged, deduplicated). For each suggestion the subagent must decide:
   - **Implement it** if it is clearly in-scope, correct, and adds value -- apply the change directly.
   - **Defer it** if it raises a real question, is ambiguous, or is out of scope for this challenge -- emplace a `// TODO: <one-line description of the work that needs doing>` comment at the most relevant code location so it can be evaluated later. Follow the TODO discipline in the plugin's CLAUDE.md: describe the work, not where the note came from; never embed the challenge label, a PR number, a file path, a line number, a branch name, or any other reference that can go stale.
 
-  Suggestions must never be silently dropped. The triage subagent commits any changes (implementations and TODOs) to main. Wait for it to finish. After it returns, re-run `/phoe:verify`. Do NOT re-dispatch the reviewers. Log the triage outcome (implemented / deferred counts) in the final report.
-- **Quality NOTE:** Proceed. Log notes in the final report.
+  Suggestions must never be silently dropped. The triage subagent commits any changes (implementations and TODOs) to main. Wait for it to finish. After it returns, re-run `/phoe:verify`. Do NOT re-dispatch the reviewers. Log the triage outcome (implemented / deferred counts, broken out by source) in the final report.
+- **Quality NOTE or adversarial NOTE:** Proceed. Log notes in the final report.
+
+A challenge cannot reach 4h (Publish) until all three reviewers have returned and zero CRITICAL findings remain across spec, quality, and adversarial. The adversarial gate is non-skippable — autonomous PR submission without it is forbidden.
 
 ### 4g. Move to Review
 
@@ -494,6 +526,9 @@ After all waves complete, collect the "Workflow Friction" sections from every su
 - <friction item>
 
 ### Challenge: <label> (quality-reviewer)
+- <friction item>
+
+### Challenge: <label> (adversarial-reviewer)
 - <friction item>
 ```
 
