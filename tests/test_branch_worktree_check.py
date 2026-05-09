@@ -10,6 +10,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from unittest import mock
 
 HOOK_PATH = Path(__file__).resolve().parents[1] / "hooks" / "branch-worktree-check.py"
 spec = importlib.util.spec_from_file_location("branch_worktree_check", HOOK_PATH)
@@ -109,6 +110,51 @@ class TestRegistryOverride(HookTestCase):
 		code, output = self._run(
 			"git worktree add .claude/worktrees/challenge-foo -b challenge/foo"
 		)
+		self.assertEqual(code, 0)
+		self.assertEqual(output.strip(), "{}")
+
+
+class TestForceBranchFastForward(HookTestCase):
+	"""Regression guard for bug pretooluse-hook-blocks-legitimate-fast-forward-branch-update:
+	`git branch -f <existing-branch> <commit>` should be allowed when the move
+	is a true fast-forward (commit descends from current branch tip)."""
+
+	def _patch_git(self, exists, is_ancestor):
+		"""Make subprocess.run mimic `git rev-parse --verify` and `git merge-base --is-ancestor`."""
+		def fake_run(cmd, capture_output, text, check):
+			if cmd[:3] == ["git", "rev-parse", "--verify"]:
+				class R: returncode = 0 if exists else 1
+				return R()
+			if cmd[:3] == ["git", "merge-base", "--is-ancestor"]:
+				class R: returncode = 0 if is_ancestor else 1
+				return R()
+			class R: returncode = 0
+			return R()
+		return mock.patch.object(hook.subprocess, "run", side_effect=fake_run)
+
+	def test_force_branch_fast_forward_allowed(self):
+		"""`git branch -f existing main` allowed when main descends from existing."""
+		with self._patch_git(exists=True, is_ancestor=True):
+			code, output = self._run("git branch -f challenge/x main")
+		self.assertEqual(code, 0)
+		self.assertEqual(output.strip(), "{}")
+
+	def test_force_branch_non_fast_forward_blocked(self):
+		"""`git branch -f existing some-non-ancestor` still blocked."""
+		with self._patch_git(exists=True, is_ancestor=False):
+			code, _output = self._run("git branch -f challenge/x rewind-target")
+		self.assertEqual(code, 2)
+
+	def test_force_branch_new_branch_blocked(self):
+		"""`git branch -f new-branch HEAD` (branch does not exist) still blocked."""
+		with self._patch_git(exists=False, is_ancestor=False):
+			code, _output = self._run("git branch -f challenge/new HEAD")
+		self.assertEqual(code, 2)
+
+	def test_force_branch_implicit_head_commit(self):
+		"""`git branch -f existing` (no commit arg → HEAD) is allowed when FF."""
+		with self._patch_git(exists=True, is_ancestor=True):
+			code, output = self._run("git branch -f challenge/x")
 		self.assertEqual(code, 0)
 		self.assertEqual(output.strip(), "{}")
 

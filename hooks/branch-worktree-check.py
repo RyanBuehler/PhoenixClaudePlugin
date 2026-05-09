@@ -5,6 +5,7 @@ import json
 import os
 import re
 import shlex
+import subprocess
 import sys
 
 KEBAB = r'[a-z0-9][a-z0-9-]*'
@@ -135,6 +136,30 @@ def check_worktree_add(tokens):
 		block(MSG_MISMATCH.format(branch=branch, expected=expected_path(branch)))
 
 
+def is_branch_fast_forward(branch, commit):
+	"""True when `branch` already exists locally AND `commit` is a descendant of it.
+
+	A descendant relationship means moving `branch` to `commit` is a true
+	fast-forward (no commits on the current branch tip would be discarded).
+	Both git invocations are read-only. Returns False on any subprocess
+	failure so the caller falls back to the strict block path.
+	"""
+	try:
+		exists = subprocess.run(
+			["git", "rev-parse", "--verify", "--quiet", "refs/heads/" + branch],
+			capture_output=True, text=True, check=False,
+		)
+		if exists.returncode != 0:
+			return False
+		ff = subprocess.run(
+			["git", "merge-base", "--is-ancestor", branch, commit],
+			capture_output=True, text=True, check=False,
+		)
+		return ff.returncode == 0
+	except (OSError, subprocess.SubprocessError):
+		return False
+
+
 def check_git_branch(tokens):
 	"""`git branch` — only intervene when a new branch is being created."""
 	for token in tokens:
@@ -143,6 +168,16 @@ def check_git_branch(tokens):
 	positional = [token for token in tokens if not token.startswith("-")]
 	if not positional:
 		return
+	# `git branch -f <existing-branch> <commit>` is permitted when the move is
+	# a true fast-forward (the new commit descends from the current branch
+	# tip). Other -f invocations — creating a new branch, rewinding to a
+	# non-ancestor — continue to flow through the create-branch block path.
+	has_force = any(token in ("-f", "--force") for token in tokens)
+	if has_force and len(positional) >= 1:
+		branch = positional[0]
+		commit = positional[1] if len(positional) >= 2 else "HEAD"
+		if is_branch_fast_forward(branch, commit):
+			return
 	check_create(positional[0])
 
 
