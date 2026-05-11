@@ -73,7 +73,7 @@ Use saga-aware priority logic to select N eligible challenges. The candidate poo
 
    For each remaining candidate, apply these three filters in order and skip only when **all three** match against the same unmerged challenge:
 
-   **A. Qualified token present.** Extract only qualified tokens from the candidate's `description` / `strategy` / `acceptance_criteria` — `Namespace::Identifier`, `Module.Type`, file paths (`Modules/Mosaic/Canvas.cpp`). Bare PascalCase names (`Config`, `Canvas`, `RenderPass`) are too common; ignore them.
+   **A. Qualified token present.** Extract only qualified tokens from the candidate's `description` / `strategy` / `acceptance_criteria` — `Namespace::Identifier`, `Module.Type`, file paths (`Engine/Modules/Rendering/Mosaic/Canvas.cpp`). Bare PascalCase names (`Config`, `Canvas`, `RenderPass`) are too common; ignore them.
 
    **B. Unmerged challenge introduces the token.** For each unmerged challenge in any saga, the token must appear in both its prose AND its `affected_files` (i.e., the unmerged challenge is where the symbol is being *introduced* or *modified*, not just mentioned for context). If the token only shows up in the unmerged challenge's prose — as a reference, analogy, or completed API mention — do NOT skip.
 

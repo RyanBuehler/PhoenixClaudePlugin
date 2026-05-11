@@ -179,7 +179,7 @@ change that violates them. Specifically check for:
 
 ### Portability Requirements (Shared Code)
 
-**Platform APIs in shared code are CRITICAL violations.** All platform-specific code belongs in dedicated liaison modules (`Modules/Platform/`), not in shared sources. Files under `Modules/Platform/` are exempt from these rules.
+**Platform APIs in shared code are CRITICAL violations.** All platform-specific code belongs in dedicated liaison modules (`Engine/Modules/Platform/`), not in shared sources. Files under `Engine/Modules/Platform/` are exempt from these rules.
 
 Forbidden in shared code:
 - POSIX-only APIs (`gettimeofday`, `clock_gettime`, `pthread_create`, `dlopen`, `mmap`, `fork`, `exec*`, `select`, `poll`, `epoll`, etc.)

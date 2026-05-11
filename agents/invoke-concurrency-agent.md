@@ -47,7 +47,7 @@ cmake -S . -B build-tsan \
     -DTESTS=ON
 
 cmake --build build-tsan --parallel
-./build-tsan/Plugins/Trials/Engine_EngineTrials
+./build-tsan/bin/Engine_EngineTrials
 ```
 
 ### TSan Options

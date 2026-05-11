@@ -40,8 +40,8 @@ Activate when the user says any of:
 ### 2. Identify UI-relevant files
 
 A file is in scope if ANY of these match:
-1. **Path** matches `Modules/Rendering/Mosaic/**`, `Modules/Rendering/Montage/**`,
-   `Applications/Editor/**`, `Applications/*/Source/**/UI*`, or `Modules/Ledger/**`
+1. **Path** matches `Engine/Modules/Rendering/Mosaic/**`, `Engine/Modules/Rendering/Montage/**`,
+   `Applications/Editor/**`, `Applications/*/Source/**/UI*`, or `Engine/Modules/Ledger/**`
 2. **Includes** reference `Tessera.h`, `Canvas.h`, `Panel.h`, `Emblema.h`,
    `Ledger.h`, `IEntry.h`, `IAccountState.h`, or anything from `Mosaic/`/`Montage/`
 3. **Type definitions** inherit from `Tessera`/`Canvas`/`Panel`/`Emblema`/`ITessera`,
@@ -52,13 +52,13 @@ A file is in scope if ANY of these match:
 ### 3. Ground against current codebase
 
 Before applying checks, read these files fresh (do not cache across invocations):
-- `Modules/Rendering/Mosaic/Source/Public/Tessera.h` — widget base class contract
-- `Modules/Rendering/Mosaic/Source/Public/Style/Theme.h` — current Theme fields
-- `Modules/Ledger/Source/Public/Ledger.h` — Ledger API
-- `Modules/Ledger/Source/Public/IEntry.h` — Entry interface
-- `Modules/Ledger/Source/Public/EntryCategory.h` — category definitions
-- `Modules/Ledger/Source/Public/IAccountState.h` — Account state interface
-- Any `CLAUDE.md` at repo root, under `Modules/Rendering/Mosaic/`, or `Applications/Editor/`
+- `Engine/Modules/Rendering/Mosaic/Source/Public/Tessera.h` — widget base class contract
+- `Engine/Modules/Rendering/Mosaic/Source/Public/Style/Theme.h` — current Theme fields
+- `Engine/Modules/Ledger/Source/Public/Ledger.h` — Ledger API
+- `Engine/Modules/Ledger/Source/Public/IEntry.h` — Entry interface
+- `Engine/Modules/Ledger/Source/Public/EntryCategory.h` — category definitions
+- `Engine/Modules/Ledger/Source/Public/IAccountState.h` — Account state interface
+- Any `CLAUDE.md` at repo root, under `Engine/Modules/Rendering/Mosaic/`, or `Applications/Editor/`
 - `~/.claude/projects/-home-ryan-Agents-Agent3/memory/MEMORY.md` — active conventions
 
 ### 4. Apply checks

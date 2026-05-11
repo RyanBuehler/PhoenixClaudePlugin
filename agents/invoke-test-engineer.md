@@ -27,16 +27,17 @@ and the formatting/lint toolchain. Code that violates them will fail review.
 
 ### Directory Structure
 ```
-Plugins/
-└── Trials/                    # Test framework plugin
-    ├── CMakeLists.txt
-    └── Source/
-        ├── Public/            # Trials.h, TrialHelpers.h, PerformanceHelpers.h
-        └── Private/           # Trials.cpp
+Engine/Trials/                 # Test runner (ModuleCategory::Trial)
+├── CMakeLists.txt
+└── Source/
+    ├── Public/                # Trials.h, TrialHelpers.h, PerformanceHelpers.h
+    └── Private/               # Trials.cpp
 
-Modules/
+Engine/Modules/
 └── */
     └── Trials/                # Module-specific tests (*Trials.cpp, auto-discovered)
+
+Applications/<App>/Trials/     # App-specific tests (*Trials.cpp, auto-discovered)
 ```
 
 ### Running Tests
@@ -76,7 +77,7 @@ build-<profile>/bin/Engine_EngineTrials
 Test files are named `<Component>Trials.cpp` and placed in the module's `Trials/` directory. They are discovered automatically via glob — no CMake registration needed.
 
 ```cpp
-// Modules/Core/Engine/Trials/MyComponentTrials.cpp
+// Engine/Modules/Core/Engine/Trials/MyComponentTrials.cpp
 
 #include "Trials.h"
 import Phoenix;
@@ -129,7 +130,7 @@ UNIT_TRIAL_F(MyComponentFixture, "MyComponent", "FixtureValueIsInitialized")
 For performance benchmarks, use `BENCHMARK_TRIAL` instead of `UNIT_TRIAL`. Benchmarks live alongside unit trials in the same `Trials/` directory and are auto-discovered the same way.
 
 ```cpp
-// Modules/Core/Engine/Trials/MyComponentBenchmarkTrials.cpp
+// Engine/Modules/Core/Engine/Trials/MyComponentBenchmarkTrials.cpp
 
 #include "Trials.h"
 import Phoenix;

@@ -212,7 +212,7 @@ See `references/heisenbugs.md` for the full taxonomy of trace-induced vanishings
 
 **Phase 1.2 hypothesis:** *"I expect `InventoryModule::ApplyItem` to publish an `ItemApplied` Arbiter event when the user clicks an item, but I observe the event never arrives at the game state subsystem."*
 
-**Phase 1.3 git log:** `git log -p -- Modules/Gameplay/Inventory/InventoryModule.cpp` shows a recent commit refactoring the event publication into a helper method. Strong prior hypothesis.
+**Phase 1.3 git log:** `git log -p -- Engine/Modules/Gameplay/Inventory/InventoryModule.cpp` shows a recent commit refactoring the event publication into a helper method. Strong prior hypothesis.
 
 **Round 1 placement:**
 - `start` — `InventoryModule::ApplyItem` entry.

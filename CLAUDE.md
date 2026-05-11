@@ -15,7 +15,7 @@ Guarded failure modes include any phrasing of "Phoenix has no X", "there is no e
 
 If the search returns no results, say "I did not find X" rather than "X does not exist". One statement is an observation; the other is a claim that a reviewer can falsify.
 
-Minimal example: before claiming Phoenix lacks reflection, run `grep -r reflection Core/ Modules/` — Phoenix in fact ships a reflection system in `Core/Public/Reflection/Reflective.cppm`, and an unchecked absence claim on a public PR thread has to be walked back by hand.
+Minimal example: before claiming Phoenix lacks reflection, run `grep -r reflection Engine/Core/ Engine/Modules/` — Phoenix in fact ships a reflection system in `Engine/Core/Public/Reflection/Reflective.cppm`, and an unchecked absence claim on a public PR thread has to be walked back by hand.
 
 ### Verify review-comment code claims before acting
 
@@ -134,12 +134,17 @@ module dependencies for CI validation.
 
 ## Module Structure
 
-All modules are peers under `Modules/{Domain}/`:
-- `Modules/Core/` — Engine, Arbiter, Archive, Soulforge, Terminal
-- `Modules/Rendering/` — Aurora, Prism, Glyph, Montage, VulkanBackend, HeadlessBackend, HeadlessPane
-- `Modules/Input/` — Impulse, Signal, Conduit, UserConduit, SyntheticConduit, XInput
-- `Modules/Platform/` — PlatformLiaison, LinuxLiaison, LinuxAudio, LinuxInput, LinuxPane, LinuxFileManager, WindowsLiaison, WindowsAudio, WindowsInput, WindowsPane, WindowsFileManager, HeadlessLiaison
-- `Modules/Audio/` — Sonic
+All engine modules live under `Engine/Modules/{Domain}/`:
+- `Engine/Modules/Core/` — Engine, Arbiter, Archive, Soulforge, Terminal
+- `Engine/Modules/Rendering/` — Aurora, Prism, Glyph, Montage, VulkanBackend, HeadlessBackend, HeadlessPane
+- `Engine/Modules/Input/` — Impulse, Signal, Conduit, UserConduit, SyntheticConduit, XInput
+- `Engine/Modules/Platform/` — PlatformLiaison, LinuxLiaison, LinuxAudio, LinuxInput, LinuxPane, LinuxFileManager, WindowsLiaison, WindowsAudio, WindowsInput, WindowsPane, WindowsFileManager, HeadlessLiaison
+- `Engine/Modules/Audio/` — Sonic
+- `Engine/Plugins/` — optional plugins (Deadline, ExamplePlugin, InputDebug, Pulse)
+- `Engine/Trials/` — the test runner itself (its own ModuleCategory::Trial)
+- `Engine/Core/` — the Core library shared by every app
+- `Engine/Content/` — engine-shared runtime assets (fonts, audio)
+- `Applications/<App>/{Modules,Plugins}/` — app-private modules and plugins
 
 ## No Preprocessor Guards for Modularity
 
@@ -165,7 +170,7 @@ The Linux CI workflow (`.github/workflows/ci.yml`) runs three sequential jobs on
 
 Jobs run in order; failure in any job skips subsequent jobs.
 
-Test labels are derived from `MODULE_CATEGORY`, a target property set automatically from the module's directory: `Applications/` → APP_TRIAL, `Plugins/` → PLUGIN_TRIAL, `Modules/` → CORE_TRIAL. Benchmarks are skipped at runtime by default — they use `BENCHMARK_TRIAL` in the Trials framework and run only when `--type benchmark` is passed to the test executable.
+Test labels are derived from `MODULE_CATEGORY`, a target property set automatically from the module's directory: `Applications/` → APP_TRIAL, `Engine/Plugins/` → PLUGIN_TRIAL, `Engine/Modules/` → CORE_TRIAL, `Engine/Trials/` → TRIAL_TRIAL (the runner's own self-tests). Benchmarks are skipped at runtime by default — they use `BENCHMARK_TRIAL` in the Trials framework and run only when `--type benchmark` is passed to the test executable.
 
 ## Code Guidelines
 
@@ -230,7 +235,7 @@ Phoenix consumes the standard library through `import Phoenix;`, which re-export
 The rules below are surface conventions for that module — habits carried over from
 header-only C++ get them wrong.
 
-- **`Move` / `Forward`, not `std::move` / `std::forward`.** `Core/Public/Std.cppm` exports
+- **`Move` / `Forward`, not `std::move` / `std::forward`.** `Engine/Core/Public/Std.cppm` exports
   Phoenix's own `Move` and `Forward` templates. Use them unqualified. Unqualified
   `std::move` / `std::forward` resolve unreliably across module boundaries.
 - **Drop `std::` on common types.** `string`, `string_view`, `vector`, `unordered_map`,

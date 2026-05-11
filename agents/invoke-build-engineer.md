@@ -24,21 +24,23 @@ You are a world-class build engineer with deep expertise in CMake, cross-platfor
 ```
 Phoenix/
 ├── CMakeLists.txt              # Root CMake configuration
-├── CMake/
+├── CMake/                      # Build helpers (project-wide, NOT under Engine/)
 │   ├── CompilerOptions.cmake   # Compiler flags and warnings
+│   ├── SetupModule.cmake       # Module dep resolution + classification
+│   ├── SetupPlugin.cmake       # Plugin scaffolding
 │   └── SystemIncludes.cmake    # System-specific includes
-├── Core/                       # Core library (linked globally)
-├── Modules/
-│   ├── Editor/                 # Editor module (executable source)
-│   ├── Engine/                 # Engine module with submodules
-│   ├── PlatformLiaison/        # Platform abstraction layer
-│   │   ├── LinuxLiaison/       # Linux-specific implementations
-│   │   ├── WindowsLiaison/     # Windows-specific implementations
-│   │   └── HeadlessLiaison/    # Headless/CI implementations
-│   └── Subsystem/              # Subsystem module
-├── Plugins/                    # Dynamic plugins (auto-discovered)
-│   ├── Trials/                 # Test framework plugin
-│   └── ...
+├── Applications/               # Application entry points (Editor, Forge, Crucible, ...)
+│   └── <App>/
+│       ├── Modules/            # App-private modules (optional)
+│       └── Plugins/            # App-private plugins (optional)
+├── Engine/
+│   ├── Core/                   # Core library (linked globally)
+│   ├── Content/                # Engine-shared runtime assets (fonts, audio)
+│   ├── Modules/                # Engine modules (Core, Rendering, Input, Platform, Audio, ...)
+│   ├── Plugins/                # Engine plugins (Deadline, Pulse, ExamplePlugin, InputDebug, ...)
+│   └── Trials/                 # Test runner (ModuleCategory::Trial; not a Plugin)
+├── BuildProfiles/              # Forge build profiles
+├── Tools/                      # Python tooling (build_dependency, tidy, format, create_module)
 └── .github/
     ├── workflows/              # CI/CD pipeline definitions
     └── actions/                # Reusable workflow actions
@@ -403,10 +405,10 @@ dumpbin /exports MyLib.dll
 **Symptom: Module not found by SetupModule.cmake**
 ```bash
 # Verify the module has a proper *Description.json
-ls Modules/*/YourModule/*Description.json
+ls Engine/Modules/*/YourModule/*Manifest.json
 
 # Ensure requires_module lists valid module names
-cat Modules/Core/YourModule/YourModuleDescription.json
+cat Engine/Modules/Core/YourModule/YourModuleManifest.json
 
 # Check CMake output for skip messages
 cmake -S . -B build 2>&1 | grep -i "skip\|not found\|missing"
@@ -566,7 +568,7 @@ When adding support for a new platform:
 
 1. **Create Platform Liaison Module**
    ```
-   Modules/PlatformLiaison/Submodules/NewPlatformLiaison/
+   Engine/Modules/Platform/NewPlatformLiaison/
    ├── CMakeLists.txt
    ├── Include/
    └── Source/
@@ -574,7 +576,7 @@ When adding support for a new platform:
 
 2. **Update Platform Selection**
    ```cmake
-   # In Modules/PlatformLiaison/CMakeLists.txt
+   # In Engine/Modules/Platform/PlatformLiaison/CMakeLists.txt
    if(CMAKE_SYSTEM_NAME STREQUAL "NewPlatform")
        add_subdirectory(Submodules/NewPlatformLiaison)
    endif()
@@ -633,4 +635,4 @@ Before submitting build changes:
 - Compiler Options: `/CMake/CompilerOptions.cmake`
 - CI Workflows: `/.github/workflows/`
 - CI Actions: `/.github/actions/`
-- Platform Liaison: `/Modules/PlatformLiaison/`
+- Platform Liaison: `/Engine/Modules/Platform/PlatformLiaison/`

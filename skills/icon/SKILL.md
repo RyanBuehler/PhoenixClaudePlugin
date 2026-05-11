@@ -174,7 +174,7 @@ Given a confirmed icon name (e.g. `floppy-disk`):
    ```
 
    If the consumer is a layout file (JSON), point at the `IconImage` tessera type that's
-   registered in `Modules/Rendering/Mosaic/Source/Private/Layout/TesseraFactory.cpp`.
+   registered in `Engine/Modules/Rendering/Mosaic/Source/Private/Layout/TesseraFactory.cpp`.
 
 5. **Do not rebuild the editor.** The IconRegistry rebuilds its atlas on next launch — the
    user re-runs `/phoe:build engine` (or just relaunches) when they want the icon visible.
@@ -213,7 +213,7 @@ The manual flow skips the catalog cache and the search heuristic but produces th
 - **Phosphor SVGs use `A` (arc) commands.** The Editor's SVG parser handles arcs (added
   alongside the initial vendoring), but do not assume future Phosphor releases keep the
   same path-data shape. If a freshly fetched icon fails to load at runtime, dig into
-  `Modules/Rendering/Montage/Source/Private/SVGPathParser.cpp` rather than blaming the
+  `Engine/Modules/Rendering/Montage/Source/Private/SVGPathParser.cpp` rather than blaming the
   vendoring.
 - **viewBox is consistently `0 0 256 256`** across all current Phosphor weights, but the
   parser does not assume this — it reads the actual attribute. If a Phosphor release ever

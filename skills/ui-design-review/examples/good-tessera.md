@@ -10,7 +10,7 @@ zero findings when the ui-design-review skill runs against it.
 
 ```cpp
 // DragFloat.h — Atomic Tessera for dragging a float value.
-// Lives in: Modules/Rendering/Mosaic/Source/Public/Tesserae/DragFloat.h
+// Lives in: Engine/Modules/Rendering/Mosaic/Source/Public/Tesserae/DragFloat.h
 
 #pragma once
 

@@ -163,7 +163,7 @@ Anonymous namespaces are forbidden — they break our unity builds. Always name 
 namespace.
 
 Modules sit at the root namespace. A module's namespace is its own module name,
-without any parent-directory prefix — `Modules/Rendering/Mosaic/Source/Public/Tile.h`
+without any parent-directory prefix — `Engine/Modules/Rendering/Mosaic/Source/Public/Tile.h`
 lives in `namespace Mosaic`, not `Rendering::Mosaic`. The directory grouping
 (`Rendering/`, `Input/`, `Audio/`, `Platform/`) is filesystem-only and does not
 contribute a namespace segment. Directory layout is a soft convention; the module
@@ -171,11 +171,11 @@ rule wins when the two conflict.
 
 | Location | Namespace |
 | --- | --- |
-| `Modules/Rendering/Mosaic/Source/Public/Tile.h` | `Mosaic` |
-| `Modules/Audio/Sonic/Source/Public/Voice.h` | `Sonic` |
-| `Modules/Platform/LinuxAudio/Source/Public/AlsaBridge.h` | `LinuxAudio` |
-| `Modules/Json/Source/Public/Parser.h` | `Json` |
-| `Core/Image/PNG/Deflate.h` | `Core::Image::PNG::Deflate` |
+| `Engine/Modules/Rendering/Mosaic/Source/Public/Tile.h` | `Mosaic` |
+| `Engine/Modules/Audio/Sonic/Source/Public/Voice.h` | `Sonic` |
+| `Engine/Modules/Platform/LinuxAudio/Source/Public/AlsaBridge.h` | `LinuxAudio` |
+| `Engine/Modules/Json/Source/Public/Parser.h` | `Json` |
+| `Engine/Core/Image/PNG/Deflate.h` | `Core::Image::PNG::Deflate` |
 | `Applications/Crucible/Source/Server.h` | `Crucible` |
 
 Inside a module namespace, no class or struct may share the module's name —
@@ -249,7 +249,7 @@ buys nothing.
 
 Keep platform-specific logic (for example, Linux-only behavior) confined to the corresponding
 platform liaison sources so code for other platforms remains encapsulated and unaffected.
-Files under `Modules/Platform/` are exempt from the platform-API ban.
+Files under `Engine/Modules/Platform/` are exempt from the platform-API ban.
 
 ## Error Handling
 

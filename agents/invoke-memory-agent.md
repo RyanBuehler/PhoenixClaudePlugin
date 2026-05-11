@@ -52,7 +52,7 @@ cmake -S . -B build-asan \
 cmake --build build-asan --parallel
 
 # Run with ASan
-./build-asan/Plugins/Trials/Engine_EngineTrials
+./build-asan/bin/Engine_EngineTrials
 ```
 
 ### ASan Environment Variables
@@ -238,12 +238,12 @@ cmake -S . -B build-debug -DCMAKE_BUILD_TYPE=Debug -DTESTS=ON
 cmake --build build-debug
 
 # Run under Valgrind
-valgrind ./build-debug/Plugins/Trials/Engine_EngineTrials
+valgrind ./build-debug/bin/Engine_EngineTrials
 
 # More detailed output
 valgrind --leak-check=full --show-leak-kinds=all \
     --track-origins=yes --verbose \
-    ./build-debug/Plugins/Trials/Engine_EngineTrials
+    ./build-debug/bin/Engine_EngineTrials
 ```
 
 ### Valgrind Options
@@ -506,7 +506,7 @@ jobs:
       - name: Run under Valgrind
         run: |
           valgrind --leak-check=full --error-exitcode=1 \
-            ./build/Plugins/Trials/Engine_EngineTrials
+            ./build/bin/Engine_EngineTrials
 ```
 
 ## Quick Reference
