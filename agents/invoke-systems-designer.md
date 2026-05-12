@@ -43,28 +43,28 @@ and the formatting/lint toolchain. Code that violates them will fail review.
 ### Module Hierarchy
 ```
 Phoenix/
-├── Core/                      # Foundation library (linked by all)
-│   ├── Include/Core/          # Public headers
-│   └── Source/                # Implementation
+├── Engine/                            # The engine tree
+│   ├── Core/                          # Foundation library (linked by all)
+│   │   ├── Public/                    # Public headers / module interfaces
+│   │   └── Source/                    # Implementation
+│   ├── Modules/                       # Engine modules, grouped by domain
+│   │   ├── Core/                      # Engine, Arbiter, Archive, Soulforge, Dispatch, ...
+│   │   ├── Rendering/                 # Aurora, Prism, Montage, Mosaic, VulkanBackend, ...
+│   │   ├── Input/                     # Impulse, Signal, Conduit, UserConduit, ...
+│   │   ├── Platform/                  # PlatformLiaison + per-OS Liaisons & subsystems
+│   │   └── Audio/                     # Sonic
+│   ├── Plugins/                       # Dynamic engine plugins (Deadline, Pulse, ...)
+│   ├── Trials/                        # Trials test-runner module (ModuleCategory::Trial)
+│   └── Content/                       # Shared engine content
 │
-├── Modules/
-│   ├── Engine/                # Engine module
-│   │   └── Submodules/        # Engine sub-components
-│   │
-│   ├── Editor/                # Editor module
-│   │
-│   ├── PlatformLiaison/       # Platform abstraction layer
-│   │   ├── Submodules/
-│   │   │   ├── LinuxLiaison/      # Linux implementations
-│   │   │   ├── WindowsLiaison/    # Windows implementations
-│   │   │   └── HeadlessLiaison/   # CI/headless implementations
-│   │   ├── Include/               # Platform-agnostic interfaces
-│   │   └── Source/                # Shared implementation
-│   │
-│   └── Subsystem/             # Subsystem module
+├── Applications/                      # One subdirectory per app
+│   ├── Editor/
+│   │   ├── Modules/                   # App-private modules (e.g. Pictures)
+│   │   └── Source/
+│   ├── Game/, Forge/, Crucible/, Vigil/, Minimal/
 │
-└── Plugins/                   # Dynamic plugins
-    └── Trials/                # Test framework plugin
+├── Tools/                             # Python helpers (module.py, create_module.py, ...)
+└── CMake/                             # Shared CMake helpers (SetupModule.cmake, ...)
 ```
 
 ### Dependency Flow

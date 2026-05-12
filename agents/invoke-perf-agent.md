@@ -198,7 +198,7 @@ heaptrack_print heaptrack.program.*.gz
 The project has a built-in `BENCHMARK_TRIAL` macro in the Trials framework. Use it instead of hand-rolling timing loops. The framework handles warmup, auto-calibrated iteration (~1s target), and formatted reporting.
 
 ```cpp
-// Modules/Core/Engine/Trials/HashBenchmarkTrials.cpp
+// Engine/Modules/Core/Engine/Trials/HashBenchmarkTrials.cpp
 #include "Trials.h"
 import Phoenix;
 

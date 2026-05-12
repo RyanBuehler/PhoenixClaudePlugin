@@ -45,7 +45,7 @@ These documents are the SSOT. This skill is a driver.
 /phoe:audit <file-path>              # single file
 /phoe:audit <path-1> <path-2> ...    # explicit file list
 /phoe:audit <directory>              # every C++ source under the directory (recursive)
-/phoe:audit <module-name>            # the module's Source/ tree (resolved via Modules/**/<name>)
+/phoe:audit <module-name>            # the module's Source/ tree (resolved via Engine/Modules/**/<name>)
 /phoe:audit --rotation=N             # N oldest-mtime source files engine-wide
 /phoe:audit --dry-run                # force report-only, skip the fix offer
 ```
@@ -80,8 +80,10 @@ Resolve the invocation form into a concrete list of files:
   in-scope extensions.
 - **File path(s)** — use as-is after scope filtering.
 - **Directory** — recursively enumerate in-scope files, apply always-skipped filters.
-- **Module name** — locate via `Modules/**/<name>/Source/` (or `Applications/<name>/Source/`
-  if no module matches); audit everything under `Source/`.
+- **Module name** — locate via `Engine/{Modules,Plugins,Trials}/**/<name>/Source/` (or
+  `Applications/<name>/Source/` if no module matches, or
+  `Applications/*/Modules/<name>/Source/` for app-private modules); audit everything
+  under `Source/`.
 - **`--rotation=N`** — list in-scope files engine-wide, sort by mtime ascending, take first
   N. Rotation is the intended automation entry point.
 

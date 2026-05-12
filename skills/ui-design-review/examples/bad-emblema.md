@@ -21,7 +21,7 @@ against this file should produce exactly these 11 findings.
 
 import Phoenix;
 
-// [V1] app-code-in-modules (Critical) — if this file lived under Modules/
+// [V1] app-code-in-modules (Critical) — if this file lived under Engine/Modules/
 // instead of Applications/Editor/, it would violate app isolation.
 // (Annotated as a reminder; the path itself determines the violation.)
 
@@ -145,7 +145,7 @@ namespace Editor  // [V2] wrong namespace — should be `namespace Application`
    instead of `Move()`.
 
 4. **`app-code-in-modules`** (V1) — Annotated as a conditional violation.
-   If this file's path were under `Modules/`, it would be Critical.
+   If this file's path were under `Engine/Modules/`, it would be Critical.
 
 ### Warning violations (5)
 

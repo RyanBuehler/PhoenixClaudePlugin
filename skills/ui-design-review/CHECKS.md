@@ -142,10 +142,11 @@ color literals like `0xFF0000`.
 **Fix**: convert to normalized floats (divide by 255.0f).
 
 ### `app-code-in-modules` (Critical)
-Application-specific code placed under `Modules/` or `Tools/` instead of
-`Applications/{AppName}/`.
+Application-specific code placed under `Engine/Modules/` or `Tools/` instead of
+`Applications/{AppName}/Source/` (or, for app-private modules,
+`Applications/{AppName}/Modules/{ModuleName}/`).
 
-**Detection**: file path is under `Modules/` but contains app-specific logic,
+**Detection**: file path is under `Engine/Modules/` but contains app-specific logic,
 includes app headers, or uses `namespace Application`.
 
 **Fix**: move the file to `Applications/{AppName}/`.

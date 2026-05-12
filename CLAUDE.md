@@ -84,7 +84,7 @@ These are distinct concepts. Do NOT conflate them.
 
 - **Modules** are self-contained components that register with `ModuleRegistry` via `IModule`.
   Engine manages module lifecycle (create, initialize, tick, shutdown) through `ModuleRegistry`/`IModuleBase`.
-  Modules live as peers under `Modules/{Domain}/` — no nested submodules.
+  Modules live as peers under `Engine/Modules/{Domain}/` — no nested submodules.
 
 - **Subsystems** are abstract service interfaces (`ISubsystem`) for cross-module communication.
   Modules access each other's services through subsystem interfaces (e.g., `ITerminalService`, `IInputService`).
@@ -170,7 +170,7 @@ The Linux CI workflow (`.github/workflows/ci.yml`) runs three sequential jobs on
 
 Jobs run in order; failure in any job skips subsequent jobs.
 
-Test labels are derived from `MODULE_CATEGORY`, a target property set automatically from the module's directory: `Applications/` → APP_TRIAL, `Engine/Plugins/` → PLUGIN_TRIAL, `Engine/Modules/` → CORE_TRIAL, `Engine/Trials/` → TRIAL_TRIAL (the runner's own self-tests). Benchmarks are skipped at runtime by default — they use `BENCHMARK_TRIAL` in the Trials framework and run only when `--type benchmark` is passed to the test executable.
+Test labels are derived from `MODULE_CATEGORY`, a target property set automatically from the module's directory: `Applications/` → APP_TRIAL, `Engine/Plugins/` → PLUGIN_TRIAL, `Engine/Modules/` and `Engine/Trials/` → CORE_TRIAL. Benchmarks are skipped at runtime by default — they use `BENCHMARK_TRIAL` in the Trials framework and run only when `--type benchmark` is passed to the test executable.
 
 ## Code Guidelines
 

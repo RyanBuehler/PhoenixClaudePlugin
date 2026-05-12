@@ -329,7 +329,7 @@ Good:
 
 Bad:
 
-    // TODO(execute-saga-canvas-overhaul): per code review on PR #312, see Modules/Mosaic/Canvas.cpp:142
+    // TODO(execute-saga-canvas-overhaul): per code review on PR #312, see Engine/Modules/Rendering/Mosaic/Canvas.cpp:142
     // TODO: previously this used a raw pointer, switched to CanvasLease in this commit
     // TODO: address feedback from challenge `add-viewport-resize`
 
