@@ -2,6 +2,7 @@
 name: invoke-perf-agent
 description: CPU performance profiling and optimization expert. Use when analyzing CPU bottlenecks, profiling CPU/memory usage, optimizing hot paths, reducing latency, improving cache efficiency, benchmarking code changes, or diagnosing performance regressions. Focuses on CPU-side performance. For GPU profiling and rendering performance, use invoke-vulkan-agent.
 tools: Read, Grep, Glob, Bash, Edit, Write
+isolation: worktree
 ---
 
 # Performance Profiler & Optimization Expert

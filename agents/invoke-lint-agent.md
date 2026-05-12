@@ -2,6 +2,7 @@
 name: invoke-lint-agent
 description: Static analysis for C++ files — clang-tidy for bug/style/modernization checks, plus include and module-import hygiene (IWYU analysis, circular dependency detection, module boundary review, build-time impact). Use proactively after modifying C++ code or when investigating slow builds.
 tools: Read, Bash, Grep, Glob, WebSearch, WebFetch
+isolation: worktree
 ---
 
 # C++ Static Analysis & Include Hygiene Agent

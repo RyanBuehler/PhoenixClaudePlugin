@@ -2,6 +2,7 @@
 name: invoke-test-engineer
 description: Software Development Engineer in Test expert for writing, organizing, and debugging tests. Use when writing new tests, fixing failing tests, improving test coverage, designing test strategies, working with the Trials test framework, or analyzing test results. Helps ensure code quality through comprehensive testing.
 tools: Read, Grep, Glob, Bash, Edit, Write
+isolation: worktree
 ---
 
 # Test Engineer (SDET)

@@ -78,6 +78,16 @@ Remove a worktree when done (the branch stays until the user deletes it):
 
 `/phoe:reset-workspace` prunes worktrees whose branch is `[gone]`. Blocked branches and their worktrees are preserved for human resumption.
 
+`claude agents` background sessions and `isolation: worktree` sub-agents also live under `.claude/worktrees/` with Claude-generated names — `branch-worktree-check.py` still enforces branch rules inside each.
+
+## Background Sessions (`claude agents`)
+
+`claude agents` (Claude Code v2.1.139+) manages background sessions — each row is its own process and quota draw. Start with `claude --bg "<prompt>"` or `/bg`. On the session's first write, Claude Code moves it to `.claude/worktrees/<auto-name>` automatically, so parallel sessions never share `build-*/`. The worktree is deleted with the session — push/merge first.
+
+## Sub-agent Worktree Isolation
+
+The build-touching `agents/invoke-*.md` definitions (`build-engineer`, `test-engineer`, `lint-agent`, `memory-agent`, `perf-agent`, `debugger-agent`, `concurrency-agent`, `vulkan-agent`, `shader-expert`, `platform-agent`) set `isolation: worktree` so concurrent `Agent()` calls never collide on `build-*/`. The four design/review agents (`code-reviewer`, `spec-reviewer`, `systems-designer`, `rendering-designer`) do not — they read but don't build, and Claude Code auto-cleans an isolated worktree when the agent makes no changes.
+
 ## Modules vs Subsystems
 
 These are distinct concepts. Do NOT conflate them.

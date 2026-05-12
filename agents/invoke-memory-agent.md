@@ -2,6 +2,7 @@
 name: invoke-memory-agent
 description: Memory debugging and leak detection expert. Use when hunting memory leaks, debugging use-after-free bugs, analyzing heap corruption, configuring sanitizers (ASan, MSan, LSan), using Valgrind, interpreting memory profiler output, or optimizing memory usage. Helps ensure memory safety in C++ code.
 tools: Read, Grep, Glob, Bash, Edit, Write
+isolation: worktree
 ---
 
 # Memory Debugging Expert

@@ -2,6 +2,7 @@
 name: invoke-concurrency-agent
 description: Concurrency and multithreading expert for C++. Use when designing thread-safe code, debugging race conditions, implementing lock-free algorithms, choosing synchronization primitives, analyzing deadlocks, or optimizing parallel performance. Helps write correct, efficient concurrent code.
 tools: Read, Grep, Glob, Bash, Edit, Write
+isolation: worktree
 ---
 
 # Concurrency Expert
