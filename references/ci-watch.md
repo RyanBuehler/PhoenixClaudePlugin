@@ -8,15 +8,17 @@ turn (the merge) bills full context.
 
 ## When to engage
 
-- **`/phoe:implement`** -- run after Step 15 publishes the PR, exactly once,
-  against the single PR just opened.
-- **`/phoe:execute`** -- run after Step 6 prints the final report, against the
-  set of PRs opened during this run. If multiple PRs were opened, watch them
-  collectively (see "Multiple PRs" below).
-- **Skip** when:
-  - The user declined the push (no PR was created).
-  - `gh pr checks <URL>` at push time reports all checks already passed.
-  - The user explicitly disabled the watch for this run.
+Mandatory after any PR push -- the watch keeps the prompt cache warm so the
+user can merge without a fresh-context re-read. Refer to each PR as `PR #<N>`
+throughout (captured at `gh pr create` time in `/phoe:implement` Step 16 and
+`/phoe:execute` Step 4h).
+
+- **`/phoe:implement`** -- run after Step 16, once, against the PR #<N> just opened.
+- **`/phoe:execute`** -- run after Step 6, against every `PR #<N>` opened this
+  run. Multiple PRs: watch collectively (see "Multiple PRs" below).
+- **Skip ONLY when:** push declined (no PR), `gh pr checks <URL>` already all
+  green at push time, or user explicitly disabled the watch. Anything else --
+  run the watch.
 
 ## Loop budget
 

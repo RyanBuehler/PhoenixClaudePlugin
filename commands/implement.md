@@ -322,7 +322,7 @@ Push the branch and open a pull request. Confirm with the user before pushing or
 
 ```bash
 git push -u origin challenge/<label>
-gh pr create \
+PR_URL=$(gh pr create \
   --head challenge/<label> \
   --base main \
   --title "<challenge title>" \
@@ -333,10 +333,14 @@ gh pr create \
 Crucible: #<id> <label>
 Saga: #<saga-id> <saga-label>
 EOF
-)"
+)")
+PR_NUM="${PR_URL##*/}"
+echo "Opened PR #${PR_NUM}: ${PR_URL}"
 ```
 
 `Crucible:` and `Saga:` trailers are mandatory; pull IDs from the JSON already fetched in Step 2/3. Drop the `Saga:` line for orphans.
+
+Refer to the PR as **PR #<N>** (the trailing `/pull/<N>` segment) in all subsequent narration, the Watch CI step, and the report — never URL alone.
 
 Compose the summary from the challenge title and the key changes — keep it concise; the
 challenge spec in Crucible is the detailed record. If the user declines to push, leave the
@@ -346,9 +350,9 @@ If PR review comments come back later, check out the branch, apply fixes, rebuil
 they compile (full `/phoe:verify` only when changes are significant — new logic, API changes,
 new files), commit with a brief "Address review: …" message, and push.
 
-## 16.5. Watch CI
+## 16.5. Watch CI — Required
 
-If a PR was pushed, run the watch loop in `references/ci-watch.md` against it.
+If Step 16 opened a PR, run the watch loop in `references/ci-watch.md` against PR #<N> before advancing to Step 17. Mandatory; skip only on the conditions listed in `ci-watch.md`.
 
 ## 17. Report
 
@@ -365,7 +369,8 @@ Tell the user:
 - Branch name: `challenge/<label>`
 - Saga progress (if applicable)
 - Follow-on sibling updates, if any (which siblings were updated and what fields changed)
-- Pull request URL (if pushed) or "branch left local; not pushed"
+- Pull request: **PR #<N>** + URL (or "branch left local; not pushed"). Always lead with `PR #<N>`.
+- CI watch outcome: READY / FAILED / expired / skipped (reason)
 - The challenge is now in `review` status — user inspects before marking merged
 
 **Do not merge or mark as merged.** The user will review and decide whether to merge, request changes, or mark merged.

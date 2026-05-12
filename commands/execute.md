@@ -465,7 +465,7 @@ request. Group by strategy:
 ```bash
 # branch-per-challenge
 git push -u origin challenge/<label>
-gh pr create \
+PR_URL=$(gh pr create \
   --head challenge/<label> \
   --base main \
   --title "<challenge title>" \
@@ -476,13 +476,15 @@ gh pr create \
 Crucible: #<id> <label>
 Saga: #<saga-id> <saga-label>
 EOF
-)"
+)")
+PR_NUM="${PR_URL##*/}"
+echo "Opened PR #${PR_NUM}: ${PR_URL}"
 ```
 
 ```bash
 # combined-branch
 git push -u origin challenge/saga-<saga-label>
-gh pr create \
+PR_URL=$(gh pr create \
   --head challenge/saga-<saga-label> \
   --base main \
   --title "<saga title>" \
@@ -493,12 +495,14 @@ gh pr create \
 Crucible: #<id-1> <label-1>, #<id-2> <label-2>, #<id-3> <label-3>
 Saga: #<saga-id> <saga-label>
 EOF
-)"
+)")
+PR_NUM="${PR_URL##*/}"
+echo "Opened PR #${PR_NUM}: ${PR_URL}"
 ```
 
 `Crucible:` and `Saga:` trailers are mandatory; pull IDs from the JSON already fetched in Step 2. Combined-branch PRs list every challenge in the chain. Drop the `Saga:` line for orphans.
 
-Record each PR URL for the final report.
+Refer to each PR as **PR #<N>** (the trailing `/pull/<N>` segment) in narration, the Report table, and the Watch CI step — never URL alone. Record each `PR #<N>` + URL for the final report.
 
 After the wave's PRs are open, clean up worktrees (the branches and commits stay until the
 user removes them):
@@ -542,11 +546,11 @@ Print a summary table:
 /phoe:execute Results
 =====================
 
-| Challenge | Wave | Status | Branch | Notes |
-|-----------|------|--------|--------|-------|
-| add-viewport-resize | 0 | review | challenge/add-viewport-resize | -- |
-| forge-compiler | 0 | blocked | challenge/forge-compiler | Build failure: missing include |
-| wire-canvas-events | 1 | review | challenge/wire-canvas-events | WARNING: large function |
+| Challenge | Wave | Status | Branch | PR | Notes |
+|-----------|------|--------|--------|----|-------|
+| add-viewport-resize | 0 | review | challenge/add-viewport-resize | #1234 | -- |
+| forge-compiler | 0 | blocked | challenge/forge-compiler | -- | Build failure: missing include |
+| wire-canvas-events | 1 | review | challenge/wire-canvas-events | #1235 | WARNING: large function |
 
 Saga Progress:
   synthetic-input: 3/6 complete (was 2/6)
@@ -567,7 +571,8 @@ Include:
 - Full explanation for each blocked challenge
 - Reference to checkpoint files and how to resume
 - Total stats (completed, blocked, skipped)
-- The branch strategy chosen per challenge (branch-per-challenge or combined-branch) and the resulting PR URLs
+- Branch strategy per challenge (branch-per-challenge or combined-branch) and resulting **PR #<N>** + URL. Lead with `PR #<N>`.
+- CI watch outcome per PR: READY / FAILED / expired / skipped (reason)
 - Reference to the feedback log
 
 After each PR lands on remote main, mark the corresponding challenge merged:
@@ -576,6 +581,6 @@ After each PR lands on remote main, mark the corresponding challenge merged:
 build-crucible-release/bin/crucible challenge move --label=<LABEL> merged
 ```
 
-## 7. Watch CI
+## 7. Watch CI — Required
 
-If any PRs were pushed this run, run the watch loop in `references/ci-watch.md` against them.
+Run the collective watch loop in `references/ci-watch.md` against every `PR #<N>` opened in Step 4h. Mandatory; skip only on the conditions listed in `ci-watch.md`. Fold each PR's outcome (READY / FAILED / expired / skipped) into the Step 6 report.
