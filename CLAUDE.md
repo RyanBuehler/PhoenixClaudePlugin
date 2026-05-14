@@ -201,6 +201,18 @@ only — it is *not* the project's Forge-managed build dir (which is always prof
 e.g. `build-editor-debug/`). Don't run cmake/ctest against `build/`; only `Tools/tidy.py`
 reads from it.
 
+## Comment Discipline
+
+Verbose comments are the dominant agent drift here. Full rules: `references/style-guide.md`
+§Comments / §TODO Comments. The digest, always in force:
+
+- Default to no comment. Explain *why*, never *what*.
+- One line, never a paragraph. Don't stack 4+ `//` lines — long explanations go in the commit message, not the source.
+- No decorative banners. No `// =====`, no `// ----- Section -----`, no section-header comments like `// Typography`, `// Dimensions`, `// Window and panel backgrounds`. Use scope and naming.
+- No temporal narration. Forbidden words in comments: *previously*, *now*, *new*, *legacy*, *refactored*, *was*, *used to*.
+- TODOs are plain: `// TODO: <work>`. `TODO(label):` is forbidden — `grep "TODO("` in source must return zero hits. No file paths, line numbers, labels, PR numbers, branch names, or dates inside.
+- Public API declarations in a module's public header get one short purpose line.
+
 ## Crucible Lifecycle Reference
 
 The plugin's Crucible workflows operate on three task types. Match status names exactly — the CLI
