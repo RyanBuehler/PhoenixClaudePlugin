@@ -211,7 +211,7 @@ Tests are NOT required for:
 - Pure wiring or delegation (forwarding calls to already-tested functions)
 - Platform-specific code that can only be tested on the target platform's CI
 
-When tests are applicable, launch `invoke-test-engineer` as a subagent to write them. Provide it with the implementation diff and the module context so it can place tests correctly and follow Trials conventions.
+When tests are applicable, launch `invoke-test-engineer` as a subagent to write them. Provide it with the implementation diff and the module context so it can place tests correctly and follow Trials conventions. **Ask it to end its report with a `## Workflow Friction` section** listing anything that made the task harder than it should have been — missing context, ambiguous spec, undocumented convention, tooling gaps — or the single word `none` if nothing applied. These notes are aggregated in Step 14.5.
 
 ## 9. Verification Gate
 
@@ -246,6 +246,8 @@ Invoke the code reviewer as a **separate agent** to evaluate the implementation 
 1. Stage all changes: `git add -A`
 2. Launch `invoke-code-reviewer` as a subagent with the prompt:
    > Review the staged diff (`git diff --cached`) for this challenge branch. Focus on correctness, safety, modern C++23 opportunities, performance, and project convention compliance. Report findings using CRITICAL/WARNING/SUGGESTION/NOTE severity levels.
+   >
+   > End your report with a `## Workflow Friction` section listing anything that made this review harder than it should have been — missing context, ambiguous spec, undocumented convention, tooling gaps — or the single word `none` if nothing applied.
 3. **Gate on zero CRITICAL findings.** If any CRITICAL issues are found:
    - Fix each CRITICAL issue
    - Re-run `/phoe:verify`
@@ -270,6 +272,8 @@ Launch `invoke-code-reviewer` as a fresh subagent with the prompt:
 > - **Spec gaps** — acceptance criteria that pass for the easy case but fail in plausible variations the spec did not enumerate. If the spec itself is the weak link, say so.
 >
 > Report only findings that represent real failure modes, not stylistic concerns. Use CRITICAL/WARNING/SUGGESTION/NOTE severity. If you find nothing actionable, say so explicitly — a clean adversarial pass is a valid result.
+>
+> End your report with a `## Workflow Friction` section listing anything that made this review harder than it should have been — missing context, ambiguous spec, undocumented convention, tooling gaps — or the single word `none` if nothing applied.
 
 **Gate on zero CRITICAL adversarial findings.** Treat them the same as Step 11: fix, re-run `/phoe:verify`, re-run acceptance criteria evaluation, then re-run **both** the standard and adversarial reviews until both pass. Include any WARNING findings in the final report alongside the standard-review WARNINGs.
 
@@ -286,6 +290,30 @@ build-crucible-release/bin/crucible challenge move --label=<LABEL> review
 ```
 
 If this move fails (server down, label mismatch, Crucible not initialized), **stop and surface the error to the user**. Do not report the challenge as done, and do not continue to the report step, until the move has succeeded.
+
+## 14.5. Subagent Feedback Log
+
+Collect the `## Workflow Friction` sections from each subagent report dispatched during this run (test engineer from Step 8, standard reviewer from Step 11, adversarial reviewer from Step 12). If every section is `none` or empty, skip this step entirely — write nothing.
+
+Otherwise, append to `.claude/SUBAGENT_FEEDBACK.md` at the main repo root (same file `/phoe:execute` writes to). Create the file if it does not exist. Use this format, omitting subagents whose section was `none`:
+
+```markdown
+## <YYYY-MM-DD> - /phoe:implement <label>
+
+### Challenge: <label> (test-engineer)
+- <friction item 1>
+- <friction item 2>
+
+### Challenge: <label> (code-reviewer)
+- <friction item>
+
+### Challenge: <label> (adversarial-reviewer)
+- <friction item>
+```
+
+Do not summarize, paraphrase, or filter the friction items — copy them verbatim. The user reviews this log on their own schedule to evolve CLAUDE.md, challenge specs, and the plugin.
+
+Do not mention this log in the Step 17 report.
 
 ## 15. Propagate Changes to Follow-on Challenges
 

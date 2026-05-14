@@ -10,6 +10,12 @@ design practice; agents and commands reference it before writing or reviewing co
 - Never reformat code unless you're already modifying it. When reformatting, apply the rules
   below.
 - Follow the style of surrounding code.
+- Phoenix is unreleased software. When file formats, schemas, or APIs change, refactor every
+  call site in one commit — no back-compat shims, deprecation aliases, legacy-format readers,
+  version gates, migrators, or `// removed` comments. Bump magics or versions if convenient,
+  but do not write code to read the old version. This applies equally to Crucible challenge
+  plans: no "legacy buffer loads as empty" acceptance criteria, no "backwards-compat trial"
+  test cases.
 
 ## Formatting
 
@@ -61,6 +67,16 @@ what a variable holds, rename the variable instead. Single-letter names only for
 counters (`i`, `j`, `k`).
 
 Use `Previous` not `Old` in field and variable names (`previous_label`, `PreviousState`).
+
+Acronyms in **module, directory, manifest, and file-format names are written all-caps**:
+`GLTF` (not `Gltf`), `KTX`, `HTTP`, `PBR`, `BRDF`. This extends to the manifest filename
+(`GLTFManifest.json`), the API export macro (`GLTF_API`), and the on-disk format constants.
+The existing `Json` module is the outlier, not the precedent — going forward, acronym
+modules are all-caps.
+
+No `k` prefix on constants. Use PascalCase for `inline constexpr` and `static constexpr`
+names at namespace or class scope (`ReflectionChecksumSeed`, `MinPort`, `MaxPort`,
+`MaxSubdivisionDepth`). Phoenix is not a Google-style codebase.
 
 | Entity | Style | Notes |
 | --- | --- | --- |
@@ -377,6 +393,35 @@ explanatory comment. Fix the code, don't suppress the warning.
 For identity comparisons (actions, signals, categories), use `Label` types with compile-time
 FNV-1a hashing instead of raw string comparisons. Integer comparisons are constant-time and
 cache-friendly. Define constants as `inline constexpr Label`. See `Impulse/Signal/Label.h`.
+
+### 7. Helper Placement
+
+Before placing a generic-looking helper (text sink, byte buffer, formatter, indent tracker,
+string-splitter, scope tracker — anything that has nothing module-specific about it) inside
+the first consuming module, **ask the user where it belongs**. The default is `Core` or
+another lower-level shared library, not module-local. Module-local placement is only correct
+when the type only makes sense in that module's vocabulary.
+
+If you would not, looking at the name in isolation, guess it was specific to the module —
+ask before committing. Do not unilaterally place it module-local just because that's where
+the first consumer lives.
+
+### 8. File-Format Identifiers
+
+On-disk file-format magic numbers are 8 ASCII characters packed little-endian into a
+`uint64_t`, structured as a **3-letter system prefix + 5-letter structure name**:
+
+| Identifier | System | Structure |
+| --- | --- | --- |
+| `CTXSTRAT` | Cortex (`CTX`) | Stratum |
+| `MSCLYOUT` | Mosaic (`MSC`) | Layout |
+
+Choose the hex literal so the bytes on little-endian disk spell the tag left-to-right.
+
+All identifiers live in the central namespace `IO::File::Identifiers` with a compile-time
+uniqueness `static_assert` over the registered values — two modules cannot independently
+mint the same tag because the new entry collides at compile time. Do not define module-local
+magic constants; register every new format in the central table.
 
 For tooling mechanics — formatter configuration, linter layers, command invocations, and
 troubleshooting — see `references/tooling.md`.
