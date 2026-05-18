@@ -105,8 +105,8 @@ you know where to look.
   - Formatting rules clang-format does not enforce (blank line after `}`, `if`-init
     refactor opportunity).
   - Naming: member/global/static/local prefix patterns, atomic-bool prefix, abbreviations,
-    `Old*`→`Previous*`, `Maybe*`→`Tentative*`, single-letter non-loop names, overlong
-    acronyms vs spelled-out names.
+    `Old*`→`Previous*`, `Maybe*`→`Tentative*`, `Kind*`→`Type*` (and `*Kind`→`*Type`),
+    single-letter non-loop names, overlong acronyms vs spelled-out names.
   - Language features: forbidden keywords (`try`, `catch`, `throw`, `noexcept`,
     `dynamic_cast`, `typeid`, `reinterpret_cast`, `[[deprecated]]`), `auto` on
     error-bearing returns, trailing return types, `const` correctness.
@@ -168,8 +168,8 @@ Partition findings into three buckets:
 - **Mechanical (safe to auto-apply).** Single-line replacements with no judgment: delete a
   decorative banner comment, rename `std::move(X)` to `Move(X)`, add a blank line after a
   `}`, convert a `TODO(foo):` to `TODO:`, add `#pragma once`, rename `Maybe*` to
-  `Tentative*` (scoped to one declaration and its references in the same file), swap
-  `std::forward` for `Forward`.
+  `Tentative*` or `Kind`/`*Kind` to `Type`/`*Type` (scoped to one declaration and its
+  references in the same file), swap `std::forward` for `Forward`.
 - **Judgment-required.** Needs a human decision: renaming an abbreviation (multiple
   readable choices), rewriting a public accessor to an intent-based operation, deciding
   whether a namespace named `Helpers` is "generic enough to be wrong," picking `Previous`

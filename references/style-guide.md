@@ -68,6 +68,10 @@ counters (`i`, `j`, `k`).
 
 Use `Previous` not `Old` in field and variable names (`previous_label`, `PreviousState`).
 
+Use `Type` not `Kind` for discriminator names — both the bare word and as a suffix
+(`NodeType`, not `NodeKind`; `Type`, not `Kind`). C++ has no `kind` keyword; the older
+"avoid `type` because it's reserved-ish" reflex doesn't apply here.
+
 Acronyms in **module, directory, manifest, and file-format names are written all-caps**:
 `GLTF` (not `Gltf`), `KTX`, `HTTP`, `PBR`, `BRDF`. This extends to the manifest filename
 (`GLTFManifest.json`), the API export macro (`GLTF_API`), and the on-disk format constants.
