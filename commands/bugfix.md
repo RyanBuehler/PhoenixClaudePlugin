@@ -233,7 +233,7 @@ Push the branch and open a pull request. Confirm with the user before pushing or
 
 ```bash
 git push -u origin bug/<label>
-gh pr create \
+PR_URL=$(gh pr create \
   --head bug/<label> \
   --base main \
   --title "<bug title>" \
@@ -243,7 +243,16 @@ gh pr create \
 
 Crucible: <label>
 EOF
-)"
+)")
+```
+
+After a successful `gh pr create`, record the review link on the bug so future sessions
+and `crucible bug show` surface the PR URL without grepping comments. The flag name is
+intentionally source-neutral — `--replace-review-link` accepts any URL string, so a
+non-GitHub review system fits without rewording this step:
+
+```bash
+build-crucible-release/bin/crucible bug update --label=<LABEL> --replace-review-link="${PR_URL}"
 ```
 
 If the user declines to push, leave the branch local for them to publish later.

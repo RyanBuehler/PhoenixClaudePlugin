@@ -479,6 +479,7 @@ EOF
 )")
 PR_NUM="${PR_URL##*/}"
 echo "Opened PR #${PR_NUM}: ${PR_URL}"
+build-crucible-release/bin/crucible challenge update --label=<LABEL> --replace-review-link="${PR_URL}"
 ```
 
 ```bash
@@ -498,9 +499,17 @@ EOF
 )")
 PR_NUM="${PR_URL##*/}"
 echo "Opened PR #${PR_NUM}: ${PR_URL}"
+# Combined PR covers every challenge in the chain — record the same review link on each one
+# so subsequent `crucible challenge show` calls all surface the PR URL.
+for LBL in <label-1> <label-2> <label-3>; do
+  build-crucible-release/bin/crucible challenge update --label="${LBL}" --replace-review-link="${PR_URL}"
+done
 ```
 
 `Crucible:` and `Saga:` trailers are mandatory; pull IDs from the JSON already fetched in Step 2. Combined-branch PRs list every challenge in the chain. Drop the `Saga:` line for orphans.
+
+The `--replace-review-link` step after each `gh pr create` is source-neutral by design — the
+flag accepts any URL string, so a non-GitHub review system fits without rewording this step.
 
 Refer to each PR as **PR #<N>** (the trailing `/pull/<N>` segment) in narration, the Report table, and the Watch CI step — never URL alone. Record each `PR #<N>` + URL for the final report.
 

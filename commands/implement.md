@@ -366,6 +366,16 @@ PR_NUM="${PR_URL##*/}"
 echo "Opened PR #${PR_NUM}: ${PR_URL}"
 ```
 
+After a successful `gh pr create`, record the review link on the challenge so future
+sessions and `crucible challenge show` surface the PR URL without grepping comments.
+The flag name is intentionally source-neutral — `--replace-review-link` accepts any
+URL string, so a non-GitHub review system (Gitea, Phabricator, internal mirror) fits
+without rewording this step:
+
+```bash
+build-crucible-release/bin/crucible challenge update --label=<LABEL> --replace-review-link="${PR_URL}"
+```
+
 `Crucible:` and `Saga:` trailers are mandatory; pull IDs from the JSON already fetched in Step 2/3. Drop the `Saga:` line for orphans.
 
 Refer to the PR as **PR #<N>** (the trailing `/pull/<N>` segment) in all subsequent narration, the Watch CI step, and the report — never URL alone.

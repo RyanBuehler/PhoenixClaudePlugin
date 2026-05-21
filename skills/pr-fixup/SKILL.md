@@ -91,6 +91,27 @@ Pushing the PR branch fires GitHub's `pull_request.synchronize` webhook, which i
 
 If the build fails, fix the failure, rebuild, and push once it's green. Repeat until clean. **Never push a known-broken build** — pushing failures wastes a CI cycle and signals false progress.
 
+### 7.5. Backfill the review link on the Crucible entry
+
+`pr-fixup` runs against an already-open PR, so this skill never calls `gh pr create` itself.
+But the Crucible entry may predate `--review-link` and still have an empty `review_link`
+field. Before reporting, check and backfill so subsequent sessions and `crucible <entity>
+show` carry the PR URL:
+
+```bash
+ENTITY=challenge   # or bug, depending on which workflow opened the PR
+LABEL=<label>
+PR_URL=$(gh pr view --json url --jq .url)
+EXISTING=$(build-crucible-release/bin/crucible --json "${ENTITY}" show --label="${LABEL}" | jq -r '.review_link // ""')
+if [ -z "${EXISTING}" ]; then
+  build-crucible-release/bin/crucible "${ENTITY}" update --label="${LABEL}" --replace-review-link="${PR_URL}"
+fi
+```
+
+The `--replace-review-link` flag is source-neutral by design — it accepts any URL string,
+so a non-GitHub review system fits without rewording this step. No-op when the link is
+already present.
+
 ### 8. Report
 
 Tell the user:
@@ -98,6 +119,7 @@ Tell the user:
 - Which have drafted replies awaiting the user (questions, disagreements, deferred, out-of-scope) — include the draft text inline.
 - Confirmation that every comment is in one terminal state — fixed+resolved or drafted+unresolved.
 - Build status and the pushed commit.
+- Whether the Crucible `review_link` was backfilled this run, if applicable.
 - Any out-of-scope items filed as Crucible follow-ups.
 
 ## What this skill does NOT do
