@@ -112,6 +112,13 @@ you know where to look.
     error-bearing returns, trailing return types, `const` correctness.
   - **`Move`/`Forward` vs `std::move`/`std::forward`** — grep should return zero hits on
     the `std::` forms in shared source.
+  - **`std::filesystem` outside `Engine/Core/{Public,Private}/IO/`** — flag any `<filesystem>`
+    include or `std::filesystem::*` use; route through `IO::File` / `IO::Directory` /
+    `IO::Path`. If the wrapper lacks the needed operation, say so in the report — the fix
+    is to extend `IO::*`, not bypass it. Platform OS-callback path shapes may be downgraded
+    to Nit.
+  - **`static_cast` proliferation** — 3+ in one function/file is a type-design smell, not a
+    per-cast finding. Report it; the fix is reshaping the types, not deleting the casts.
   - Comments: decorative banners, temporal narration, stale references (file paths, line
     numbers, commit hashes, PR #, Crucible labels), stacked `//` paragraphs, what-comments
     over self-documenting code, public-API header declarations without a purpose comment,
@@ -175,9 +182,11 @@ Partition findings into three buckets:
   whether a namespace named `Helpers` is "generic enough to be wrong," picking `Previous`
   vs a domain-specific word, deciding whether a TODO-style comment should become a Crucible
   challenge.
-- **Report-only.** Architectural violations that require cross-file refactors (cross-module
+- **Report-only.** Architectural violations needing cross-file refactors (cross-module
   object handoff, a subsystem that should be collapsed, a singleton that needs to become a
-  subsystem). Do not attempt these; surface them in the report for human follow-up.
+  subsystem, a `static_cast` cluster signalling type rework, a `std::filesystem` call site
+  that needs `IO::*` extended). Do not attempt these; report and say *extend the wrapper*
+  when that's the right call.
 
 Behavior by flag:
 
@@ -234,8 +243,9 @@ Empty sections are omitted. If a run finds nothing, emit the clean-case form:
 
 If audit applied any mechanical fixes, finish with:
 
-1. `python3 Tools/format.py --files=staged` on the touched files (audit's mechanical fixes
-   can leave formatting slightly off — let clang-format finalize).
+1. `python3 Tools/format.py --files=branch` on the touched files (audit's mechanical fixes
+   can leave formatting slightly off — let clang-format finalize). `--files=branch` mirrors
+   CI; `--files=staged` would no-op here since audit edits the working tree, not the index.
 2. A single-line confirmation in the report: *"Formatted N files after audit fixes."*
 
 Do **not** run `/phoe:build`, `/phoe:verify`, or any tests after audit fixes. That's the

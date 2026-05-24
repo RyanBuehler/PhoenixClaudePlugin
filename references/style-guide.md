@@ -119,6 +119,14 @@ source. Use `std::expected`, `std::optional`, or result types instead.
 Disabled. Do not use `dynamic_cast`, `typeid`, or `reinterpret_cast`. For type-discriminated
 queries, use virtual query methods and `From<T>().ID()`.
 
+### `static_cast` proliferation
+
+Three or more `static_cast`s in one function or file is a type-design smell — one side
+of the conversion is the wrong type. Fix the types (tighten the source, add a wrapper or
+`enum class`, move the conversion to a single boundary), not the casts.
+
+Heuristic, not a ban. One cast at an API boundary is fine; the signal is *proliferation*.
+
 ### `[[deprecated]]`
 
 Forbidden. Do not use deprecated attributes or mark code as deprecated — remove the code
@@ -170,6 +178,19 @@ zero hits.
 
 For every use of `std::memory_order`, add a nearby comment explaining why that ordering is
 required. This is the canonical example of a non-obvious *why* that belongs in a comment.
+
+### Filesystem
+
+Use `IO::File` / `IO::Directory` / `IO::Path` from the `Phoenix:IO` module
+(`Engine/Core/Public/IO/`). Direct `std::filesystem` use outside that module is forbidden.
+
+If the wrapper is missing an operation, **extend it** — do not bypass it at the call site.
+
+Exemptions:
+
+- The wrapper implementation under `Engine/Core/{Public,Private}/IO/`.
+- Platform code where an OS API requires a `std::filesystem::path` shape. The ban targets
+  the `std::filesystem::*` *operations*, not the path type at unavoidable boundaries.
 
 ## Code Organization
 
