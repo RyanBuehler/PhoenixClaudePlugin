@@ -12,6 +12,28 @@ Build an executable from source.
 
 This is the **single source of truth** for building any executable in the Phoenix project. Other plugin commands (`/phoe:test`, `/phoe:implement`, `/phoe:plan`, `/phoe:bugfix`, `/phoe:execute`, `/phoe:verify`) should invoke `/phoe:build <target>` instead of scripting cmake or checking versions themselves. After the build step, invoke the binary via its explicit build-dir path (e.g., `build-forge-release/bin/forge`). **No symlinks, no ELF files at the repo root.**
 
+## Locating an Existing Forge Binary
+
+The canonical path is `build-forge-release/bin/forge`, and the procedures below build it there. But
+a freshly cloned or CI-seeded worktree may carry only `build-forge-bootstrap/bin/forge` (the
+bootstrap build CI produces) with no release binary yet. A skill that probes *only* the release
+path reports forge missing on such a worktree and falls through to a confusing failure.
+
+When a skill needs to *invoke* an existing forge rather than (re)build it, probe both paths,
+preferring release:
+
+```bash
+forge_bin() {
+  for candidate in build-forge-release/bin/forge build-forge-bootstrap/bin/forge; do
+    [ -x "$candidate" ] && { echo "$candidate"; return 0; }
+  done
+  return 1   # neither present
+}
+```
+
+This is a locator only — version/staleness handling and the clean rebuild stay with the tool-target
+procedure below. If `forge_bin` finds nothing, run `/phoe:build forge` to produce the release binary.
+
 ## Tool Build Targets
 
 | Target   | Expected Version | CMake Flag             | Build Dir              | Binaries Produced          |

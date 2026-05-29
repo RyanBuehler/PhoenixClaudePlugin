@@ -76,6 +76,14 @@ Draft a saga and break the work into commit-sized, ordered Challenges.
 - **Affected files** — files likely to be touched
 - **References** — related docs, issues, or prior work
 
+**Co-specified header/compile pairs.** When a challenge both drops a declaration from a header
+(e.g. "remove the forward declaration of X", "stop exporting Y") *and* requires downstream
+consumers to compile unchanged, name the transitive-include implication in the spec. Consumers
+were likely leaning on that header to pull a symbol in indirectly, so the acceptance criteria must
+state where they get it now — their own direct include, or another header. Spelling this out saves
+the iteration where the implementer drops the header, breaks a transitive include, and rediscovers
+the coupling at verify time.
+
 Challenges must be:
 - **Commit-sized** — completable in a single focused session
 - **Self-contained** — can be verified independently

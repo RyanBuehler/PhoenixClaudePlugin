@@ -119,6 +119,33 @@ Execution Plan:
 
 For each wave, execute the following steps:
 
+### Docs-only fast path
+
+Classify each challenge before running its steps. A challenge is **docs-only** when its
+`affected_files` and acceptance criteria touch no C++, build, or test code -- the deliverable is
+a design document, spec, or other Markdown/prose artifact. Everything else is a **code**
+challenge and runs the full 4a-4h cycle below unchanged.
+
+The full 4d/4e/4f cycle is calibrated for code, where CRITICAL means "may crash production". For
+a design doc, CRITICAL means "this number is wrong" or "this assumes infrastructure that does not
+exist" -- both reviewable on the PR rather than requiring a second verification pass. So docs-only
+challenges diverge as follows (step numbers still map to 4a-4h):
+
+- **No build, no `/phoe:verify`.** Skip `/phoe:build` and `/phoe:verify` -- there is nothing to
+  compile or test. Drop steps 1 (populate build dir) and 6 (run `/phoe:verify`) from the
+  implementer subagent prompt and tell it the change is prose-only.
+- **4d becomes a prose-ground check.** In place of build+verify, scan the draft for grounding
+  defects: path references that do not resolve (`Engine/<X>/`, `Project/<X>/`, nonexistent
+  helpers / toolchains / inspector pages -- see the Grounding constraint) and determinism claims
+  with no stated posture. Fix what you find before review.
+- **Single-round review (4e/4f).** Run ONE adversarial review pass and ONE fix pass, then advance
+  to PR. Re-enter a second review+fix round ONLY if the first-round CRITICAL count is >= 3; below
+  that, log warnings/suggestions and advance. The spec and quality reviewers remain optional adds;
+  the adversarial pass plus the grounding check is the gate.
+- **Suppress task-tool reminders in the subagent.** Tell the docs-only implementer subagent to
+  ignore any "task tools haven't been used recently" harness reminders -- the orchestrator owns
+  wave-level task tracking, and a single-file design doc does not benefit from a local task list.
+
 ### 4a. Setup
 
 Worktrees are mandatory for every challenge — the plugin's `branch-worktree-check.py` hook blocks bare `git checkout -b` / `git switch -c` / `git branch <name>` at tool-use time (by design, to enforce one-worktree-per-branch). `git worktree add -b <name>` is the only supported way to create a challenge branch.
@@ -164,10 +191,18 @@ For each challenge in the wave:
 2. Re-confirm status is still `todo` (parse from the JSON above). Another agent's parallel
    `/phoe:execute` may have claimed it since Step 2. If status is anything else, drop the
    challenge, log "Pre-empted by parallel agent" in the final report, and continue.
-3. Create the worktree and branch from the main repo root:
+3. Create the worktree and branch from the main repo root, basing it on the right ref so the PR
+   diff is clean and dependencies are visible without ever writing local `main`:
+   - **Default:** base on `origin/main` when the remote is reachable (`REMOTE_REACHABLE=1` from
+     Step 1), else local `main`.
+   - **Stacked dependency:** if this challenge depends on an earlier challenge *in this run* whose
+     work is not yet on `origin/main` -- a cross-wave dependency that is not already on a shared
+     combined branch -- base it on that predecessor's branch tip (`challenge/<predecessor-label>`)
+     instead, so the dependency is present locally without merging anything into `main`.
    ```bash
-   git worktree add .claude/worktrees/challenge-<label> -b challenge/<label>
+   git worktree add .claude/worktrees/challenge-<label> -b challenge/<label> <base-ref>
    ```
+   where `<base-ref>` is `origin/main`, `main`, or `challenge/<predecessor-label>` per the rule above.
 4. Move to implementing (run from the main repo root so the crucible binary resolves):
    ```bash
    build-crucible-release/bin/crucible challenge move --label=<LABEL> implementing
@@ -177,7 +212,8 @@ For challenges using the **combined branch** strategy (per the rule above), do N
 new worktree — reuse the existing combined worktree. Skip the `git worktree add` step and
 instead `cd` into the existing worktree. Move the challenge to `implementing` as normal.
 
-Each fresh worktree is an independent checkout; `main` is untouched until 4d.
+Each fresh worktree is an independent checkout; local `main` is never written by `/phoe:execute` —
+all work stays on the challenge branch through 4h (see 4d).
 
 **Parallel-build caching note (bug 8 follow-on).** When a wave has multiple challenges running in parallel, each worktree does a cold build. Configuring ccache project-wide so shared objects are cache hits (~30s vs ~4min rebuild) is a separate optimization tracked outside this command — not part of /phoe:execute's responsibility. See CLAUDE.md "Build Commands" for the worktree build constraint.
 
@@ -237,6 +273,21 @@ Description: <description>
 - Do NOT enter plan mode
 - Do NOT ask the user questions -- if you need information, read the codebase
 - Do NOT modify files outside the challenge's scope unless absolutely necessary
+- **Grounding -- cite only what exists.** Before referencing any project helper, type,
+  toolchain, tool, inspector page, script, vendored dependency, or directory -- in code,
+  comments, commit messages, or design-doc prose -- confirm it exists with `grep` / `Glob` /
+  `Read`. If the search returns nothing, do NOT assert it exists: drop the reference, or (in a
+  design doc) mark it explicitly as an **Upstream Dependency** still to be built. This is the
+  inverse of CLAUDE.md "Search before claiming the codebase lacks something" -- the same
+  discipline applies to claiming something *does* exist. Phoenix's tools live at the top-level
+  `Tools/`, NOT `Engine/Tools/`; there is no `Engine/Tools/` directory. Treat any
+  `Engine/<X>/`, `Project/<X>/`, or similar path as suspect until a `Read`/`Glob` confirms it.
+- **Determinism claims need a stated posture.** Any "bit-exact", "deterministic", or
+  "reproducible" claim must cite the explicit conditions that make it true: BLAS thread counts
+  (`OPENBLAS_NUM_THREADS=1` / `MKL_NUM_THREADS=1`), pinned library versions, seeded RNG. If you
+  cannot state the posture, downgrade the wording to "deterministic under <posture>" or
+  "best-effort reproducible". Bit-exact across BLAS-threaded numerics or an unpinned
+  compression library is false by default, even on a single host.
 - Follow the project's coding conventions (CLAUDE.md) — **and before writing any C++, read `references/style-guide.md` and `references/tooling.md`** so the implementation conforms to enforced conventions (formatting, naming, comments, namespaces, return-value handling, `auto`, scope spacing, tooling)
 - Use plain ASCII only -- no unicode characters
 - Use full descriptive variable names -- no abbreviations
@@ -290,7 +341,7 @@ For each returning subagent:
 
 | Status | Action |
 |--------|--------|
-| **DONE** | Proceed to 4d (Merge + Verify) |
+| **DONE** | Proceed to 4d (Rebase + Verify) |
 | **DONE_WITH_CONCERNS** | Read concerns. If about correctness/scope: dispatch a targeted fix subagent. If observational: note and proceed. |
 | **BLOCKED** | Retry once: re-read the affected files and any files the subagent mentioned, enrich the prompt with additional context from the codebase, and re-dispatch. On second BLOCKED: mark challenge blocked in Crucible with detailed explanation, write checkpoint to `.claude/handoffs/<LABEL>-checkpoint.md`, **keep the branch and commits intact**. Skip to next challenge. |
 | **NEEDS_CONTEXT** | Retry once: read the subagent's questions, answer them by reading the codebase/CLAUDE.md/sibling saga challenges, and re-dispatch with enriched context. On second NEEDS_CONTEXT: mark blocked with unanswered questions as the reason, **keep the branch intact**. Skip. |
@@ -317,28 +368,41 @@ Write a checkpoint file:
 <full subagent report for context>
 ```
 
-### 4d. Merge + Verify (sequential, per challenge in ID order)
+### 4d. Rebase + Verify (sequential, per challenge in ID order)
 
-For each completed challenge:
+All post-implement work stays on the challenge branch in its own worktree. **Local `main` is never
+checked out, merged into, or committed to by `/phoe:execute`.** When more than one agent is active,
+local `main` is shared mutable state — writing to it bundles unrelated parallel commits into the
+PR (and the old "merge to main, fix on main, push the branch" flow silently left those fixes off
+the pushed branch entirely). The PR *is* the challenge branch; `main` only moves when a PR merges
+on the remote.
 
-1. Switch to main and merge:
+For each completed challenge, working inside its worktree (`.claude/worktrees/challenge-<label>`):
+
+1. Rebase the branch onto the freshest upstream so the PR diff is minimal. When the remote is
+   reachable (`REMOTE_REACHABLE=1` from Step 1):
    ```bash
-   git checkout main
-   git merge --ff-only challenge/<label>
+   git -C .claude/worktrees/challenge-<label> fetch origin main
+   git -C .claude/worktrees/challenge-<label> rebase origin/main
    ```
-   If fast-forward fails (parallel wave): `git merge --no-ff challenge/<label> -m "Merge challenge/<label>"`
+   When unreachable, skip the fetch and `git -C <worktree> rebase main` onto local `main`.
+   Combined-branch chains rebase the shared branch once, not once per challenge.
 
-2. If merge conflict: `git merge --abort`. Mark the challenge blocked with "Merge conflict with challenge/<other-label> on files: <list>". **Keep the branch intact.** Skip.
+2. If the rebase conflicts: `git -C <worktree> rebase --abort`. Mark the challenge blocked with
+   "Rebase conflict with origin/main on files: <list>". **Keep the branch intact.** Skip.
 
-3. Run full project verification via `/phoe:verify`. Forge drives the full sequence: configure + build, format check, lint (clang-tidy on changed files), and test.
+3. Run full project verification via `/phoe:verify` from inside the worktree. Forge drives the full
+   sequence: configure + build, format check, lint (clang-tidy on changed files), and test.
 
 4. Run challenge-specific verification commands from the challenge JSON.
 
-5. On verify failure: dispatch a fix subagent with the error output. The fix subagent works on main. Re-run `/phoe:verify`. On second failure: mark blocked with the verify error output. **Keep the branch and merged state intact.** Skip.
+5. On verify failure: dispatch a fix subagent (cwd = the worktree) with the error output; it commits
+   the fix to the challenge branch. Re-run `/phoe:verify`. On second failure: mark blocked with the
+   verify error output. **Keep the branch and its commits intact.** Skip.
 
 ### 4e. Review (spec + quality + adversarial in parallel per challenge)
 
-Process challenges in ID order. For each challenge, dispatch all three reviewers simultaneously (they are read-only, so parallel dispatch is safe), wait for all to return, then move to the next challenge. Do NOT dispatch reviewers for multiple challenges in parallel — that would let 4f's fix-subagents (which commit to main) race against each other, violating the serialization rule stated in 4f below.
+Process challenges in ID order. For each challenge, dispatch all three reviewers simultaneously (they are read-only, so parallel dispatch is safe), wait for all to return, then move to the next challenge. Reviewers diff the challenge branch against its upstream base with three-dot range `origin/main...HEAD` (use `main...HEAD` when origin is unreachable) — this captures the full PR diff regardless of how many commits the branch carries, and never depends on local `main`.
 
 The adversarial reviewer is a **mandatory pre-PR gate** — no challenge advances to 4h without it. The standard quality reviewer asks "is this code well-formed?"; the adversarial reviewer asks "how does this break?". Both are required because they catch different failure modes, and `/phoe:execute` ships PRs without human judgment in the loop, so the adversarial pass is the last line of defense before the diff lands on `origin`.
 
@@ -356,17 +420,17 @@ Review spec compliance for challenge: <label>
 <strategy from challenge JSON, if present>
 
 ## Diff
-Run: git log --oneline -1 && git diff HEAD~1..HEAD
-(or for merge commits: git diff HEAD~1..HEAD)
+Run: git diff origin/main...HEAD (use main...HEAD if origin is unreachable)
 
 ## Files Changed
-<list from git diff --name-only HEAD~1..HEAD>
+<list from git diff --name-only origin/main...HEAD>
 ```
 
 **Quality reviewer** -- launch `invoke-code-reviewer` agent:
 
 ```
-Review the staged diff (git diff HEAD~1..HEAD) for challenge branch.
+Review the branch diff (git diff origin/main...HEAD; use main...HEAD if
+origin is unreachable) for challenge branch.
 Focus on correctness, safety, modern C++23 opportunities, performance,
 and project convention compliance. Report findings using
 CRITICAL/WARNING/SUGGESTION/NOTE severity levels.
@@ -375,7 +439,8 @@ CRITICAL/WARNING/SUGGESTION/NOTE severity levels.
 **Adversarial reviewer** -- launch a second `invoke-code-reviewer` agent (fresh, no shared context with the quality reviewer) with this prompt:
 
 ```
-Adversarially review the diff (git diff HEAD~1..HEAD) for challenge: <label>.
+Adversarially review the diff (git diff origin/main...HEAD; use main...HEAD
+if origin is unreachable) for challenge: <label>.
 Your job is to attack this implementation, not validate it. Assume the
 quality review is happening in parallel — do not duplicate it. Hunt for:
 
@@ -402,12 +467,15 @@ valid result.
 
 ### 4f. Handle Review Results
 
-**Serialization rule.** Any subagent in this step commits to `main` (the post-merge state from 4d). If a wave has multiple challenges that need fix or triage subagents, **dispatch them one at a time, not in parallel** — each subagent must finish (commits landed, verify passed) before the next one starts. Parallel dispatch would force each subagent to stash-and-restore its siblings' unstaged edits, a silent data-loss risk if the restore ever fails.
+**Where fixes land.** Every fix and triage subagent in this step commits to the **challenge
+branch in its own worktree** (cwd = `.claude/worktrees/challenge-<label>`) — never to local
+`main`, preserving the "no direct commits to main" rule. Because each challenge owns an isolated
+worktree, per-challenge fix subagents do not collide; but run multiple fix/triage passes for the
+*same* challenge sequentially (each must finish — commits landed, verify passed — before the next
+starts) so a later pass sees the earlier one's committed state.
 
-**Direct-main-commit exception.** Steps 4d–4f land commits on `main` directly — an intentional
-exception to the "no direct commits to main" memory rule, justified by the work having already
-passed verify (4d) and review (4e). If a fix would materially change the shape of the work
-rather than touch it up, mark the challenge blocked instead and let the user re-plan.
+If a fix would materially change the shape of the work rather than touch it up, mark the challenge
+blocked instead and let the user re-plan.
 
 Process challenges in **ID order** within the wave, and for each one:
 
@@ -417,7 +485,7 @@ Process challenges in **ID order** within the wave, and for each one:
   - **Implement it** if it is clearly in-scope, correct, and adds value -- apply the change directly.
   - **Defer it** if it raises a real question, is ambiguous, or is out of scope for this challenge -- emplace a `// TODO: <one-line description of the work that needs doing>` comment at the most relevant code location so it can be evaluated later. Follow the TODO discipline in the plugin's CLAUDE.md: describe the work, not where the note came from; never embed the challenge label, a PR number, a file path, a line number, a branch name, or any other reference that can go stale.
 
-  Suggestions must never be silently dropped. The triage subagent commits any changes (implementations and TODOs) to main. Wait for it to finish. After it returns, re-run `/phoe:verify`. Do NOT re-dispatch the reviewers. Log the triage outcome (implemented / deferred counts, broken out by source) in the final report.
+  Suggestions must never be silently dropped. The triage subagent commits any changes (implementations and TODOs) to the challenge branch in its worktree. Wait for it to finish. After it returns, re-run `/phoe:verify`. Do NOT re-dispatch the reviewers. Log the triage outcome (implemented / deferred counts, broken out by source) in the final report.
 - **Quality NOTE or adversarial NOTE:** Proceed. Log notes in the final report.
 
 A challenge cannot reach 4h (Publish) until all three reviewers have returned and zero CRITICAL findings remain across spec, quality, and adversarial. The adversarial gate is non-skippable — autonomous PR submission without it is forbidden.
@@ -445,6 +513,16 @@ cherry-pick-equivalent and leaves an empty PR.
 git fetch origin main
 git log origin/main --oneline -i --grep="<label>" -10
 ```
+
+If no match, rebase the branch once more onto the freshest origin/main so the push is a clean
+fast-forward of the PR head (origin/main may have advanced since 4d):
+
+```bash
+git -C .claude/worktrees/challenge-<label> rebase origin/main
+```
+
+If this rebase conflicts, abort it, mark the challenge blocked with the conflicting files, keep
+the branch intact, and skip.
 
 If matches exist, mark merged, clean up the branch/worktree, log "Pre-empted by parallel agent"
 in the final report, and skip to the next challenge:
