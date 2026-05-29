@@ -17,9 +17,13 @@ On a fresh worktree the first call rebuilds Forge; subsequent calls are no-ops.
 
 ## 2. Format
 
+Use `--files=branch` to mirror CI exactly (compares against `main`). `--files=staged` silently
+passes when nothing is staged — this gate runs before `git add -A` in most workflows, so
+`staged` would no-op.
+
 ```bash
-python3 Tools/format.py --files=staged
-python3 Tools/format.py --files=staged -error
+python3 Tools/format.py --files=branch
+python3 Tools/format.py --files=branch -error
 ```
 
 ## 3. Lint

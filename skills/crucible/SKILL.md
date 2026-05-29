@@ -1,6 +1,6 @@
 ---
 name: crucible
-description: Use for ANY question or action involving Crucible, sagas, challenges, or bugs — including read-only status queries. Activates on phrases like "saga status", "what is the status of (all) sagas", "what's in review", "what bugs are open", "list sagas", "show challenge X", "create a challenge", "promote saga X", "move challenge to review", "add a comment to challenge Z", or any mention of crucible/saga/challenge/bug. The Crucible CLI is the source of truth — never grep the filesystem or pgrep the server to answer status questions.
+description: Use for ANY question or action involving Crucible, sagas, challenges, or bugs — including read-only status queries. Activates on phrases like "saga status", "what's in review", "create a challenge", "move challenge to review", or any mention of crucible/saga/challenge/bug.
 ---
 
 # Crucible CLI — How to Talk to the Project Tracker
@@ -13,6 +13,7 @@ Crucible is the project's bespoke saga/challenge/bug tracker. A `crucible` CLI c
 - **The binary is project-local, not on PATH.** From the engine repo root use `build-crucible-release/bin/crucible`. There is no system-wide `crucible`. Build via `/phoe:build crucible` if the binary is missing.
 - **Storage lives at `~/.local/share/crucible-server/`** (`challenges/`, `sagas/`, `bugs/`, `archive/`, `bug-archive/`, `config.json`). Never edit those files by hand — go through the CLI so the server stays consistent.
 - **Use the CLI, not raw JSON.** This is reinforced by user feedback: do not hand-author challenge/saga/bug JSON files when a CLI subcommand exists.
+- **The CLI is the source of truth for status.** Never grep the filesystem or pgrep the server to answer status questions — ask the CLI.
 
 ## Mental model
 

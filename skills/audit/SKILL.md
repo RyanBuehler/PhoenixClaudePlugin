@@ -1,6 +1,6 @@
 ---
 name: audit
-description: Use when auditing a cold Phoenix C++ file, a set of files, or a module for drift from project conventions — style-guide violations, naming inconsistencies, comment hygiene, Phoenix-specific antipatterns, and subsystem-design smells that slip past clang-tidy and per-change review. Auto-activates on phrases like "audit this file", "audit this module", "sweep for style drift", "check for convention drift", "consistency pass"; also invocable directly via `/phoe:audit`. Not for per-change review (use `invoke-code-reviewer`), not for UI-architecture review (use `ui-design-review`), not for include/module-import hygiene (use `invoke-lint-agent`), and not a gate — `/phoe:verify` remains the commit precondition.
+description: Use when auditing a cold Phoenix C++ file, a set of files, or a module for drift from project conventions — style-guide violations, naming inconsistencies, comment hygiene, Phoenix-specific antipatterns, and subsystem-design smells that slip past clang-tidy and per-change review. Auto-activates on phrases like "audit this file", "audit this module", "check for convention drift". Not for per-change review (use `invoke-code-reviewer`), not for UI-architecture review (use `ui-design-review`), not for include/module-import hygiene (use `invoke-lint-agent`).
 ---
 
 # Audit — Phoenix Consistency Sweeper

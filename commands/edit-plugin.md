@@ -1,6 +1,7 @@
 ---
 description: Edit the PhoenixClaudePlugin source — add or modify commands, agents, hooks, skills, or references following plugin conventions, then bump the calendar version.
 allowed-tools: Read, Edit, Write, Bash, Glob, Grep, Agent
+disable-model-invocation: true
 ---
 
 Edit the PhoenixClaudePlugin (the "phoe" plugin for Claude Code).

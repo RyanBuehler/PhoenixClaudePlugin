@@ -1,15 +1,18 @@
 ---
-description: Format staged C++ files with clang-format and verify formatting is correct.
+description: Format C++ files on the current branch with clang-format and verify formatting is correct.
 ---
 
-Format staged C++ files and verify the result matches CI expectations.
+Format branch-modified C++ files and verify the result matches CI expectations.
+
+`--files=branch` (diff against `main`) is the same scope CI uses. `--files=staged` would
+silently succeed when nothing is staged — avoid it.
 
 ## 1. Format
 
-Apply formatting to staged files:
+Apply formatting to branch-modified files:
 
 ```bash
-python3 Tools/format.py --files=staged
+python3 Tools/format.py --files=branch
 ```
 
 ## 2. Verify
@@ -17,10 +20,10 @@ python3 Tools/format.py --files=staged
 Check that formatting passes (mirrors CI behavior):
 
 ```bash
-python3 Tools/format.py --files=staged -error
+python3 Tools/format.py --files=branch -error
 ```
 
-If verification fails after formatting, investigate the issue. If there are no staged files, inform the user.
+If verification fails after formatting, investigate the issue. If there are no branch-modified files, inform the user.
 
 ## 3. Report
 

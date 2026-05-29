@@ -1,5 +1,6 @@
 ---
 description: Create a new Phoenix engine module using the project's create_module.py scaffolding tool.
+disable-model-invocation: true
 ---
 
 Create a new module using the project's scaffolding tool. Supports interactive and non-interactive modes.

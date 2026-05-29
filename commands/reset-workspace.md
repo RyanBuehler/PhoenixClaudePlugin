@@ -1,6 +1,7 @@
 ---
 description: Clean up the workspace — resolve unstaged files, switch to main, pull latest, and prune stale local branches.
 allowed-tools: Read, Bash, Glob, Grep, Agent
+disable-model-invocation: true
 ---
 
 Clean up the current workspace by working through these steps in order. Each step involves investigation before action — confirm with the user before anything destructive.

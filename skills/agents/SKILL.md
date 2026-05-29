@@ -1,6 +1,6 @@
 ---
 name: agents
-description: Use to answer "which background job owns PR #X?" or "which PRs is job Y juggling?" — looks up the PR/job/session registry written by the agent-registry-tracker hook. Activates on phrases like "who owns PR 1234", "what is job 9271caec working on", "which agent made this PR", "list live agents", "which PRs are still in flight", or any cross-reference between `claude agents` background jobs and GitHub PRs. Read-only — never edits the registry.
+description: Use to answer "which background job owns PR #X?" or "which PRs is job Y juggling?" — looks up the PR/job/session registry written by the agent-registry-tracker hook. Activates on phrases like "who owns PR 1234", "which agent made this PR", "list live agents", or any cross-reference between `claude agents` background jobs and GitHub PRs.
 ---
 
 # Agent ↔ PR Registry
@@ -11,7 +11,7 @@ The `agent-registry-tracker.py` PostToolUse hook silently records every `gh pr c
 ~/.claude/agent-registry.jsonl
 ```
 
-This skill is what you read before answering any question about who is working on what PR.
+This skill is what you read before answering any question about who is working on what PR. It is read-only — never edit the registry.
 
 ## Hard rules
 
