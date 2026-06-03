@@ -60,11 +60,11 @@ Two interchangeable forms accepted by every per-record subcommand:
 
 ## Status vocabulary
 
-`backlog`, `todo`, `in-progress`, `review`, `blocked`, `merged`, `canceled`.
+`backlog`, `todo`, `active`, `review`, `blocked`, `merged`, `canceled`. (There is **no `in-progress`** — the CLI rejects it; use `active`.)
 
 Use `crucible challenge move <id> <status>` to move a challenge column. `unblock` defaults to `todo` if no target status is given.
 
-The `crucible saga list` breakdown columns are abbreviated: **T**=todo, **I**=in-progress, **B**=blocked, **R**=review, **M**=merged.
+The `crucible saga list` breakdown columns are abbreviated: **T**=todo, **A**=active, **B**=blocked, **R**=review, **M**=merged, **C**=canceled. "Done" counts **M+C**.
 
 ## Reading state
 
@@ -95,6 +95,29 @@ crucible --json challenge list
 ```
 
 `--verbose` echoes engine logs. `--port=<N>` overrides the server port (otherwise `CRUCIBLE_SERVER_PORT` env wins).
+
+## Status report — the default "saga status" output
+
+When the user asks for "saga status", a "status table", "where are we", or similar, **reconcile first, then print the report below.** This is the canonical format; don't invent ad-hoc tables.
+
+**1. Reconcile in-flight work** (so the board is true, not just what the tracker last recorded):
+- `git fetch origin -q`. For each `review`/`merged` challenge, confirm its PR merge-commit is an ancestor of `origin/main` — `git merge-base --is-ancestor <oid> origin/main` — before trusting it. A squash-merge can show MERGED yet never reach main. Move a verified stale `review` → `merged`; leave it in `review` if its PR is still open.
+- For each `blocked` challenge, if its `blocked_by` target is now merged, `unblock` it — **but** if it's a capstone with more unmet prerequisites, re-point the block to the next one (`challenge block <id> --blocked_by=<next>`); a capstone isn't pickable until all prereqs land.
+- Briefly list every move you made (old → new + why) above the report.
+
+**2. Pull data:** `crucible saga list --completion`, `crucible challenge list --no-saga`, `crucible bug list`.
+
+**3. Print these sections, in order:**
+
+1. **▶ In-flight & blocked sagas** — markdown table, one row per saga with status `active`/`blocked`/`todo` (omit `complete` and `backlog`). Columns: `# | Saga | Done | Progress | Remaining`. Progress = a 10-cell bar `▰`(done=M+C) / `▱`(rest) inline-code-wrapped + `%`. Remaining in words (`1 blocked, 4 todo`), never glyph soup. Suffix blocked sagas with ⛔.
+2. **◆ Sagaless challenges** — orphans from `--no-saga` (non-terminal only): `# | status | priority | label`.
+3. **🐞 Bugs** — open bugs: `# | severity | priority | label`. If all merged/none, write "none open".
+4. **· Backlog** — two groups: **Parked** (has challenges, set aside) and **Shell sagas** (0 challenges → need `/phoe:plan <label>` to decompose into challenges). One `#id label` per entry.
+5. **✓ Complete** — collapse to a single line: count + ids. Never one row per saga.
+6. **Totals** — `N sagas · done/total challenges (P%)` + a 20-cell bar.
+7. **⚠ Synopsis & dependency chains** — prose, the payoff section. For each blocked saga/challenge give the chain (`#314 → #313 → #356–#359`), what would unblock it, and special considerations: capstones not yet pickable, `review` items with *open* vs *merged* PRs, squash-merge retarget hazards, parked-vs-shell distinction. Close with the single most useful next action.
+
+Parse the `--completion` rows with `^(\d+)\s+(\S+)\s+T:(\d+)\s+A:(\d+)\s+B:(\d+)\s+R:(\d+)\s+M:(\d+)\s+C:(\d+)\s+(\d+)/(\d+)\s+(\S+)\s+(.*)$`. Keep bars in inline code so columns align.
 
 ## Creating
 
@@ -249,4 +272,4 @@ If still in doubt, the source of truth is `Applications/Crucible/Source/Private/
 
 - Default output is human-readable tables with status, priority, label, title columns.
 - Use `--json` (before the subcommand) for parseable output, e.g. `crucible --json saga show 44`.
-- `crucible saga list` breakdown columns: `T:<todo> I:<in-progress> B:<blocked> R:<review> M:<merged>`.
+- `crucible saga list` breakdown columns: `T:<todo> A:<active> B:<blocked> R:<review> M:<merged> C:<canceled>`.
