@@ -141,6 +141,12 @@ you know where to look.
     module.
   - Public accessors returning references to owned internals.
   - Color literals in 0–255 or hex form not normalized to 0–1.
+  - **Hardcoded `RGBA{…}` literals** that duplicate an existing `Color::` / `Palette::`
+    constant (use the constant), or that color a themable UI element instead of reading the
+    active theme stand-in (`m_ActiveTheme->Accent`, etc.). See `CLAUDE.md` §Color Values.
+  - **Platform coupling** — a platform name (`Wayland`, `X11`, `Windows`, `Win32`, `macOS`,
+    `POSIX`, …) in an identifier, type, branch, or include outside `Engine/Modules/Platform/`.
+    See `CLAUDE.md` §No Platform Coupling.
   - Preprocessor guards outside platform/Vulkan modules.
 
 - **Header hygiene**

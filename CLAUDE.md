@@ -163,6 +163,24 @@ The project does not use `#ifdef` for feature/module gating. Modularity is drive
 - CMake (`SetupModule.cmake`) resolving and building only required modules
 - Runtime checks via `Subsystem::Get<>()` for optional service availability
 
+## No Platform Coupling
+
+Platform specifics live behind the `Platform` module's liaison abstraction
+(`PlatformLiaison`, `LinuxLiaison`, `WindowsLiaison`, `HeadlessLiaison`, and the `Linux*` /
+`Windows*` implementations under `Engine/Modules/Platform/`). Code outside that boundary is
+platform-agnostic and must stay that way.
+
+- A platform name — `Wayland`, `X11`, `Windows`, `Win32`, `macOS`, `Cocoa`, `POSIX`, etc. —
+  appearing in an identifier, type, branch, or include **outside `Engine/Modules/Platform/`**
+  is a coupling smell. Route the need through `PlatformLiaison` (or the relevant subsystem
+  interface) instead of naming the platform in shared code.
+- This holds for headers, source, and comments-that-imply-behavior alike: shared modules
+  describe *what* they need (a window surface, a clipboard, a file dialog), never *which OS*
+  provides it.
+- Mentioning a platform in prose where it's genuinely platform-liaison documentation, or in
+  build/CI config that legitimately selects a backend, is fine. The rule targets shared
+  *runtime* code reaching for a specific platform.
+
 ## Build System
 
 - Applications declare their module needs in `*Description.json` `requires_module` arrays
@@ -250,6 +268,18 @@ Worktrees follow at `.claude/worktrees/<type>-<label>` (slashes converted to das
   not `{255.0f, 0.0f, 0.0f, 255.0f}`.
 - When constructing colors from 8-bit inputs (e.g., hex codes, UI pickers), divide each
   channel by 255.0f before storing.
+- **Be skeptical of any new hardcoded RGBA literal.** Before writing `RGBA{r, g, b, a}` with
+  raw channel values, look for an existing named constant first:
+  - The `Color::` namespace (`Engine/Core/Public/Color/Color.cppm`) holds the standard named
+    colors (`Color::Red`, `Color::Crimson`, `Color::Orange`, …). The UI `Palette::` namespace
+    holds the editor palette (`Palette::Accent`, `Palette::AccentDeep`, …). If the value you
+    need already exists there, use the named constant — don't re-spell the channels.
+  - If no constant matches and the color is reused or semantically meaningful, add a named
+    constant (to `Color::` or `Palette::` as appropriate) rather than scattering a literal.
+  - **If the color is for a UI element that should respect the active theme, it must come
+    from the theme, not a literal.** Read the theme stand-in (`m_ActiveTheme->Accent` and
+    siblings, falling back to `Palette::Accent`) so user-themable surfaces recolor correctly.
+    A hardcoded literal on a themable element is a bug — it ignores the theme.
 
 ## Module Imports
 
