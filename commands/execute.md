@@ -139,9 +139,10 @@ challenges diverge as follows (step numbers still map to 4a-4h):
   helpers / toolchains / inspector pages -- see the Grounding constraint) and determinism claims
   with no stated posture. Fix what you find before review.
 - **Single-round review (4e/4f).** Run ONE adversarial review pass and ONE fix pass, then advance
-  to PR. Re-enter a second review+fix round ONLY if the first-round CRITICAL count is >= 3; below
-  that, log warnings/suggestions and advance. The spec and quality reviewers remain optional adds;
-  the adversarial pass plus the grounding check is the gate.
+  to PR. The fix pass must resolve every CRITICAL and WARNING (WARNING is a blocking tier here too);
+  log only suggestions/notes and advance. Re-enter a second review+fix round ONLY if the first-round
+  CRITICAL count is >= 3. The spec and quality reviewers remain optional adds; the adversarial pass
+  plus the grounding check is the gate.
 - **Suppress task-tool reminders in the subagent.** Tell the docs-only implementer subagent to
   ignore any "task tools haven't been used recently" harness reminders -- the orchestrator owns
   wave-level task tracking, and a single-file design doc does not benefit from a local task list.
@@ -479,8 +480,7 @@ blocked instead and let the user re-plan.
 
 Process challenges in **ID order** within the wave, and for each one:
 
-- **Spec FAIL, quality CRITICAL, or adversarial CRITICAL:** Dispatch a fix subagent with combined feedback from every reviewer that flagged a blocker (spec, quality, adversarial — whichever fired). Wait for it to finish. Re-run `/phoe:verify`. Re-dispatch **all three** reviewers (a fix can introduce new adversarial-class regressions). On second failure: mark blocked with reviewer feedback. **Keep all branches and commits intact.** Skip this challenge and move to the next one in the wave.
-- **Quality WARNING or adversarial WARNING:** Proceed. Log warnings (tagged with their source — quality vs adversarial) in the final report.
+- **Spec FAIL, quality CRITICAL or WARNING, or adversarial CRITICAL or WARNING:** Dispatch a fix subagent with combined feedback from every reviewer that flagged a blocker (spec, quality, adversarial — whichever fired). Wait for it to finish. Re-run `/phoe:verify`. Re-dispatch **all three** reviewers (a fix can introduce new adversarial-class regressions). On second failure: mark blocked with reviewer feedback. **Keep all branches and commits intact.** Skip this challenge and move to the next one in the wave. WARNING is a blocking tier alongside CRITICAL — an autonomous run has no human to waive one, so an unresolved WARNING blocks the challenge for human review rather than shipping with it ignored.
 - **Quality SUGGESTION or adversarial SUGGESTION:** Dispatch a suggestion-triage subagent with the combined suggestion list (both sources merged, deduplicated). For each suggestion the subagent must decide:
   - **Implement it** if it is clearly in-scope, correct, and adds value -- apply the change directly.
   - **Defer it** if it raises a real question, is ambiguous, or is out of scope for this challenge -- emplace a `// TODO: <one-line description of the work that needs doing>` comment at the most relevant code location so it can be evaluated later. Follow the TODO discipline in the plugin's CLAUDE.md: describe the work, not where the note came from; never embed the challenge label, a PR number, a file path, a line number, a branch name, or any other reference that can go stale.
@@ -488,7 +488,7 @@ Process challenges in **ID order** within the wave, and for each one:
   Suggestions must never be silently dropped. The triage subagent commits any changes (implementations and TODOs) to the challenge branch in its worktree. Wait for it to finish. After it returns, re-run `/phoe:verify`. Do NOT re-dispatch the reviewers. Log the triage outcome (implemented / deferred counts, broken out by source) in the final report.
 - **Quality NOTE or adversarial NOTE:** Proceed. Log notes in the final report.
 
-A challenge cannot reach 4h (Publish) until all three reviewers have returned and zero CRITICAL findings remain across spec, quality, and adversarial. The adversarial gate is non-skippable — autonomous PR submission without it is forbidden.
+A challenge cannot reach 4h (Publish) until all three reviewers have returned and zero CRITICAL and zero WARNING findings remain across spec, quality, and adversarial. The adversarial gate is non-skippable — autonomous PR submission without it is forbidden.
 
 ### 4g. Move to Review
 
@@ -637,7 +637,7 @@ Print a summary table:
 |-----------|------|--------|--------|----|-------|
 | add-viewport-resize | 0 | review | challenge/add-viewport-resize | #1234 | -- |
 | forge-compiler | 0 | blocked | challenge/forge-compiler | -- | Build failure: missing include |
-| wire-canvas-events | 1 | review | challenge/wire-canvas-events | #1235 | WARNING: large function |
+| wire-canvas-events | 1 | review | challenge/wire-canvas-events | #1235 | Fixed 1 WARNING (large function) before review |
 
 Saga Progress:
   synthetic-input: 3/6 complete (was 2/6)

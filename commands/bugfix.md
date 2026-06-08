@@ -205,12 +205,12 @@ Invoke the code reviewer as a **separate agent** to evaluate the implementation 
 1. Stage all changes: `git add -A`
 2. Launch `invoke-code-reviewer` as a subagent with the prompt:
    > Review the staged diff (`git diff --cached`) for this bug fix branch. Focus on correctness, safety, modern C++23 opportunities, performance, and project convention compliance. Verify the fix addresses the root cause and doesn't introduce regressions. Report findings using CRITICAL/WARNING/SUGGESTION/NOTE severity levels.
-3. **Gate on zero CRITICAL findings.** If any CRITICAL issues are found:
-   - Fix each CRITICAL issue
+3. **Gate on zero CRITICAL and zero WARNING findings.** If any CRITICAL or WARNING issues are found:
+   - Fix each CRITICAL and WARNING issue
    - Re-run `/phoe:verify`
    - Re-run acceptance criteria evaluation (Step 10)
    - Re-invoke the code reviewer
-4. **WARNING findings** are included in the final report.
+4. **WARNING is a blocking tier alongside CRITICAL** — fix each one as in step 3, or surface it to the user for an explicit waive if you judge it a false positive or out of scope. Never ship a WARNING unaddressed; record any waived WARNING in the final report.
 
 ## 12. Commit Changes
 

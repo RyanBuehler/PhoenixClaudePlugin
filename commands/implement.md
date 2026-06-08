@@ -248,12 +248,12 @@ Invoke the code reviewer as a **separate agent** to evaluate the implementation 
    > Review the staged diff (`git diff --cached`) for this challenge branch. Focus on correctness, safety, modern C++23 opportunities, performance, and project convention compliance. Report findings using CRITICAL/WARNING/SUGGESTION/NOTE severity levels.
    >
    > End your report with a `## Workflow Friction` section listing anything that made this review harder than it should have been — missing context, ambiguous spec, undocumented convention, tooling gaps — or the single word `none` if nothing applied.
-3. **Gate on zero CRITICAL findings.** If any CRITICAL issues are found:
-   - Fix each CRITICAL issue
+3. **Gate on zero CRITICAL and zero WARNING findings.** If any CRITICAL or WARNING issues are found:
+   - Fix each CRITICAL and WARNING issue
    - Re-run `/phoe:verify`
    - Re-run acceptance criteria evaluation (Step 10)
    - Re-invoke the code reviewer (repeat this step)
-4. **WARNING findings** are included in the final report for user review but do not block the commit.
+4. **WARNING is a blocking tier alongside CRITICAL.** If you judge a WARNING to be a false positive or genuinely out of scope, do not silently proceed — surface it to the user with your reasoning and let them waive it. Record any waived WARNING in the final report; never ship one unaddressed.
 5. **SUGGESTION and NOTE findings** are omitted from the report unless particularly insightful.
 
 ## 12. Adversarial Review — Required Before PR
@@ -275,7 +275,7 @@ Launch `invoke-code-reviewer` as a fresh subagent with the prompt:
 >
 > End your report with a `## Workflow Friction` section listing anything that made this review harder than it should have been — missing context, ambiguous spec, undocumented convention, tooling gaps — or the single word `none` if nothing applied.
 
-**Gate on zero CRITICAL adversarial findings.** Treat them the same as Step 11: fix, re-run `/phoe:verify`, re-run acceptance criteria evaluation, then re-run **both** the standard and adversarial reviews until both pass. Include any WARNING findings in the final report alongside the standard-review WARNINGs.
+**Gate on zero CRITICAL and zero WARNING adversarial findings.** Treat them the same as Step 11: fix every CRITICAL and WARNING, re-run `/phoe:verify`, re-run acceptance criteria evaluation, then re-run **both** the standard and adversarial reviews until both pass. As in Step 11, a WARNING you judge a false positive or out of scope must be surfaced to the user for an explicit waive — never silently dropped — and any waived WARNING recorded in the final report.
 
 ## 13. Commit Changes
 
