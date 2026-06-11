@@ -431,7 +431,18 @@ If you would not, looking at the name in isolation, guess it was specific to the
 ask before committing. Do not unilaterally place it module-local just because that's where
 the first consumer lives.
 
-### 8. File-Format Identifiers
+### 8. Reuse Before Reimplementation
+
+Don't hand-roll common algorithms or boilerplate at call sites — string split/trim/case
+mapping, hashing, byte packing, alignment/clamp/lerp math, ad-hoc linear searches, scratch
+buffers, path manipulation. Check for a proven implementation first: the standard library
+(via `Std`), `Core` (Structures, IO, Identity, …), or the owning module's existing helpers.
+If none exists and the need recurs (or plausibly will), extract a named helper into the
+appropriate shared library (placement per §7) instead of inlining another copy — one proven
+implementation, many call sites. Implementation sites for proprietary structures should read
+as domain logic, not algorithm plumbing.
+
+### 9. File-Format Identifiers
 
 On-disk file-format magic numbers are 8 ASCII characters packed little-endian into a
 `uint64_t`, structured as a **3-letter system prefix + 5-letter structure name**:

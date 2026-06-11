@@ -119,6 +119,11 @@ you know where to look.
     to Nit.
   - **`static_cast` proliferation** — 3+ in one function/file is a type-design smell, not a
     per-cast finding. Report it; the fix is reshaping the types, not deleting the casts.
+  - **Ad-hoc boilerplate** — a common algorithm or utility reimplemented at a call site
+    (string split/trim, hashing, byte packing, clamp/lerp math, scratch buffers, path
+    manipulation) where a `Std`/`Core`/module helper exists or should. Challenge it: cite
+    the existing helper, or recommend extracting one so proprietary-structure implementation
+    sites stay domain logic. See style-guide.md §Reuse Before Reimplementation.
   - Comments: decorative banners, temporal narration, stale references (file paths, line
     numbers, commit hashes, PR #, Crucible labels), stacked `//` paragraphs, what-comments
     over self-documenting code, public-API header declarations without a purpose comment,
@@ -191,8 +196,10 @@ Partition findings into three buckets:
 - **Report-only.** Architectural violations needing cross-file refactors (cross-module
   object handoff, a subsystem that should be collapsed, a singleton that needs to become a
   subsystem, a `static_cast` cluster signalling type rework, a `std::filesystem` call site
-  that needs `IO::*` extended). Do not attempt these; report and say *extend the wrapper*
-  when that's the right call.
+  that needs `IO::*` extended, an ad-hoc boilerplate cluster needing a shared helper
+  extracted). Do not attempt these; report and say *extend the wrapper* / *extract the
+  helper* when that's the right call. Swapping a hand-rolled snippet for an existing
+  one-call helper is judgment-required, not mechanical — behavior equivalence needs eyes.
 
 Behavior by flag:
 
