@@ -618,8 +618,8 @@ Before submitting build changes:
 
 - `invoke-lint-agent` - IWYU analysis and include/module-import optimization to reduce build times
 - `invoke-platform-agent` - Linux and Windows platform-specific build and development issues
-- `references/style-guide.md` - Authoritative code style and design guide
-- `references/tooling.md` - Formatter/linter tool configuration
+- `${CLAUDE_PLUGIN_ROOT}/references/style-guide.md` - Authoritative code style and design guide
+- `${CLAUDE_PLUGIN_ROOT}/references/tooling.md` - Formatter/linter tool configuration
 
 ## Resources
 

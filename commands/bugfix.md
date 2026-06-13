@@ -44,10 +44,10 @@ git rev-parse --verify bug/<LABEL> 2>/dev/null \
   && echo "branch tip is ancestor of main"
 ```
 
-3. If either signal fires, show the user the matching commit(s) and ask whether to mark the bug done. **Never auto-mark.** On confirmation:
+3. If either signal fires, show the user the matching commit(s) and ask whether to mark the bug merged. **Never auto-mark.** On confirmation:
 
 ```bash
-build-crucible-release/bin/crucible bug move --label=<LABEL> done
+build-crucible-release/bin/crucible bug move --label=<LABEL> merged
 ```
 
 4. If a review bug shows no merge evidence, leave it in `review`.
@@ -105,10 +105,10 @@ CRUCIBLE="$(git rev-parse --path-format=absolute --git-common-dir | xargs dirnam
 
 All subsequent `build-crucible-release/bin/crucible <args>` snippets in this document assume you've derived `$CRUCIBLE` first — substitute `"$CRUCIBLE" <args>` when running them from inside the worktree.
 
-## 5. Move to In Progress
+## 5. Move to Active
 
 ```bash
-build-crucible-release/bin/crucible bug move --label=<LABEL> implementing
+build-crucible-release/bin/crucible bug move --label=<LABEL> active
 ```
 
 ## 6. Reproduce
@@ -152,11 +152,11 @@ If diagnosis is consuming significant context, write a checkpoint before impleme
 
 ## 8. Fix
 
-Implement the fix. Follow the project's normal development workflow — write code, follow conventions from CLAUDE.md. **Before writing any C++**, read `references/style-guide.md` and `references/tooling.md` so the fix conforms to the enforced conventions (formatting, naming, comments, namespaces, return-value handling, `auto`, scope spacing, tooling).
+Implement the fix. Follow the project's normal development workflow — write code, follow conventions from CLAUDE.md. **Before writing any C++**, read `${CLAUDE_PLUGIN_ROOT}/references/style-guide.md` and `${CLAUDE_PLUGIN_ROOT}/references/tooling.md` so the fix conforms to the enforced conventions (formatting, naming, comments, namespaces, return-value handling, `auto`, scope spacing, tooling).
 
-Comments: default to none. Prefer one line; two or three for the genuinely complex. *Why*, not *what*. Paragraphs belong in the commit message. Full rules in `references/style-guide.md` §Comments.
+Comments: default to none. Prefer one line; two or three for the genuinely complex. *Why*, not *what*. Paragraphs belong in the commit message. Full rules in `${CLAUDE_PLUGIN_ROOT}/references/style-guide.md` §Comments.
 
-When emplacing TODO comments during the fix, follow the discipline in `references/style-guide.md` (TODO Comments section): keep them to one line, describe the work itself, never embed file paths, line numbers, bug labels, PR numbers, branch names, or dates (anything that can go stale), and never leave a TODO that narrates the change you just made.
+When emplacing TODO comments during the fix, follow the discipline in `${CLAUDE_PLUGIN_ROOT}/references/style-guide.md` (TODO Comments section): keep them to one line, describe the work itself, never embed file paths, line numbers, bug labels, PR numbers, branch names, or dates (anything that can go stale), and never leave a TODO that narrates the change you just made.
 
 ### Regression Test Evaluation
 
@@ -267,14 +267,14 @@ Tell the user:
 - Verification results (all passing, reproduction steps no longer trigger)
 - Branch name: `bug/<label>`
 - Pull request URL (if pushed) or "branch left local; not pushed"
-- The bug is now in `review` status — user inspects before marking done
+- The bug is now in `review` status — user inspects before marking merged
 
-**Do not merge or mark as done.** The user will review and decide.
+**Do not mark the bug merged.** The user will review and decide.
 
-After the PR lands on remote main, mark the bug done:
+After the PR lands on remote main, mark the bug merged:
 
 ```bash
-build-crucible-release/bin/crucible bug move --label=<LABEL> done
+build-crucible-release/bin/crucible bug move --label=<LABEL> merged
 ```
 
-> **Note:** When the user moves a bug to `done`, it is automatically archived in the server's data dir. If work needs to be revisited, use `build-crucible-release/bin/crucible bug unarchive --label=<LABEL>` to restore it to `todo` status.
+> **Note:** When the user moves a bug to `merged`, it is automatically archived in the server's data dir. If work needs to be revisited, use `build-crucible-release/bin/crucible bug unarchive --label=<LABEL>` to restore it to `todo` status.

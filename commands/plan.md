@@ -73,7 +73,7 @@ Draft a saga and break the work into commit-sized, ordered Challenges.
 - **Acceptance criteria** — what "done" looks like
 - **Strategy** — ordered implementation steps: patterns to follow (with file paths), functions/classes to extend, specific constraints, and step-by-step approach. Think of this as briefing a capable engineer who cannot ask questions. When creating challenges intended for `/phoe:execute`, the strategy must be thorough enough for fully autonomous implementation.
 - **Verification steps** — describe the **intent** of each verification in plain language, not the literal shell command. Write "build the editor in debug", "run the LayoutSorter tests", "confirm Aurora emits a resize event on window shrink" — never `cmake --build build-clang/ -j24` or `ctest --test-dir build/ -R Foo`. The implementing agent resolves intent to the current invocation (Forge profiles, env-suffixed dirs, etc.), so literal commands go stale the moment the build system shifts.
-- **Affected files** — files likely to be touched
+- **Affected files** — files likely to be touched. State in the challenge that this list is a **hint, not a contract**: reviewers treat it as advisory, and the clean realization often adds new helper files or touches siblings the list did not predict. Use it to point, not to fence.
 - **References** — related docs, issues, or prior work
 
 **Co-specified header/compile pairs.** When a challenge both drops a declaration from a header
@@ -83,6 +83,25 @@ were likely leaning on that header to pull a symbol in indirectly, so the accept
 state where they get it now — their own direct include, or another header. Spelling this out saves
 the iteration where the implementer drops the header, breaks a transitive include, and rediscovers
 the coupling at verify time.
+
+**Mandatory cross-file couplings.** Beyond `affected_files`, name any wiring the work cannot compile
+or run without — these are the recurring "first build fails" misses: a new `Phoenix.Core` partition
+is invisible until re-exported from the `Phoenix.Core.cppm` aggregator (`export import :X;`); a new
+pipeline stage / registration usually must be added in two places (a runtime registry list AND a
+manifest/entry-points file); a dockable Editor panel needs `EditorUI.{h,cpp}` wiring; a
+glob-discovered new trial file needs a `forge configure` re-run before the build sees it.
+
+**Phoenix placement: Mirage GPU/inference code lives in VulkanBackend, not Mirage.** When
+decomposing Mirage rendering/inference work, GPU passes, inference kernels, and their trials must be
+specced under `Rendering::VulkanBackend` (free functions + trials), NOT `Rendering/Mirage` —
+`Mirage` does not depend on `VulkanBackend`, so GPU code placed there will not link. (`Mirage` is
+already in VulkanBackend's `requires_test_module`, so an e2e trial linking both needs no manifest
+edit.)
+
+**Never name a forbidden third-party library in a spec.** Phoenix uses zero third-party libraries
+(no zstd/zlib, no JSON libs, no scikit-learn/scikit-image, no torch in engine code, etc.); only OS
+deps (X11/ALSA/Vulkan) are allowed. A spec must not instruct the implementer to pull one in — spec
+the pure in-tree approach (e.g. a hand-rolled k-means / connected-components) instead.
 
 Challenges must be:
 - **Commit-sized** — completable in a single focused session
@@ -146,10 +165,14 @@ build-crucible-release/bin/crucible challenge create --title="<TITLE>" --descrip
 build-crucible-release/bin/crucible challenge move --label=<LABEL> todo
 ```
 
-**Create a new saga** (if not extending):
+**Create a new saga** (if not extending). `--challenges=...` is **silently ignored** on
+`saga create`, so create the saga first, then attach each challenge with `saga add`:
 
 ```bash
-build-crucible-release/bin/crucible saga create --title="<TITLE>" --description="<DESC>" --challenges="label1|label2|..." --label="<OPTIONAL_LABEL>"
+build-crucible-release/bin/crucible saga create --title="<TITLE>" --description="<DESC>" --label="<OPTIONAL_LABEL>"
+for LBL in label1 label2 ...; do
+  build-crucible-release/bin/crucible saga add <SAGA_LABEL> "$LBL"
+done
 ```
 
 **Extend an existing saga** (if `<saga_label>` was provided):

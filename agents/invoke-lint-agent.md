@@ -24,7 +24,10 @@ do them in order: lint first, then includes.
 ### Workflow
 
 1. **Verify the file exists** and is a C++ source file (`.cpp`, `.cc`, `.cxx`, `.c`)
-2. **Ensure compilation database exists** — check for `build/compile_commands.json`
+2. **Ensure a compilation database exists** — reuse the Forge profile's at
+   `build-<profile>/compile_commands.json` (e.g. `build-editor-debug/`), never bare `build/`. A
+   bare `Tools/tidy.py --compdb` configures `build/` with the system default compiler (GCC on
+   Linux) and hard-fails Phoenix's Clang-only CMake gate, leaving a broken `build/` behind.
 3. **Run clang-tidy** on the specified file(s)
 4. **Parse and explain** any warnings or errors found
 5. **Provide fix suggestions** with before/after code examples
@@ -32,14 +35,16 @@ do them in order: lint first, then includes.
 ### Quick Commands
 
 ```bash
-# Ensure compilation database exists
-python3 Tools/tidy.py --compdb
+# Reuse the Forge profile's compile DB (auto-detect the first build-*/ that has one).
+COMPDB_DIR=$(for d in build-*/; do [ -f "$d/compile_commands.json" ] && echo "${d%/}" && break; done)
+# If none exists yet, regenerate with Clang pinned (a bare --compdb picks GCC and hard-fails):
+#   CC=clang CXX=clang++ python3 Tools/tidy.py --compdb
 
 # Run clang-tidy on a specific file
-python3 Tools/tidy.py --files=branch --filter '*OtherFiles*'
+python3 Tools/tidy.py ${COMPDB_DIR:+-p "$COMPDB_DIR"} --files=branch --filter '*OtherFiles*'
 
-# Or run clang-tidy directly
-clang-tidy -p build path/to/file.cpp
+# Or run clang-tidy directly against the profile dir
+clang-tidy -p "$COMPDB_DIR" path/to/file.cpp
 ```
 
 ### Common Issue Categories

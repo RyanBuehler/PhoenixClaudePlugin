@@ -11,8 +11,8 @@ You are a world-class SDET with deep expertise in C++ testing, test architecture
 
 ## Project Style
 
-Before writing or modifying any C++ in this repository, read `references/style-guide.md` and
-`references/tooling.md`. They define the enforced conventions for formatting, naming,
+Before writing or modifying any C++ in this repository, read `${CLAUDE_PLUGIN_ROOT}/references/style-guide.md` and
+`${CLAUDE_PLUGIN_ROOT}/references/tooling.md`. They define the enforced conventions for formatting, naming,
 comments, namespaces, return-value handling, `auto` usage, blank lines after closing braces,
 and the formatting/lint toolchain. Code that violates them will fail review.
 

@@ -16,9 +16,8 @@ throughout (captured at `gh pr create` time in `/phoe:implement` Step 16 and
 - **`/phoe:implement`** -- run after Step 16, once, against the PR #<N> just opened.
 - **`/phoe:execute`** -- run after Step 6, against every `PR #<N>` opened this
   run. Multiple PRs: watch collectively (see "Multiple PRs" below).
-- **Skip ONLY when:** push declined (no PR), `gh pr checks <URL>` already all
-  green at push time, or user explicitly disabled the watch. Anything else --
-  run the watch.
+- **Skip ONLY when:** push declined (no PR), CI already all green at push time,
+  or user explicitly disabled the watch. Anything else -- run the watch.
 
 ## Loop budget
 
@@ -30,7 +29,7 @@ throughout (captured at `gh pr create` time in `/phoe:implement` Step 16 and
 
 The 270-second figure is deliberate: it sits just inside the 5-minute prompt
 cache TTL, so each iteration replays the conversation cached. **Do not extend
-past 270.** If `gh pr checks` is slow, run it inline -- do not pad the sleep
+past 270.** If the check is slow, run it inline -- do not pad the sleep
 to compensate.
 
 ## Sleep mechanics
@@ -47,24 +46,31 @@ block per iteration.
 
 ## Per-iteration check
 
-Use the JSON form so parsing is reliable:
+The session's token often lacks `checks:read`, so `gh pr checks` / `statusCheckRollup` return
+`Resource not accessible by personal access token` (the PR shows UNSTABLE). Use the **Actions runs
+API**, which the token *can* read. Resolve the PR's head branch once, then list its workflow runs:
 
 ```bash
-gh pr checks <PR_URL> --json name,state,conclusion
+BRANCH=$(gh pr view <PR_URL> --json headRefName -q .headRefName)
+gh run list --branch "$BRANCH" --json databaseId,name,status,conclusion --limit 20
 ```
 
-Classify each check:
+Classify each run:
 
-- **passed** -- `state == "COMPLETED"` and `conclusion == "SUCCESS"`
-- **failed** -- `state == "COMPLETED"` and `conclusion` is one of `FAILURE`,
-  `CANCELLED`, `TIMED_OUT`, `ACTION_REQUIRED`
-- **pending** -- everything else (`QUEUED`, `IN_PROGRESS`, `PENDING`, etc.)
+- **passed** -- `status == "completed"` and `conclusion == "success"`
+- **failed** -- `status == "completed"` and `conclusion` is one of `failure`,
+  `cancelled`, `timed_out`, `action_required`
+- **pending** -- everything else (`queued`, `in_progress`, `requested`, etc.)
 
 Roll up to a single PR-level state:
 
-- **READY** -- every required check passed.
-- **FAILED** -- at least one required check failed.
+- **READY** -- every run completed and passed.
+- **FAILED** -- at least one run failed. Pull the failing log without a re-run via
+  `gh run view <databaseId> --log-failed`.
 - **PENDING** -- otherwise.
+
+(If `gh pr checks` happens to work in your environment — a token *with* `checks:read` — it is a
+fine shortcut, but never depend on it; the `gh run` path is the reliable one here.)
 
 ## Flashy messages
 
@@ -129,14 +135,15 @@ PR: <URL>
 ## CI Watch -- PR #<N> -- watch expired after 3 snoozes
 
 Last status: <comma-separated pending check names>
-Reconnect manually: gh pr checks <URL>
+Reconnect manually: gh run list --branch <branch>
 ```
 
 ## Multiple PRs (`/phoe:execute`)
 
 When a run opens more than one PR, watch them collectively in a single loop:
 
-1. On each iteration, run `gh pr checks` against every PR.
+1. On each iteration, run the per-iteration check (resolve each PR's branch, then
+   `gh run list --branch "$BRANCH"`) against every PR.
 2. Roll up to a wave-level state:
    - **ANY READY** -- at least one PR has all checks passed. Exit the watch
      and emit the READY message naming which PRs are ready (so the user can

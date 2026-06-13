@@ -204,14 +204,14 @@ For each challenge in the wave:
    git worktree add .claude/worktrees/challenge-<label> -b challenge/<label> <base-ref>
    ```
    where `<base-ref>` is `origin/main`, `main`, or `challenge/<predecessor-label>` per the rule above.
-4. Move to implementing (run from the main repo root so the crucible binary resolves):
+4. Move to active (run from the main repo root so the crucible binary resolves):
    ```bash
-   build-crucible-release/bin/crucible challenge move --label=<LABEL> implementing
+   build-crucible-release/bin/crucible challenge move --label=<LABEL> active
    ```
 
 For challenges using the **combined branch** strategy (per the rule above), do NOT create a
 new worktree — reuse the existing combined worktree. Skip the `git worktree add` step and
-instead `cd` into the existing worktree. Move the challenge to `implementing` as normal.
+instead `cd` into the existing worktree. Move the challenge to `active` as normal.
 
 Each fresh worktree is an independent checkout; local `main` is never written by `/phoe:execute` —
 all work stays on the challenge branch through 4h (see 4d).
@@ -220,7 +220,35 @@ all work stays on the challenge branch through 4h (see 4d).
 
 ### 4b. Implement (parallel within wave)
 
-Dispatch one implementer subagent per challenge. Set the subagent `cwd` to `.claude/worktrees/challenge-<label>`. For multi-challenge waves, also pass `isolation: "worktree"` so each subagent operates in its own worktree checkout.
+Dispatch one implementer subagent per challenge; each works in the worktree pre-created for it in
+4a. Its prompt's Step 1 commands run there.
+
+**The Agent tool has no `cwd` parameter** — a subagent inherits the orchestrator's working
+directory. To place an implementer in its worktree, the orchestrator calls
+`EnterWorktree(path=".claude/worktrees/challenge-<label>")` (combined branch: the shared worktree)
+*before* dispatching, so the subagent inherits that cwd.
+
+**Background-session write-guard.** When `/phoe:execute` runs as a background session, Claude
+Code's isolation guard rejects `Write`/`Edit` in any worktree the parent session has not isolated
+into ("parent bg session hasn't isolated yet") — the implementer can `cd` and build via Bash but
+cannot use the native file tools. The `EnterWorktree(path=...)` above also satisfies this guard,
+so do it before dispatching the wave's first implementer. If a subagent still reports it cannot
+Write/Edit, tell it (in the prompt) to author files via Bash — single-quoted heredocs for new
+files, `python` exact-string replace with an `assert count == 1` for edits — which the guard does
+not intercept.
+
+**Never pass `isolation: "worktree"` to implementer subagents.** The branch and worktree already
+exist (4a); `isolation: "worktree"` spawns a *fresh, auto-named* worktree off `main`, so the
+subagent ignores the prepared `challenge/<label>` branch and, on stacked/combined work, abandons
+its accumulated commits. Use the default **general-purpose** agent. (The specialist `phoe:invoke-*`
+agents carry `isolation: worktree` intrinsically and self-isolate off `main` — don't use them for
+stacked implementer work; if one was, recover the commit by fast-forwarding its `agent-<hash>`
+branch.)
+
+For a parallel wave of independent worktrees, enter-and-dispatch one worktree at a time (the
+orchestrator occupies a single cwd); within each, the implementer addresses files by absolute
+worktree path. Combining is never used for parallel work (4a), so each parallel implementer is its
+own dispatch.
 
 **Implementer subagent prompt template:**
 
@@ -255,7 +283,7 @@ Description: <description>
 
 ## Your Job
 
-1. **Populate the worktree's build dir.** Your `cwd` is a fresh git worktree with no `build-editor-*/` directory yet. Run `/phoe:build` once as your first action — Forge will configure and build via the active profile. Do this before exploring: you'll want the compilation database present so `grep`/`Read`-based exploration works correctly on modules that use C++23 modules, and so your later `/phoe:verify` run is an incremental build, not a cold one.
+1. **Populate the worktree's build dir (FOREGROUND).** Your `cwd` is a fresh git worktree with no `build-editor-*/` directory yet. Build once as your first action — Forge configures and builds via the active profile. Run the build in the **foreground** and wait for it to finish in this same turn; do NOT launch it in the background and yield your turn waiting for a completion notification — that strands you with edits unverified and uncommitted. If a build helper would background itself, run the underlying build command directly in the foreground. Do this before exploring: you'll want the compilation database present so `grep`/`Read`-based exploration works correctly on modules that use C++23 modules, and so your later `/phoe:verify` run is an incremental build, not a cold one.
 2. Read the affected files and explore related Phoenix code to understand the context. **Ground your approach in Phoenix's own patterns** — if the challenge touches UI, read Mosaic/Tessera/Emblema code; if it touches input, read Impulse; if it touches the renderer, read Aurora/Prism/Vulkan code. Do NOT generalize from external frameworks (ImGui, Qt, React, etc.) or from memory of how similar problems are solved elsewhere — that frequently ships wrong assumptions into the diff. When in doubt, grep for analogous existing features and mirror their shape.
 3. Follow the strategy steps (if provided) or plan your own approach based on what you read in step 2
 4. Implement the changes
@@ -289,11 +317,16 @@ Description: <description>
   cannot state the posture, downgrade the wording to "deterministic under <posture>" or
   "best-effort reproducible". Bit-exact across BLAS-threaded numerics or an unpinned
   compression library is false by default, even on a single host.
-- Follow the project's coding conventions (CLAUDE.md) — **and before writing any C++, read `references/style-guide.md` and `references/tooling.md`** so the implementation conforms to enforced conventions (formatting, naming, comments, namespaces, return-value handling, `auto`, scope spacing, tooling)
+- Follow the project's coding conventions (CLAUDE.md) — **and before writing any C++, read `${CLAUDE_PLUGIN_ROOT}/references/style-guide.md` and `${CLAUDE_PLUGIN_ROOT}/references/tooling.md`** so the implementation conforms to enforced conventions (formatting, naming, comments, namespaces, return-value handling, `auto`, scope spacing, tooling). `${CLAUDE_PLUGIN_ROOT}` is the plugin install path — `cat` these via Bash so the shell expands the variable; if it is unset, use `~/phoenixclaudeplugin/references/`
 - Use plain ASCII only -- no unicode characters
+- **Do not yield your turn until committed + reported.** Run builds and tests in the FOREGROUND; ending your turn with edits unverified or uncommitted (e.g. waiting on a backgrounded build) strands the work and the orchestrator cannot resume you mid-task.
+- **Use worktree-absolute paths.** The paths in your prompt/context use the main-repo form (`/home/ryan/phoenix/...`), but the files you must edit live under the worktree prefix (`.claude/worktrees/challenge-<label>/...`). Reading the main-repo path can serve stale content, and a later `Edit` then fails "File has not been read yet" — read and edit the worktree copy.
+- **This shell is zsh.** Quote `grep --include` globs (`'*.cpp'`, not `*.cpp`) and do not rely on unquoted `$VAR` word-splitting — pass file lists literally or use arrays. An unquoted multi-file variable collapses to a single argument and silently checks nothing.
+- **Numeric safety.** Any clamp / `min` / `max` over a caller-supplied float must guard with `isfinite`/`isnan` FIRST — `std::clamp`/`min`/`max` pass NaN straight through into casts and persisted state. This is a recurring CRITICAL class the adversarial reviewer keeps catching.
+- **Byte/format-parser safety.** Bound every allocation and element count by the actual payload/blob size BEFORE any `reserve`/`resize`/multiply; a hostile count field otherwise drives a multi-GB reserve or a `length_error`/terminate (Phoenix bans exceptions). Add an adversarial regression trial with inflated counts — the happy-path round-trip cannot catch this.
 - Use full descriptive variable names -- no abbreviations
 - Prefer sized integer types (int32_t, uint64_t) over platform-dependent types
-- Comments: default to none. Prefer one line; two or three for the genuinely complex. *Why*, not *what*. Paragraphs belong in the commit message. Full rules in `references/style-guide.md` §Comments.
+- Comments: default to none. Prefer one line; two or three for the genuinely complex. *Why*, not *what*. Paragraphs belong in the commit message. Full rules in `${CLAUDE_PLUGIN_ROOT}/references/style-guide.md` §Comments.
 - TODO comments must follow the discipline in the plugin's CLAUDE.md "TODO Comments" section:
   short, describe the work itself, never reference anything that can go stale (file paths, line
   numbers, challenge labels, PR numbers, branch names, dates), and never narrate refactors you
@@ -404,6 +437,8 @@ For each completed challenge, working inside its worktree (`.claude/worktrees/ch
 ### 4e. Review (spec + quality + adversarial in parallel per challenge)
 
 Process challenges in ID order. For each challenge, dispatch all three reviewers simultaneously (they are read-only, so parallel dispatch is safe), wait for all to return, then move to the next challenge. Reviewers diff the challenge branch against its upstream base with three-dot range `origin/main...HEAD` (use `main...HEAD` when origin is unreachable) — this captures the full PR diff regardless of how many commits the branch carries, and never depends on local `main`.
+
+**A reviewer that returns with zero tool uses and no verdict is a failed dispatch, not a pass.** Reviewers occasionally terminate early (no `git diff` run, no per-criterion table). Detect this — an empty or verdict-less return — and re-dispatch that reviewer once with the same prompt; never treat an empty review as a clean gate.
 
 The adversarial reviewer is a **mandatory pre-PR gate** — no challenge advances to 4h without it. The standard quality reviewer asks "is this code well-formed?"; the adversarial reviewer asks "how does this break?". Both are required because they catch different failure modes, and `/phoe:execute` ships PRs without human judgment in the loop, so the adversarial pass is the last line of defense before the diff lands on `origin`.
 

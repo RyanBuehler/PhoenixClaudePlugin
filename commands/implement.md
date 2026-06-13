@@ -71,7 +71,7 @@ build-crucible-release/bin/crucible --json challenge list --status=todo
 
 3. Pick the best challenge using this priority order:
    - **Saga ordering first** — if a challenge belongs to a saga, only pick it if all earlier challenges in that saga are `merged` or `canceled`. Never skip ahead in a saga's ordering.
-   - **Blocked check** — if a saga predecessor is in `review` or `implementing` (not yet merged), the next challenge cannot proceed. Move it to `blocked` and stop:
+   - **Blocked check** — if a saga predecessor is in `review` or `active` (not yet merged), the next challenge cannot proceed. Move it to `blocked` and stop:
      ```bash
      build-crucible-release/bin/crucible challenge block <NEXT_ID> --blocked_by=<PREDECESSOR_ID> --reason="Awaiting merge of #<PREDECESSOR_ID> on branch challenge/<predecessor-label>"
      ```
@@ -153,10 +153,10 @@ CRUCIBLE="$(git rev-parse --path-format=absolute --git-common-dir | xargs dirnam
 
 All subsequent `build-crucible-release/bin/crucible <args>` snippets in this document assume you've derived `$CRUCIBLE` first — substitute `"$CRUCIBLE" <args>` when running them from inside the worktree.
 
-## 6. Move to Implementing
+## 6. Move to Active
 
 ```bash
-build-crucible-release/bin/crucible challenge move --label=<LABEL> implementing
+build-crucible-release/bin/crucible challenge move --label=<LABEL> active
 ```
 
 ## 7. Explore and Understand
@@ -190,11 +190,11 @@ If this challenge is complex (multiple modules, many affected files, or extensiv
 
 ## 8. Plan and Implement
 
-Enter plan mode, create an implementation plan, then execute it. Follow the project's normal development workflow — write code, follow conventions from CLAUDE.md. **Before writing any C++**, read `references/style-guide.md` and `references/tooling.md` so the implementation conforms to the enforced conventions (formatting, naming, comments, namespaces, return-value handling, `auto`, scope spacing, tooling). If the challenge has a `strategy` field, use it as a starting point for the implementation plan.
+Enter plan mode, create an implementation plan, then execute it. Follow the project's normal development workflow — write code, follow conventions from CLAUDE.md. **Before writing any C++**, read `${CLAUDE_PLUGIN_ROOT}/references/style-guide.md` and `${CLAUDE_PLUGIN_ROOT}/references/tooling.md` so the implementation conforms to the enforced conventions (formatting, naming, comments, namespaces, return-value handling, `auto`, scope spacing, tooling). `${CLAUDE_PLUGIN_ROOT}` is the plugin install path — `cat` these via Bash so the shell expands the variable; if it is unset, use `~/phoenixclaudeplugin/references/`. If the challenge has a `strategy` field, use it as a starting point for the implementation plan.
 
-Comments: default to none. Prefer one line; two or three for the genuinely complex. *Why*, not *what*. Paragraphs belong in the commit message. Full rules in `references/style-guide.md` §Comments.
+Comments: default to none. Prefer one line; two or three for the genuinely complex. *Why*, not *what*. Paragraphs belong in the commit message. Full rules in `${CLAUDE_PLUGIN_ROOT}/references/style-guide.md` §Comments.
 
-When emplacing TODO comments during implementation, follow the discipline in `references/style-guide.md` (TODO Comments section): keep them to one line, describe the work itself, never embed file paths, line numbers, challenge labels, PR numbers, branch names, or dates (anything that can go stale), and never leave a TODO that narrates the refactor or rename you just performed.
+When emplacing TODO comments during implementation, follow the discipline in `${CLAUDE_PLUGIN_ROOT}/references/style-guide.md` (TODO Comments section): keep them to one line, describe the work itself, never embed file paths, line numbers, challenge labels, PR numbers, branch names, or dates (anything that can go stale), and never leave a TODO that narrates the refactor or rename you just performed.
 
 ### Unit Test Coverage
 

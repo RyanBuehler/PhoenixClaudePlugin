@@ -203,9 +203,9 @@ Test labels are derived from `MODULE_CATEGORY`, a target property set automatica
 ## Code Guidelines
 
 For all code style and design practices — formatting, naming, language features, comments,
-TODOs, error handling, design practices — follow `references/style-guide.md`. For tooling
+TODOs, error handling, design practices — follow `${CLAUDE_PLUGIN_ROOT}/references/style-guide.md`. For tooling
 mechanics (formatter/linter configuration, commands, troubleshooting), see
-`references/tooling.md`.
+`${CLAUDE_PLUGIN_ROOT}/references/tooling.md`.
 
 After changing C/C++ code, run `python3 Tools/format.py --files=staged` to apply
 `clang-format`, then `python3 Tools/format.py --files=staged -error` to verify formatting.
@@ -221,7 +221,7 @@ reads from it.
 
 ## Comment Discipline
 
-Verbose comments are the dominant agent drift here. Full rules: `references/style-guide.md`
+Verbose comments are the dominant agent drift here. Full rules: `${CLAUDE_PLUGIN_ROOT}/references/style-guide.md`
 §Comments / §TODO Comments. The digest, always in force:
 
 - Default to no comment. Explain *why*, never *what*.
@@ -234,17 +234,19 @@ Verbose comments are the dominant agent drift here. Full rules: `references/styl
 ## Crucible Lifecycle Reference
 
 The plugin's Crucible workflows operate on three task types. Match status names exactly — the CLI
-rejects unknown statuses, and using the wrong terminal status (e.g. `merged` for a bug, `done` for
-a challenge) causes silent reconciliation failures across `/phoe:implement`, `/phoe:execute`, and
+rejects unknown statuses (`implementing` and `done` are both invalid), so a wrong status name
+causes silent reconciliation failures across `/phoe:implement`, `/phoe:execute`, and
 `/phoe:bugfix`.
 
-| Task type | Statuses (in order)                                              | Terminal |
-|-----------|------------------------------------------------------------------|----------|
-| Challenge | `todo` → `implementing` → `review` → `merged` (or `blocked`)     | `merged` |
-| Bug       | `todo` → `implementing` → `review` → `done`                      | `done`   |
-| Saga      | *(no status — tracks collective challenge progress)*             | n/a      |
+| Task type | Statuses (in order)                                          | Terminal |
+|-----------|--------------------------------------------------------------|----------|
+| Challenge | `todo` → `active` → `review` → `merged` (or `blocked`)       | `merged` |
+| Bug       | `todo` → `active` → `review` → `merged` (or `blocked`)       | `merged` |
+| Saga      | *(no status — tracks collective challenge progress)*         | n/a      |
 
-CLI shape is parallel — `crucible challenge move --label=<L> <status>` /
+The full valid set is identical for challenges and bugs: `backlog`, `todo`, `active`, `review`,
+`blocked`, `merged`, `canceled`. There is no `implementing` (use `active`) and no `done` (use
+`merged`). CLI shape is parallel — `crucible challenge move --label=<L> <status>` /
 `crucible bug move --label=<L> <status>`. When writing a workflow that accepts either, branch on
 type early and use the type-correct verbs throughout; do not paper over the difference.
 
