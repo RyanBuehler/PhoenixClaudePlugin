@@ -1,43 +1,43 @@
 ---
-description: Run the project's test suite using Forge. Delegates Forge-readiness to /phoe:build.
+description: Run the engine test suite via ForgePrototype. Delegates builder-readiness to /phoe:build.
 ---
 
-Run the full test suite using Forge.
+Run the engine test suite using ForgePrototype's in-process trial runner.
 
-## 1. Ensure Forge Is Ready
+## 1. Ensure the Builder Is Ready
 
-Run `/phoe:build forge`. This rebuilds Forge from scratch if it's missing or at the wrong version; it's a no-op otherwise. If `/phoe:build forge` stops with a version mismatch, stop here and report it to the user.
-
-## 2. Select Profile
-
-Detect the active profile from existing build directories. Only pick a profile whose `BuildProfiles/<profile>.json` has `tests_enabled: true` — otherwise `forge test` will fail. Fall back to the next candidate if the first pick has tests disabled.
-
-Candidates in priority order (first match with `tests_enabled: true` wins): `editor-debug`, `editor-release`. If none match, default to `editor-debug` and warn the user.
+The tests run through `forge-prototype`. Locate it (prefer the bootstrap output), bootstrapping if
+absent:
 
 ```bash
-select_test_profile() {
-  for candidate in editor-debug editor-release; do
-    [ -d "build-$candidate" ] || continue
-    enabled=$(python3 -c "import json,sys; print(json.load(open('BuildProfiles/$candidate.json')).get('tests_enabled', False))" 2>/dev/null)
-    if [ "$enabled" = "True" ]; then
-      echo "$candidate"
-      return
-    fi
+fp_bin() {
+  for c in Applications/ForgePrototype/.bootstrap-out/forge-prototype \
+           build-fp-debug/bin/forge-prototype build-fp-release/bin/forge-prototype; do
+    [ -x "$c" ] && { echo "$c"; return 0; }
   done
-  echo "editor-debug"
+  return 1
 }
-PROFILE=$(select_test_profile)
+FP=$(fp_bin) || { python3 Applications/ForgePrototype/Scripts/bootstrap.py && FP=$(fp_bin); }
 ```
 
-Note: `editor-release` currently has `tests_enabled: false`, so it will be skipped even if `build-editor-release` exists.
+If the engine hasn't been built yet, run `/phoe:build` first — the trial runner executes the
+binaries produced by a `configure` + `build` of the test profile.
 
-## 3. Test with Forge
+## 2. Profile
+
+Use `forge-builds-editor` — the Headless engine profile, which has tests enabled.
+`forge-builds-editor-release` has tests **disabled** and will not run trials.
+
+## 3. Test
 
 ```bash
-build-forge-release/bin/forge test "$PROFILE" --output-on-failure
+"$FP" test forge-builds-editor --output-on-failure
 ```
 
-If the build directory for the selected profile doesn't exist, tell the user to run `/phoe:build` first.
+On success the runner prints a single summary line (`Tests: PASSED (P/T, Xs)`); passing trials are
+not echoed. On failure it prints each failing trial's name and captured output. Narrow the run with
+`--name=<substring>` (alias `-R`) or `--label=<APP_TRIAL|CORE_TRIAL|PLUGIN_TRIAL|BENCHMARK_TRIAL>`
+when iterating on a single area.
 
 ## 4. Report
 

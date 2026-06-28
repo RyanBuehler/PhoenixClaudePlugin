@@ -21,7 +21,7 @@ design practice; agents and commands reference it before writing or reviewing co
 
 | Rule | Description |
 | --- | --- |
-| Column width | Limit lines to 120 characters. |
+| Column width | Limit lines to 150 characters (matches `.clang-format` `ColumnLimit`). |
 | Indentation | Use tabs configured to a width of four spaces. |
 | Brace style | Follow Allman braces (opening brace on its own line). |
 | Alignment | Align consecutive assignments and trailing comments when practical. |
@@ -111,8 +111,11 @@ member (`m_`) and pointer (`p`) prefixes before the descriptive name.
 
 ### Exceptions
 
-Forbidden. The keywords `try`, `catch`, `throw`, and `noexcept` do not appear in Phoenix
-source. Use `std::expected`, `std::optional`, or result types instead.
+Forbidden. The keywords `try`, `catch`, and `throw` do not appear in Phoenix source — use
+`std::expected`, `std::optional`, or result types instead. `noexcept` is likewise banned as a
+specifier, with two narrow exceptions required to compile: a coroutine's `final_suspend()` and
+`std::hash` specializations must be `noexcept`. A few `noexcept`-on-defaulted move operations
+remain as committed debt — remove those when you touch them; do not treat them as precedent.
 
 ### RTTI
 

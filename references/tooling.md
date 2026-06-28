@@ -67,7 +67,7 @@ indent_size = 2
 **Key Settings:**
 - Based on LLVM style with extensive customizations
 - **Tab-based indentation** (tab width: 4)
-- **Column limit: 120** (hard wrap)
+- **Column limit: 150** (hard wrap)
 - **Namespace indentation: All** (contents indented)
 - **Brace style: Custom Allman-like** (braces on own line for classes, functions, control statements)
 - **Pointer/reference alignment: Left** (`int* ptr`, not `int *ptr`)
@@ -151,7 +151,7 @@ indent_size = 2
 
 **Code Style (`.idea/codeStyles/Project.xml`):**
 - Tab-based indentation across C++, CMake, JSON, Python
-- Wrap limit: 160 (looser than clang-format's 120 for IDE comfort)
+- Wrap limit: 160 (looser than clang-format's 150 for IDE comfort)
 - Aligns multiline arguments, parameters, extends lists
 - Namespace indentation: All
 - Brace style: End of line (differs from clang-format - clang-format is authoritative)

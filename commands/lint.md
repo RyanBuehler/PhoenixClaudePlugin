@@ -1,30 +1,33 @@
 ---
-description: Run clang-tidy on changed files. Generates compilation database if needed.
+description: Run clang-tidy on changed files via ForgePrototype.
 ---
 
-Run clang-tidy on changed files, generating the compilation database first if missing.
+Run clang-tidy on branch-changed C++ files through ForgePrototype's `lint` command. It resolves the
+compilation context from the in-process build graph itself, so there's no separate compile-database
+step (the old `Tools/tidy.py --compdb` pitfall — a bare `build/` configured with the system GCC
+that hard-fails Phoenix's Clang-only gate — is gone).
 
-## 1. Check Compilation Database
-
-`Tools/tidy.py` needs a compile DB. **Reuse the Forge profile's** at
-`build-<profile>/compile_commands.json` (e.g. `build-editor-debug/`), never bare `build/`: a bare
-`Tools/tidy.py --compdb` configures a fresh `build/` with the system default compiler (GCC on
-Linux) and hard-fails Phoenix's Clang-only CMake gate. Auto-detect the profile dir:
+## 1. Locate the Builder
 
 ```bash
-COMPDB_DIR=$(for d in build-*/; do [ -f "$d/compile_commands.json" ] && echo "${d%/}" && break; done)
+fp_bin() {
+  for c in Applications/ForgePrototype/.bootstrap-out/forge-prototype \
+           build-fp-debug/bin/forge-prototype build-fp-release/bin/forge-prototype; do
+    [ -x "$c" ] && { echo "$c"; return 0; }
+  done
+  return 1
+}
+FP=$(fp_bin) || { python3 Applications/ForgePrototype/Scripts/bootstrap.py && FP=$(fp_bin); }
 ```
-
-If none exists yet, run `/phoe:build` first, or fall back to
-`CC=clang CXX=clang++ python3 Tools/tidy.py --compdb` so the regen uses Clang.
 
 ## 2. Lint
 
 ```bash
-python3 Tools/tidy.py ${COMPDB_DIR:+-p "$COMPDB_DIR"}
+"$FP" lint
 ```
 
-Test files (`*Trials.cpp`) may be skipped with `--filter '*Trials.cpp'` if the user requests.
+This lints the branch's changed surface (diff against `main`). Pass `--all` to lint the whole repo.
+If nothing changed, it reports "No files to process" — treat that as a clean pass.
 
 ## 3. Report
 

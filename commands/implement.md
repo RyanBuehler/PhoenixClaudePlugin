@@ -211,6 +211,8 @@ Tests are NOT required for:
 - Pure wiring or delegation (forwarding calls to already-tested functions)
 - Platform-specific code that can only be tested on the target platform's CI
 
+> **Subagent worktree isolation (applies to every dispatch below).** `invoke-test-engineer` and `invoke-code-reviewer` carry `isolation: worktree`, so the harness drops them in a *fresh* worktree branched from `main` — without this challenge's still-uncommitted changes, so they cannot read or build the code under review and resort to copying files in. Instead, dispatch this test/review work as a **general-purpose** subagent and pass it the absolute path of this challenge worktree (`.claude/worktrees/challenge-<label>`) so it operates on the real, uncommitted code in place. Keep the specialist prompts below verbatim — only the dispatch vehicle changes.
+
 When tests are applicable, launch `invoke-test-engineer` as a subagent to write them. Provide it with the implementation diff and the module context so it can place tests correctly and follow Trials conventions. **Ask it to end its report with a `## Workflow Friction` section** listing anything that made the task harder than it should have been — missing context, ambiguous spec, undocumented convention, tooling gaps — or the single word `none` if nothing applied. These notes are aggregated in Step 14.5.
 
 ## 9. Verification Gate
