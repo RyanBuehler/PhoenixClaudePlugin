@@ -530,11 +530,11 @@ A challenge cannot reach 4h (Publish) until all three reviewers have returned an
 For each successfully reviewed challenge:
 
 1. Move to review: `build-crucible-release/bin/crucible challenge move --label=<LABEL> review`
-2. **Propagate changes to follow-on saga siblings** -- if the challenge belongs to a saga, reconcile later siblings whose specs may have been invalidated by this implementation (e.g., a rename or API change in this challenge leaves a later sibling's `description`, `strategy`, `affected_files`, or `acceptance_criteria` referring to the old name).
-   1. `build-crucible-release/bin/crucible --json saga show --label=<SAGA_LABEL>` to list remaining todo + blocked siblings after this challenge's position.
-   2. For each later sibling, `build-crucible-release/bin/crucible --json challenge show --label=<SIBLING_LABEL>` and scan its text against the committed diff for stale references: renamed types / functions / files, changed signatures, moved modules, replaced concepts.
-   3. For each sibling with stale references, `build-crucible-release/bin/crucible challenge update --label=<SIBLING_LABEL> [--field=...]` (run `--help` for flags). Keep edits surgical -- update only stale references; do not rewrite scope.
-   4. Record sibling updates for the final report (which siblings, which fields). If a later sibling's scope is genuinely broken (not just a rename), do not rewrite it -- flag it as a blocked-follow-on in the report and let the user re-plan.
+2. **Reconcile follow-on siblings and docs** (pre-merge pass) -- this implementation may have invalidated later sibling specs *or* `docs/` design/spec files: a rename or API change leaving a sibling's `description`, `strategy`, `affected_files`, or `acceptance_criteria`, or a doc, referring to the old name. Do a best-effort pass now against the committed diff; the authoritative pass runs post-merge in Step 6.
+   1. `build-crucible-release/bin/crucible --json saga show --label=<SAGA_LABEL>` lists remaining todo + blocked siblings after this challenge's position. (Skip for orphans -- no siblings -- but still run the docs scan below.)
+   2. Scan each later sibling's text (`build-crucible-release/bin/crucible --json challenge show --label=<SIBLING_LABEL>`) **and** `docs/` design/spec files against the committed diff for stale references: renamed types / functions / files, changed signatures, moved modules, replaced concepts.
+   3. Fix each surgically -- `build-crucible-release/bin/crucible challenge update --label=<SIBLING_LABEL> [--field=...]` (run `--help` for flags) for sibling text; an in-place edit on this challenge's branch (rides the same PR) for docs. Update only stale references; do not rewrite scope.
+   4. Record sibling + doc updates for the final report (which siblings/docs, which fields). If a later sibling's scope is genuinely broken (not just a rename), do not rewrite it -- flag it as a blocked-follow-on in the report and let the user re-plan.
 
 **Blocked challenge policy:** Never revert branches or discard commits from blocked challenges. Partial work is valuable context for human resumption via `/phoe:implement <label>`. Always keep branches, commits, and checkpoint files intact.
 
@@ -689,7 +689,7 @@ Feedback logged to: .claude/SUBAGENT_FEEDBACK.md
 
 Include:
 - Saga progress updates for all affected sagas
-- Follow-on sibling updates per completed challenge (which siblings, which fields changed), and any flagged-as-broken follow-ons that need user re-planning
+- Reconciliation outcome (pre-merge pass, Step 4g.2): siblings + `docs/` scanned against each committed diff -- which siblings/docs were updated, any flagged-as-broken follow-ons that need user re-planning, or "none stale" (required -- a present line makes a skipped reconciliation visible). The authoritative post-merge pass runs later when each PR lands and reports its own outcome then.
 - Full explanation for each blocked challenge
 - Reference to checkpoint files and how to resume
 - Total stats (completed, blocked, skipped)
@@ -697,11 +697,13 @@ Include:
 - CI watch outcome per PR: READY / FAILED / expired / skipped (reason)
 - Reference to the feedback log
 
-After each PR lands on remote main, mark the corresponding challenge merged:
+After each PR lands on remote main, mark the corresponding challenge merged, then run the **end-of-cycle reconciliation** (the authoritative pass) against its merged diff. This fires whenever the merge is observed -- e.g. the next `/phoe:execute` Step 2, or interactively -- not inside the run that opened the PR:
 
 ```bash
 build-crucible-release/bin/crucible challenge move --label=<LABEL> merged
 ```
+
+Re-scan the merged diff against every remaining todo/blocked challenge (saga sibling or orphan) **and** `docs/` design/spec files for stale references the pre-merge pass (Step 4g.2) missed or that only the landed diff made certain. Fix challenge text in place with `crucible challenge update`. For stale docs, file a tracked docs-reconcile challenge (`/phoe:plan`) so the edit flows through the normal implement + CI-watch path rather than an untracked side PR -- the original challenge branch is gone post-merge. Flag genuinely scope-broken siblings as blocked for re-plan rather than rewriting them. Report this pass's outcome when it runs.
 
 ## 7. Watch CI — Required
 
