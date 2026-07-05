@@ -267,11 +267,11 @@ Tell the user:
 - Verification results (all passing, reproduction steps no longer trigger)
 - Branch name: `bug/<label>`
 - Pull request URL (if pushed) or "branch left local; not pushed"
-- The bug is now in `review` status — user inspects before marking merged
+- The bug is now in `review` status — user inspects before it lands
 
-**Do not mark the bug merged.** The user will review and decide.
+**Do not merge the PR yourself, and do not mark the bug `merged` before the merge has landed.** The user decides whether to merge, request changes, or close. The `review` → `merged` transition tracks reality; it must not run ahead of it.
 
-After the PR lands on remote main, mark the bug merged:
+But once the PR is confirmed merged into remote `main`, reconciling the tracking status *is* expected — a merged PR left in `review` is stale bookkeeping. Verify the landing first (PR `state` is `MERGED` **and** its merge commit is reachable from `origin/main`), then move it without waiting to be asked again:
 
 ```bash
 build-crucible-release/bin/crucible bug move --label=<LABEL> merged

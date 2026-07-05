@@ -408,11 +408,11 @@ Tell the user:
 - Reconciliation outcome (pre-merge pass, Step 15): siblings + `docs/` scanned against the committed diff — which were updated, or "none stale" (required — a present line makes a skipped reconciliation visible). The authoritative post-merge pass runs later when the PR lands and reports its own outcome then.
 - Pull request: **PR #<N>** + URL (or "branch left local; not pushed"). Always lead with `PR #<N>`.
 - CI watch outcome: READY / FAILED / expired / skipped (reason)
-- The challenge is now in `review` status — user inspects before marking merged
+- The challenge is now in `review` status — user inspects before it lands
 
-**Do not merge or mark as merged.** The user will review and decide whether to merge, request changes, or mark merged.
+**Do not merge the PR yourself, and do not mark the challenge `merged` before the merge has landed.** The user decides whether to merge, request changes, or close. The `review` → `merged` transition tracks reality; it must not run ahead of it.
 
-After the PR lands on remote main — typically observed on a later `/phoe:implement next` (Step 2) — mark the challenge merged, then run the **end-of-cycle reconciliation** (the authoritative pass) against the merged diff:
+But once the PR is confirmed merged into remote `main` — typically observed on a later `/phoe:implement next` (Step 2) — reconciling the tracking status *is* expected; a merged PR left in `review` is stale bookkeeping (and saga progress only counts `merged`). Verify the landing first (PR `state` is `MERGED` **and** its merge commit is reachable from `origin/main` — a retarget-miss can show `MERGED` without reaching main), then move it to `merged` and run the **end-of-cycle reconciliation** (the authoritative pass) against the merged diff:
 
 ```bash
 build-crucible-release/bin/crucible challenge move --label=<LABEL> merged
