@@ -72,6 +72,28 @@ Roll up to a single PR-level state:
 (If `gh pr checks` happens to work in your environment — a token *with* `checks:read` — it is a
 fine shortcut, but never depend on it; the `gh run` path is the reliable one here.)
 
+## On FAILED — one fix-and-retry attempt
+
+FAILED is not an immediate stop: the agent fixes it and re-runs CI **once**.
+Track a per-PR `ci_fix_attempts` (starts at 0), bounded to one cycle.
+
+**First FAILED (`ci_fix_attempts == 0`):** pull the logs (`gh run view
+<databaseId> --log-failed`), then fix on the challenge branch in its worktree
+(`.claude/worktrees/challenge-<label>`):
+
+- **`/phoe:implement`** — fix in the worktree, re-run `/phoe:verify`, commit
+  `Fix CI: …`, push.
+- **`/phoe:execute`** — dispatch a fix subagent (cwd = the failing PR's
+  worktree) with the log excerpt; it fixes, re-verifies, commits, pushes. One
+  PR at a time.
+
+Set `ci_fix_attempts = 1` and re-enter the watch from check 1/4. If the failure
+is unfixable by the agent (infra flake, unrelated `main` breakage, needs a human
+decision), skip the fix and treat it as terminal — do not spend the attempt.
+
+**Second FAILED (`ci_fix_attempts == 1`):** stop, emit the FAILED message, wait
+for the user. The retry is spent.
+
 ## Flashy messages
 
 Every iteration emits a **terminal bell** plus a clearly-formatted status
@@ -148,8 +170,9 @@ When a run opens more than one PR, watch them collectively in a single loop:
    - **ANY READY** -- at least one PR has all checks passed. Exit the watch
      and emit the READY message naming which PRs are ready (so the user can
      start merging).
-   - **ALL FAILED** -- every PR has at least one failed check. Exit and
-     report.
+   - **ALL FAILED** -- every PR has at least one failed check. Apply the one
+     fix-and-retry (see "On FAILED") per failing PR, then exit and report the PRs
+     still red.
    - **MIXED PENDING** -- otherwise. Snooze.
 3. The PENDING message lists per-PR status as a compact table:
 
@@ -170,7 +193,8 @@ start merging while the cache is warm, not wait for the slowest PR.
 
 ## Auto mode
 
-The watch is consistent with auto mode: it is a passive timer, not a
-question, and it does not require user input. It always runs after a
-successful PR push from `/phoe:implement` or `/phoe:execute` unless one of
-the skip conditions above applies.
+The watch is consistent with auto mode: it never asks the user a question. It
+always runs after a successful PR push from `/phoe:implement` or `/phoe:execute`
+unless a skip condition above applies. The single fix-and-retry on FAILED is
+likewise autonomous — only *after* the retry is spent (or the failure is
+unfixable) does it stop and hand back to the user.

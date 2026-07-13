@@ -707,4 +707,4 @@ Re-scan the merged diff against every remaining todo/blocked challenge (saga sib
 
 ## 7. Watch CI — Required
 
-Run the collective watch loop in `references/ci-watch.md` against every `PR #<N>` opened in Step 4h. Mandatory; skip only on the conditions listed in `ci-watch.md`. Fold each PR's outcome (READY / FAILED / expired / skipped) into the Step 6 report.
+Run the collective watch loop in `references/ci-watch.md` against every `PR #<N>` opened in Step 4h. Mandatory; skip only on the conditions listed in `ci-watch.md`. It babysits each PR's CI to a terminal green or red, making **one** automated fix-and-retry per PR on its first failure before leaving it red for the user. Fold each PR's outcome (READY / FAILED / expired / skipped) into the Step 6 report.

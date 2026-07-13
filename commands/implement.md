@@ -53,6 +53,9 @@ git rev-parse --verify challenge/<LABEL> 2>/dev/null \
 build-crucible-release/bin/crucible challenge move --label=<LABEL> merged
 ```
 
+   Then clean up the stale worktree and branch per Step 17's "On merge" note; the
+   saga-aware selection below surfaces the next ready challenge.
+
 4. If a review challenge shows no merge evidence, leave it in `review` — it is still under human review.
 
 Then pick the next todo using saga-aware selection:
@@ -388,7 +391,7 @@ new files), commit with a brief "Address review: …" message, and push.
 
 ## 16.5. Watch CI — Required
 
-If Step 16 opened a PR, run the watch loop in `references/ci-watch.md` against PR #<N> before advancing to Step 17. Mandatory; skip only on the conditions listed in `ci-watch.md`.
+If Step 16 opened a PR, run the watch loop in `references/ci-watch.md` against PR #<N> before advancing to Step 17. Mandatory; skip only on the conditions listed in `ci-watch.md`. It babysits CI to a terminal green or red, making **one** automated fix-and-retry on the first failure before stopping to wait for you.
 
 ## 17. Report
 
@@ -419,6 +422,28 @@ build-crucible-release/bin/crucible challenge move --label=<LABEL> merged
 ```
 
 Re-scan the merged diff against remaining todo/blocked siblings **and** `docs/` design/spec files for stale references the Step 15 pass missed. Fix challenge text in place with `crucible challenge update`. For stale docs, file a tracked docs-reconcile challenge (`/phoe:plan`) so the edit flows through the normal implement + CI-watch path rather than an untracked side PR — this challenge's branch is gone post-merge. Flag genuinely scope-broken siblings as blocked rather than rewriting them. Report this pass's outcome when it runs.
+
+### On merge — clean up and surface the next challenge
+
+Whenever this challenge's PR is confirmed merged (here or in Step 2's
+reconciliation), after the reconciliation pass above, clean up and report — then
+**stop**; do not begin the next challenge:
+
+1. **Clean up the worktree and branch** from the main repo root (skip either if
+   already gone):
+   ```bash
+   git worktree remove .claude/worktrees/challenge-<label>
+   git branch -D challenge/<label>
+   ```
+   If this session is running *inside* that worktree, tear it down with
+   `ExitWorktree` instead — a bare `git worktree remove` dangles the session pin.
+
+2. **Report the next ready challenge — do not implement it.** If the merged
+   challenge was in a saga, use Step 2's saga-aware selection (ordering satisfied,
+   no unmerged predecessor, auto-unblock whatever the merge unblocked) to find the
+   next pickup, and report its label, title, priority, and `/phoe:implement
+   <label>`. Present it for the user to pick up; do not start it. If the saga is
+   done or nothing is unblocked, say so.
 
 Use `/phoe:plan` to create new challenges or extend an existing saga.
 
