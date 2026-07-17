@@ -108,6 +108,8 @@ Challenges must be:
 - **Self-contained** — can be verified independently
 - **Ordered** — respects dependencies (earlier challenges don't depend on later ones)
 
+**Don't add redundant linear `block`s.** The saga's challenge *order* already encodes "do these in turn," so a challenge depending on its immediate/earlier predecessor in the same saga needs **no** `block` — rely on the ordering. Only `block` a challenge on a genuine *deviation*: a cross-saga dependency, or an out-of-order intra-saga dependency (a challenge depending on one that sits later, or left out of natural order by a re-order/insertion). See "When to block — and when NOT to" in the `crucible` skill.
+
 ## 5. Subagent Spec Review
 
 Before presenting the draft to the user, dispatch a spec reviewer subagent to audit the saga and its challenges for spec quality. The agent that drafted the plan is rarely the best judge of its own gaps — a fresh reader catches ambiguity, missing context, and ordering mistakes that the drafter has already rationalized away.

@@ -103,6 +103,7 @@ When the user asks for "saga status", a "status table", "where are we", or simil
 **1. Reconcile in-flight work** (so the board is true, not just what the tracker last recorded):
 - `git fetch origin -q`. For each `review`/`merged` challenge, confirm its PR merge-commit is an ancestor of `origin/main` — `git merge-base --is-ancestor <oid> origin/main` — before trusting it. A squash-merge can show MERGED yet never reach main. Move a verified stale `review` → `merged`; leave it in `review` if its PR is still open.
 - For each `blocked` challenge, if its `blocked_by` target is now merged, `unblock` it — **but** if it's a capstone with more unmet prerequisites, re-point the block to the next one (`challenge block <id> --blocked_by=<next>`); a capstone isn't pickable until all prereqs land.
+- **Lift redundant same-saga in-order blocks.** A challenge blocked only on its immediate/earlier predecessor within the *same* saga, in natural order, is a redundant block — the saga ordering already conveys the sequence. `unblock` it to `todo`, keeping only genuine cross-saga or out-of-order blocks (see "When to block — and when NOT to" under **Blocking**). Treat these the same as stale/satisfied blocks.
 - Briefly list every move you made (old → new + why) above the report.
 
 **2. Pull data:** `crucible saga list --completion`, `crucible challenge list --no-saga`, `crucible bug list`.
@@ -213,6 +214,15 @@ crucible challenge unblock <id|--label=X> [<target-status>]    # default todo
 ```
 
 `--blocked_by` (underscore!) is the one underscore flag in the surface. `--reason` is hyphen-style.
+
+### When to block — and when NOT to
+
+A challenge's **position in its saga's ordered challenge list already encodes linear sequence.** Do NOT `block` a challenge merely because it comes after another in the *same* saga — the ordering conveys "do these in turn." An explicit block is warranted only when there is a genuine dependency *and* a **deviation** from the normal in-order same-saga chain. Two deviation cases:
+
+1. **Cross-saga blocker** — the challenge depends on a challenge in a *different* saga (e.g. #312 in saga B can't start until #290 in saga A merges).
+2. **Out-of-order intra-saga dependency** — within one saga, a challenge depends on one that comes *later* in the order, or a re-order / insertion left the dependency no longer expressed by natural sequence (e.g. #350 depends on #356, which sits after it).
+
+In every other case — challenge N depending on its immediate or earlier predecessor in the same saga, in natural order — do NOT block. Reserve `blocked` status for real deviations.
 
 ## Comments
 
