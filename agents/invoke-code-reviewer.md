@@ -181,6 +181,8 @@ change that violates them. Specifically check for:
 
 **Descriptive Names**: Flag abbreviations (except AABB, ID), single-letter variables outside loop counters.
 
+**Export macros are Forge-emitted, not in-tree**: Do NOT flag `<MODULE>_API` macros (`EDITOR_API`, `CORTEX_API`, `MOSAIC_API`, …) as undefined — there is no in-tree `#define`. Forge's `FlagEmitter` emits `-D<MODULE>_API=""` for every module on every compile, so they expand to empty and any header usage is well-formed. `grep 'define <X>_API'` returning nothing is expected, not a defect.
+
 ### Portability Requirements (Shared Code)
 
 **Platform APIs in shared code are CRITICAL violations.** All platform-specific code belongs in dedicated liaison modules (`Engine/Modules/Platform/`), not in shared sources. Files under `Engine/Modules/Platform/` are exempt from these rules.
