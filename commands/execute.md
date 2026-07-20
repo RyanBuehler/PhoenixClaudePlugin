@@ -462,23 +462,57 @@ Run: git diff origin/main...HEAD (use main...HEAD if origin is unreachable)
 <list from git diff --name-only origin/main...HEAD>
 ```
 
+**Review Dispatch Preamble** -- paste this block verbatim into BOTH reviewer prompts
+below. Every failure mode it prevents fails toward a *false clean*: a reviewer that
+cannot find something reports it as absent, and that reaches the PR body.
+
+```
+Reading the change. Do not pipe a whole diff. `git diff origin/main...HEAD --stat`
+gives you the map; read each changed file in place, and use
+`git diff origin/main...HEAD -- <path>` per file for the delta. A whole-diff dump
+on a 30 KB+ change overflows the Bash output cap, spills to a temp file, then
+overflows the Read cap.
+
+Where to search. This repository holds many sibling worktrees under
+`.claude/worktrees/` and build trees under `.forge*/` and `.bootstrap-out/`, all
+carrying near-identical copies of the same sources. Scope every search to the
+worktree root you were given. Prefer `git grep`, which searches only tracked files
+in the current tree. If you use `grep -r`/`find`, exclude `.forge*/`,
+`.bootstrap-out/`, and `.claude/worktrees/` -- a generated compile_commands.json
+alone can exceed the output cap.
+
+How to search. Bash runs under zsh: an unquoted `--include=*.h` that matches
+nothing aborts the whole command with "no matches found". Quote every glob-bearing
+flag or use `git grep -n <pattern> -- '<pathspec>'`. Empty output may mean the
+command never ran -- confirm it executed before concluding a symbol is absent.
+
+Paths. Use full repo-relative paths. A git pathspec that matches nothing exits 0
+with empty output, indistinguishable from "no changes here". Before reporting
+anything as missing or unreferenced, re-run the check with the scoping above and
+state which tree you searched.
+```
+
 **Quality reviewer** -- launch `invoke-code-reviewer` agent:
 
 ```
-Review the branch diff (git diff origin/main...HEAD; use main...HEAD if
-origin is unreachable) for challenge branch.
+Review the change on this challenge branch.
 Focus on correctness, safety, modern C++23 opportunities, performance,
 and project convention compliance. Report findings using
 CRITICAL/WARNING/SUGGESTION/NOTE severity levels.
+
+<Review Dispatch Preamble, verbatim>
 ```
 
 **Adversarial reviewer** -- launch a second `invoke-code-reviewer` agent (fresh, no shared context with the quality reviewer) with this prompt:
 
 ```
-Adversarially review the diff (git diff origin/main...HEAD; use main...HEAD
-if origin is unreachable) for challenge: <label>.
+Adversarially review the change on challenge: <label>.
 Your job is to attack this implementation, not validate it. Assume the
-quality review is happening in parallel — do not duplicate it. Hunt for:
+quality review is happening in parallel — do not duplicate it.
+
+<Review Dispatch Preamble, verbatim>
+
+Hunt for:
 
 - Edge cases the implementation does not handle (empty input, max-size
   input, unicode, negative values, NaN, integer overflow, signed/unsigned

@@ -244,13 +244,48 @@ Before committing, systematically evaluate each acceptance criterion from the ch
 
 Do not proceed to code review until all mechanically-verifiable criteria are met.
 
+## 10.5. Review Dispatch Preamble — include in every reviewer prompt
+
+Steps 11 and 12 both dispatch reviewer subagents. Paste the block below verbatim into each
+reviewer prompt. It exists because all four failure modes it prevents **fail in the direction of
+a false clean** — a reviewer that cannot find something reports it as absent, and that conclusion
+reaches the PR body.
+
+> **Reading the change.** Do not pipe a whole diff. `git diff --cached --stat` gives you the map;
+> then read each changed file **in place** at its current content, and use `git diff --cached -- <path>`
+> for one file at a time when you need the delta. A whole-diff dump on a mid-size change (30 KB+)
+> overflows the Bash output cap, spills to a temp file, then overflows the Read cap — costing
+> round-trips and tempting you to review a truncated artifact.
+>
+> **Where to search.** This repository contains many sibling worktrees under `.claude/worktrees/`
+> and build trees under `.forge*/` and `.bootstrap-out/`, all holding near-identical copies of the
+> same sources. Scope every search to the worktree root you were given. Prefer `git grep`, which
+> searches only tracked files in the current tree and skips build output entirely. If you must use
+> `grep -r`/`find`, exclude `.forge*/`, `.bootstrap-out/`, and `.claude/worktrees/` explicitly — a
+> generated `compile_commands.json` alone can exceed the output cap.
+>
+> **How to search.** Bash runs under **zsh**, which expands unquoted globs *before* the command
+> sees them: an unquoted `--include=*.h` that matches nothing aborts the entire command with
+> "no matches found". Quote every glob-bearing flag (`--include='*.h'`) or use
+> `git grep -n <pattern> -- '<pathspec>'`. **Empty output from a search means the command may never
+> have run** — confirm the command actually executed before concluding a symbol is absent.
+>
+> **Paths.** Use full repo-relative paths and verify they exist before relying on a negative result.
+> `git diff --stat` elides long path prefixes, and a git pathspec that matches nothing **exits 0
+> with empty output** — indistinguishable from "this file has no changes."
+>
+> Before reporting that anything is missing, absent, or unreferenced, re-run the check with the
+> scoping above. State which tree you searched.
+
 ## 11. Automated Code Review
 
 Invoke the code reviewer as a **separate agent** to evaluate the implementation diff. The agent that wrote the code must not be the only judge.
 
 1. Stage all changes: `git add -A`
 2. Launch `invoke-code-reviewer` as a subagent with the prompt:
-   > Review the staged diff (`git diff --cached`) for this challenge branch. Focus on correctness, safety, modern C++23 opportunities, performance, and project convention compliance. Report findings using CRITICAL/WARNING/SUGGESTION/NOTE severity levels.
+   > Review the change on this challenge branch. Focus on correctness, safety, modern C++23 opportunities, performance, and project convention compliance. Report findings using CRITICAL/WARNING/SUGGESTION/NOTE severity levels.
+   >
+   > [Include the **Review Dispatch Preamble** from Step 10.5 here, verbatim.]
    >
    > End your report with a `## Workflow Friction` section listing anything that made this review harder than it should have been — missing context, ambiguous spec, undocumented convention, tooling gaps — or the single word `none` if nothing applied.
 3. **Gate on zero CRITICAL and zero WARNING findings.** If any CRITICAL or WARNING issues are found:
@@ -267,7 +302,11 @@ After the standard review passes, dispatch an **adversarial** reviewer subagent.
 
 Launch `invoke-code-reviewer` as a fresh subagent with the prompt:
 
-> Adversarially review the staged diff (`git diff --cached`) for challenge `<LABEL>`. Your job is to attack this implementation, not validate it. Assume the standard review already passed — do not duplicate it. Hunt for:
+> Adversarially review the change on challenge `<LABEL>`. Your job is to attack this implementation, not validate it. Assume the standard review already passed — do not duplicate it.
+>
+> [Include the **Review Dispatch Preamble** from Step 10.5 here, verbatim.]
+>
+> Hunt for:
 >
 > - **Edge cases the implementation does not handle** — empty input, max-size input, unicode, negative values, NaN, integer overflow, signed/unsigned mismatches, off-by-one at boundaries.
 > - **Concurrency hazards** — races, reentrancy, ordering assumptions across threads or subsystems, lifetime invariants not enforced by the type system.
