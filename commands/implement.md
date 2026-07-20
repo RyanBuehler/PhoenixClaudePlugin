@@ -246,10 +246,44 @@ Do not proceed to code review until all mechanically-verifiable criteria are met
 
 ## 10.5. Review Dispatch Preamble — include in every reviewer prompt
 
-Steps 11 and 12 both dispatch reviewer subagents. Paste the block below verbatim into each
-reviewer prompt. It exists because all four failure modes it prevents **fail in the direction of
-a false clean** — a reviewer that cannot find something reports it as absent, and that conclusion
-reaches the PR body.
+Steps 11 and 12 both dispatch reviewer subagents. Paste the blocks below into each reviewer
+prompt. They exist because the failure modes they prevent **fail in the direction of a false
+clean** — a reviewer that cannot find something reports it as absent, and that conclusion reaches
+the PR body.
+
+### 10.5a. Ship the contract — never a paraphrase
+
+Steps 11 and 12 gate on zero CRITICAL and zero WARNING findings. A reviewer that cannot read the
+acceptance criteria **invents the contract from the code and fixtures, then blocks on it**. The
+challenge body lives server-side in Crucible and is not reachable from the worktree — reviewers
+have repeatedly said so, and a paraphrased AC has already been wrong in a dispatch.
+
+Before dispatching, capture the challenge verbatim:
+
+```bash
+build-crucible-release/bin/crucible challenge show <ID>
+```
+
+Interpolate that **whole output** — title, description, acceptance criteria, verification,
+references — into the reviewer prompt under a `## Challenge Contract (verbatim from Crucible)`
+heading. Do not summarize it, and do not re-word the acceptance criteria: their exact wording is
+what the reviewer judges scope against.
+
+Then resolve every design-doc reference the challenge or the code comments cite
+(`Docs/Cortex_DD.md §4.6`, `Docs/PublishPath_DD.md`, …):
+
+- Confirm the file exists in **this worktree** and the cited section is actually present.
+- If it exists, give the reviewer the path and section number.
+- If the file or section does **not** exist, say so explicitly in the prompt — e.g.
+  *"`Docs/ForgePlatformModel_DD.md` is referenced but absent from this worktree; do not weigh
+  comments against it."* Reviewers have built headline findings on cited sections that were never
+  there.
+
+Also state which build directory is warm (e.g. `Applications/Forge/.forge/`) and whether a build
+has been run on this branch, so a reviewer does not report a static-only review claiming no build
+tree exists.
+
+### 10.5b. Search and diff scoping
 
 > **Reading the change.** Do not pipe a whole diff. `git diff --cached --stat` gives you the map;
 > then read each changed file **in place** at its current content, and use `git diff --cached -- <path>`
@@ -285,7 +319,7 @@ Invoke the code reviewer as a **separate agent** to evaluate the implementation 
 2. Launch `invoke-code-reviewer` as a subagent with the prompt:
    > Review the change on this challenge branch. Focus on correctness, safety, modern C++23 opportunities, performance, and project convention compliance. Report findings using CRITICAL/WARNING/SUGGESTION/NOTE severity levels.
    >
-   > [Include the **Review Dispatch Preamble** from Step 10.5 here, verbatim.]
+   > [Include the **Challenge Contract** (Step 10.5a) and the **search/diff scoping block** (Step 10.5b) here, verbatim.]
    >
    > End your report with a `## Workflow Friction` section listing anything that made this review harder than it should have been — missing context, ambiguous spec, undocumented convention, tooling gaps — or the single word `none` if nothing applied.
 3. **Gate on zero CRITICAL and zero WARNING findings.** If any CRITICAL or WARNING issues are found:
@@ -304,7 +338,7 @@ Launch `invoke-code-reviewer` as a fresh subagent with the prompt:
 
 > Adversarially review the change on challenge `<LABEL>`. Your job is to attack this implementation, not validate it. Assume the standard review already passed — do not duplicate it.
 >
-> [Include the **Review Dispatch Preamble** from Step 10.5 here, verbatim.]
+> [Include the **Challenge Contract** (Step 10.5a) and the **search/diff scoping block** (Step 10.5b) here, verbatim.]
 >
 > Hunt for:
 >

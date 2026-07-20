@@ -462,6 +462,24 @@ Run: git diff origin/main...HEAD (use main...HEAD if origin is unreachable)
 <list from git diff --name-only origin/main...HEAD>
 ```
 
+**Challenge Contract** -- capture the challenge verbatim BEFORE dispatching:
+
+```bash
+build-crucible-release/bin/crucible challenge show <ID>
+```
+
+Interpolate that whole output -- title, description, acceptance criteria, verification,
+references -- into BOTH reviewer prompts under a `## Challenge Contract (verbatim from
+Crucible)` heading. Do not summarize; the exact AC wording is what the reviewer judges
+scope against. Both review gates block on CRITICAL/WARNING, so a reviewer that cannot
+read the criteria invents the contract from the fixtures and then blocks on it.
+
+Resolve every design-doc reference the challenge or the code cites (`Docs/Cortex_DD.md
+§4.6`, `Docs/PublishPath_DD.md`, ...): confirm the file exists in THIS worktree and the
+cited section is present. If it is absent, say so explicitly in the prompt -- reviewers
+have built headline findings on sections that were never there. Also state which build
+directory is warm and whether a build has run on this branch.
+
 **Review Dispatch Preamble** -- paste this block verbatim into BOTH reviewer prompts
 below. Every failure mode it prevents fails toward a *false clean*: a reviewer that
 cannot find something reports it as absent, and that reaches the PR body.
@@ -500,6 +518,8 @@ Focus on correctness, safety, modern C++23 opportunities, performance,
 and project convention compliance. Report findings using
 CRITICAL/WARNING/SUGGESTION/NOTE severity levels.
 
+<Challenge Contract, verbatim>
+
 <Review Dispatch Preamble, verbatim>
 ```
 
@@ -509,6 +529,8 @@ CRITICAL/WARNING/SUGGESTION/NOTE severity levels.
 Adversarially review the change on challenge: <label>.
 Your job is to attack this implementation, not validate it. Assume the
 quality review is happening in parallel — do not duplicate it.
+
+<Challenge Contract, verbatim>
 
 <Review Dispatch Preamble, verbatim>
 

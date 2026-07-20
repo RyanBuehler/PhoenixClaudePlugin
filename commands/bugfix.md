@@ -203,8 +203,18 @@ Before committing, systematically evaluate each acceptance criterion from the bu
 Invoke the code reviewer as a **separate agent** to evaluate the implementation diff.
 
 1. Stage all changes: `git add -A`
-2. Launch `invoke-code-reviewer` as a subagent with the prompt:
+2. Capture the bug contract verbatim — the reviewer cannot reach Crucible from the worktree, and this gate blocks on CRITICAL/WARNING, so a reviewer without the criteria invents the contract and then blocks on it:
+
+```bash
+build-crucible-release/bin/crucible bug show --label=<LABEL>
+```
+
+   Interpolate that whole output — title, description, reproduction steps, acceptance criteria, verification — into the prompt under a `## Bug Contract (verbatim from Crucible)` heading. Do not summarize. Resolve any `Docs/*.md §x` reference the bug cites: confirm it exists in this worktree, and say so explicitly in the prompt if it does not.
+
+3. Launch `invoke-code-reviewer` as a subagent with the prompt:
    > Review the change on this bug fix branch. Focus on correctness, safety, modern C++23 opportunities, performance, and project convention compliance. Verify the fix addresses the root cause and doesn't introduce regressions. Report findings using CRITICAL/WARNING/SUGGESTION/NOTE severity levels.
+   >
+   > [Include the **Bug Contract** captured above here, verbatim.]
    >
    > **Reading the change.** Do not pipe a whole diff. `git diff --cached --stat` gives you the map; read each changed file **in place**, and use `git diff --cached -- <path>` per file for the delta. A whole-diff dump on a 30 KB+ change overflows the Bash output cap, spills to a temp file, then overflows the Read cap.
    >
@@ -213,12 +223,12 @@ Invoke the code reviewer as a **separate agent** to evaluate the implementation 
    > **How to search.** Bash runs under **zsh**: an unquoted `--include=*.h` that matches nothing aborts the whole command with "no matches found". Quote every glob-bearing flag or use `git grep -n <pattern> -- '<pathspec>'`. **Empty output may mean the command never ran** — confirm it executed before concluding a symbol is absent.
    >
    > **Paths.** Use full repo-relative paths. A git pathspec that matches nothing **exits 0 with empty output**, which is indistinguishable from "no changes here". Before reporting anything as missing or unreferenced, re-run the check with the scoping above and state which tree you searched.
-3. **Gate on zero CRITICAL and zero WARNING findings.** If any CRITICAL or WARNING issues are found:
+4. **Gate on zero CRITICAL and zero WARNING findings.** If any CRITICAL or WARNING issues are found:
    - Fix each CRITICAL and WARNING issue
    - Re-run `/phoe:verify`
    - Re-run acceptance criteria evaluation (Step 10)
    - Re-invoke the code reviewer
-4. **WARNING is a blocking tier alongside CRITICAL** — fix each one as in step 3, or surface it to the user for an explicit waive if you judge it a false positive or out of scope. Never ship a WARNING unaddressed; record any waived WARNING in the final report.
+5. **WARNING is a blocking tier alongside CRITICAL** — fix each one as in step 4, or surface it to the user for an explicit waive if you judge it a false positive or out of scope. Never ship a WARNING unaddressed; record any waived WARNING in the final report.
 
 ## 12. Commit Changes
 
