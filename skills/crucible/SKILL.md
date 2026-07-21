@@ -10,7 +10,7 @@ Crucible is the project's bespoke saga/challenge/bug tracker. A `crucible` CLI c
 ## Hard rules
 
 - **The server is managed externally.** Never `start`, `kill`, `probe`, `curl`, `pkill`, or otherwise touch `crucible-server`. If commands fail to connect, report the failure — do not try to start a server.
-- **The binary is project-local, not on PATH.** From the engine repo root use `build-crucible-release/bin/crucible`. There is no system-wide `crucible`. Build via `/phoe:build crucible` if the binary is missing.
+- **The binary is project-local, not on PATH.** From the engine repo root use `Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible`. There is no system-wide `crucible`. Build via `/phoe:build crucible` if the binary is missing.
 - **Storage lives at `~/.local/share/crucible-server/`** (`challenges/`, `sagas/`, `bugs/`, `archive/`, `bug-archive/`, `config.json`). Never edit those files by hand — go through the CLI so the server stays consistent.
 - **Use the CLI, not raw JSON.** This is reinforced by user feedback: do not hand-author challenge/saga/bug JSON files when a CLI subcommand exists.
 - **The CLI is the source of truth for status.** Never grep the filesystem or pgrep the server to answer status questions — ask the CLI.
@@ -275,7 +275,7 @@ If still in doubt, the source of truth is `Applications/Crucible/Source/Private/
 - **`Error: Unknown flag: --saga`** on `challenge list` — there is no `--saga` filter. Use `crucible saga show <id>` to enumerate a saga's challenges, or filter list by `--tag` if you tagged consistently.
 - **`saga create --challenges=a|b|c` succeeded but saga is empty** — known quirk; `--challenges` is silently dropped on create. Use `crucible saga add` after creation.
 - **`Failed to load challenge N: Failed to read file: .../N.json`** — challenge IDs are sparse. The number you tried is unallocated or archived. Use `crucible challenge list` / `list-archive` to find real IDs.
-- **`crucible: command not found`** — the binary lives at `build-crucible-release/bin/crucible`, not on PATH. Use the project-relative path or build first via `/phoe:build crucible`.
+- **`crucible: command not found`** — the binary lives at `Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible`, not on PATH. Use the project-relative path or build first via `/phoe:build crucible`.
 - **Connection errors** — server is down or wrong port. **Do not start it yourself.** Report the failure to the user.
 
 ## Output format reminders

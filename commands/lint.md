@@ -1,33 +1,29 @@
 ---
-description: Run clang-tidy on changed files via ForgePrototype.
+description: Run clang-tidy on changed files through Forge.
 ---
 
-Run clang-tidy on branch-changed C++ files through ForgePrototype's `lint` command. It resolves the
+Run clang-tidy on branch-changed C++ files through Forge's `lint` command. It resolves the
 compilation context from the in-process build graph itself, so there's no separate compile-database
-step (the old `Tools/tidy.py --compdb` pitfall — a bare `build/` configured with the system GCC
-that hard-fails Phoenix's Clang-only gate — is gone).
+step — the graph already knows every TU's exact flags and module imports.
 
 ## 1. Locate the Builder
 
 ```bash
-fp_bin() {
-  for c in Applications/ForgePrototype/.bootstrap-out/forge-prototype \
-           build-fp-debug/bin/forge-prototype build-fp-release/bin/forge-prototype; do
-    [ -x "$c" ] && { echo "$c"; return 0; }
-  done
+forge_bin() {
+  [ -x Applications/Forge/.bootstrap-out/forge ] && { echo Applications/Forge/.bootstrap-out/forge; return 0; }
   return 1
 }
-FP=$(fp_bin) || { python3 Applications/ForgePrototype/Scripts/bootstrap.py && FP=$(fp_bin); }
+FORGE=$(forge_bin) || { python3 Applications/Forge/Scripts/bootstrap.py && FORGE=$(forge_bin); }
 ```
 
 ## 2. Lint
 
 ```bash
-"$FP" lint
+"$FORGE" lint
 ```
 
 This lints the branch's changed surface (diff against `main`). Pass `--all` to lint the whole repo.
-If nothing changed, it reports "No files to process" — treat that as a clean pass.
+If nothing changed, it reports no files to process — treat that as a clean pass.
 
 ## 3. Report
 

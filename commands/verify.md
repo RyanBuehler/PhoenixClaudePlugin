@@ -1,88 +1,70 @@
 ---
-description: Full CI-mirror verification sequence — configure, build, format check, lint, and test via ForgePrototype. The mandatory pre-commit check.
+description: Full CI-mirror verification sequence — configure, build, format check, lint, forbidden-token audit, and test through Forge. The mandatory pre-commit check.
 ---
 
 Run the full CI-mirror verification sequence. Stop on the first failure.
 
 Run this **before committing**. A commit made without passing verification is incomplete work.
 
-The phases below are the inline equivalents of `/phoe:build`, `/phoe:format`, `/phoe:lint`,
-`/phoe:test`. Run them directly to avoid nested skill invocations; use the sub-skills when debugging
-a single phase. The engine build/lint/test all go through `forge-prototype`; formatting stays on
-`Tools/format.py` (it carries the exact branch-diff scoping CI uses).
+`forge verify <profile>` *is* the CI mirror: it runs configure → build → format-check → lint →
+forbidden-token audit → test in one in-process pass, exactly as CI does. That single command is the
+gate; the sub-skills (`/phoe:build`, `/phoe:format`, `/phoe:lint`, `/phoe:test`) exist for debugging
+one phase in isolation, not for re-assembling the sequence by hand.
 
-Locate the builder once:
+## 1. Locate the Builder
+
+Every phase runs through the bootstrapped `forge` binary. Locate it, bootstrapping if absent:
 
 ```bash
-fp_bin() {
-  for c in Applications/ForgePrototype/.bootstrap-out/forge-prototype \
-           build-fp-debug/bin/forge-prototype build-fp-release/bin/forge-prototype; do
-    [ -x "$c" ] && { echo "$c"; return 0; }
-  done
+forge_bin() {
+  [ -x Applications/Forge/.bootstrap-out/forge ] && { echo Applications/Forge/.bootstrap-out/forge; return 0; }
   return 1
 }
-FP=$(fp_bin) || { python3 Applications/ForgePrototype/Scripts/bootstrap.py && FP=$(fp_bin); }
+FORGE=$(forge_bin) || { python3 Applications/Forge/Scripts/bootstrap.py && FORGE=$(forge_bin); }
 ```
 
-## 1. Build
+Re-run `python3 Applications/Forge/Scripts/bootstrap.py` after pulling changes under
+`Applications/Forge/` — a stale bootstrap binary fails cold configures cryptically. See `/phoe:build`
+for bootstrap details.
+
+## 2. Verify
 
 ```bash
-"$FP" configure forge-builds-editor
-"$FP" build forge-builds-editor
+"$FORGE" verify editor
 ```
 
-`forge-builds-editor` is the Headless, tests-enabled profile. See `/phoe:build` for builder
-bootstrap and profile details. (No `--json` here: a verify-gate failure should surface the failing
-node's compiler output inline — the default tier prints a bounded head+tail excerpt — rather than
-report `error_count` with no error text.)
+`editor` is the Headless, tests-enabled profile CI runs against. Do **not** pass `--json` here: a
+verify-gate failure should surface the failing phase's output inline — the default tier prints a
+bounded head+tail excerpt and the format/lint/audit diffs — rather than reduce a failure to an
+`error_count` with no error text.
+
+**On failure**, re-run only the phase that broke to iterate faster (each maps to a sub-skill):
+
+| Failed phase        | Iterate with                              |
+|---------------------|-------------------------------------------|
+| configure / build   | `"$FORGE" build editor` (`/phoe:build`)   |
+| format-check        | `"$FORGE" format` then re-check (`/phoe:format`) |
+| lint                | `"$FORGE" lint` (`/phoe:lint`)            |
+| forbidden-token audit | fix the flagged path/token; see CLAUDE.md "Forbidden tokens" |
+| test                | `"$FORGE" test editor --output-on-failure` (`/phoe:test`) |
+
+Re-run `"$FORGE" verify editor` once the phase passes, so the full sequence confirms nothing else
+regressed.
 
 **Struct/enum layout changes need a clean build to trust.** When a change alters the in-memory
-layout of a struct/enum in a header many TUs include, an incremental module build can leave some TUs
-on the old layout and produce a *phantom* trial segfault near a `vector`/copy of the changed type
-(an ABI/size skew, not a logic bug). For an authoritative clean engine build, remove the profile's
-output tree first: `rm -rf Applications/ForgePrototype/.forge-out/shared-engine-ci-linux-Headless`,
-then rebuild. Treat such a segfault as a build artifact first, a logic bug second.
+layout of a struct/enum in a widely-included header, an incremental module build can leave some TUs
+on the old layout and produce a *phantom* trial segfault (an ABI/size skew, not a logic bug). For an
+authoritative clean run, `"$FORGE" clean editor` first. Treat such a segfault as a build artifact
+first, a logic bug second.
 
-## 2. Format
+## 3. Python-only changes
 
-Use `--files=branch` to mirror CI exactly (compares against `main`). `--files=staged` silently
-passes when nothing is staged.
+If the diff is 100% Python (touches no C++, build, or test code), the format-check and lint phases
+have no C++ surface to act on and the build is a fast no-op. For a Python-only change, run the
+touched tool's own suite instead — e.g. `python3 -m unittest discover -s Tools/Tests` — and treat
+"no C++ in scope" as a clean pass, not a failure.
 
-```bash
-python3 Tools/format.py --files=branch
-python3 Tools/format.py --files=branch -error
-```
+## 4. Report
 
-`--files=branch` does **not** see untracked new files (they are not in the branch diff until
-`git add`-ed), so a new file's formatting only surfaces after it is staged. Stage new files before
-this gate (then re-check with `--files=staged`) so violations don't slip to CI.
-
-## 3. Lint
-
-```bash
-"$FP" lint
-```
-
-ForgePrototype resolves the compile context from its own build graph — no separate compile-database
-step. Lints the branch diff; pass `--all` for the whole repo.
-
-## 4. Test
-
-```bash
-"$FP" test forge-builds-editor --output-on-failure
-```
-
-Passing trials are suppressed; failures print their name and captured output.
-
-## Python-only changes
-
-If the diff is 100% Python (touches no C++, build, or test code), phases 1-4 are no-ops:
-`format.py`/`tidy.py` act only on C++, and `python3 Tools/format.py --files=staged -error` even
-*errors* on zero staged C++ files. For a Python-only change, skip phases 1-4 and run the touched
-tool's own suite instead — e.g. `python3 -m unittest discover -s Tools/Tests`. Treat "no C++ in
-scope" as a clean pass, not a failure.
-
-## 5. Report
-
-Tell the user whether all checks passed or which step failed. If all passed, the work is cleared to
-commit.
+Tell the user whether all phases passed or which phase failed (with its inline output). If all
+passed, the work is cleared to commit.

@@ -15,14 +15,14 @@ Determine which mode by checking if the argument is a number, "next", or a strin
 
 ## 1. Bootstrap
 
-Run `/phoe:build crucible` to ensure both `crucible` and `crucible-server` exist under `build-crucible-release/bin/` and match the expected version. A fresh worktree triggers a one-time clean build; subsequent invocations are no-ops. If `/phoe:build crucible` stops with a version mismatch, stop here and report it to the user.
+Run `/phoe:build crucible` to ensure both `crucible` and `crucible-server` exist under `Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/` and match the expected version. The first build is a clean build; subsequent invocations are no-ops. If `/phoe:build crucible` stops with a version mismatch, stop here and report it to the user.
 
 The Crucible server is a user-managed process outside the plugin's scope — do not start it. If the CLI can't reach a server, the first `crucible` call below will fail with a clear error; surface that to the user and stop.
 
 Confirm Crucible is reachable and initialized for this project:
 
 ```bash
-build-crucible-release/bin/crucible status
+Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible status
 ```
 
 Verify workspace is clean:
@@ -60,14 +60,14 @@ If **unreachable** (`REMOTE_REACHABLE=0`), emit a single warning line to the use
 
 Use saga-aware priority logic to select N eligible challenges. The candidate pool is the union of saga-attached `todo` challenges and orphan `todo` challenges (challenges that belong to no saga). Both are first-class — orphans have no themed-saga lineage but participate in priority/dependency selection just like saga members.
 
-1. List all sagas: `build-crucible-release/bin/crucible --json saga list`
-2. List all todo challenges: `build-crucible-release/bin/crucible --json challenge list --status=todo`
-3. Note which of those are orphans for downstream filters: `build-crucible-release/bin/crucible --json challenge list --status=todo --no-saga`. Orphans are challenges with no saga membership; they trivially pass the same-saga ordering check (no predecessors) but still participate in the cross-saga blocker scan and priority selection.
+1. List all sagas: `Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible --json saga list`
+2. List all todo challenges: `Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible --json challenge list --status=todo`
+3. Note which of those are orphans for downstream filters: `Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible --json challenge list --status=todo --no-saga`. Orphans are challenges with no saga membership; they trivially pass the same-saga ordering check (no predecessors) but still participate in the cross-saga blocker scan and priority selection.
 4. Auto-unblock any blocked challenges whose blockers are now merged:
    ```bash
-   build-crucible-release/bin/crucible --json challenge list --status=blocked
+   Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible --json challenge list --status=blocked
    ```
-   For each, check if the `blocked_by` challenge is now merged. If so: `build-crucible-release/bin/crucible challenge unblock <ID> todo`
+   For each, check if the `blocked_by` challenge is now merged. If so: `Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge unblock <ID> todo`
 5. For each candidate, check saga ordering -- only pick challenges whose saga predecessors are all `merged` or `canceled`. Orphans skip this check (no saga, no predecessors).
 6. **Scan for implicit cross-saga blockers (precision-first).** Same-saga ordering only catches explicit dependencies; a challenge may reference a symbol or file from an *unmerged* challenge in a *different* saga via prose. The goal here is to catch the obvious cases (A says "Loads via `Canvas::LoadLayout`" where `Canvas::LoadLayout` is introduced by an unmerged B), **not** to out-smart the implementer. A false-positive skip strands an eligible challenge; a missed implicit blocker becomes one verification failure later — so lean heavily toward letting candidates through. This filter applies to orphans too — they can implicitly block on saga work and vice-versa.
 
@@ -88,7 +88,7 @@ Report skipped candidates (both the implicit-blocker reason and priority/wave-al
 **If argument is a saga label:**
 
 ```bash
-build-crucible-release/bin/crucible --json saga show --label=<SAGA_LABEL>
+Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible --json saga show --label=<SAGA_LABEL>
 ```
 
 Collect all todo challenges in saga order. These will be executed sequentially. Saga-scoped mode is explicitly bounded — orphans are NOT included even when otherwise eligible.
@@ -151,7 +151,7 @@ challenges diverge as follows (step numbers still map to 4a-4h):
 
 Worktrees are mandatory for every challenge — the plugin's `branch-worktree-check.py` hook blocks bare `git checkout -b` / `git switch -c` / `git branch <name>` at tool-use time (by design, to enforce one-worktree-per-branch). `git worktree add -b <name>` is the only supported way to create a challenge branch.
 
-Every worktree is an independent checkout with its own build dir. CMake caches absolute source paths per checkout, so each worktree pays a first-time build (~3–4 min). That cost is inherent to the isolation, not avoidable by branching on main — so the implementer subagent runs `/phoe:build` as its first concrete action (see 4b, step 5 of the subagent prompt).
+Every worktree is an independent checkout with its own Forge output tree (`.forge-out/`), so each worktree pays a first-time cold build (~3–4 min). That cost is inherent to the isolation, not avoidable by branching on main — so the implementer subagent runs `/phoe:build` as its first concrete action (see 4b, step 5 of the subagent prompt).
 
 #### Branch strategy decision (per wave)
 
@@ -175,8 +175,13 @@ Apply this rule to each wave:
 2. If the wave is a single challenge whose predecessor was the prior wave's only challenge
    *and* both belong to the same saga *and* the prior challenge has not yet been merged to
    `main`, prefer **combined branch** — extend the prior challenge's branch in the same
-   worktree rather than branching from main. The combined branch is named after the saga (e.g.
-   `challenge/saga-<saga-label>`) so its identity does not depend on any single challenge label.
+   worktree rather than branching from main. The combined branch **keeps the first challenge's
+   `challenge/<first-label>` name and its `.claude/worktrees/challenge-<first-label>` worktree** —
+   that path↔branch pair is exactly what `branch-worktree-check.py` validated when the worktree was
+   first created. Do **not** rename the combined branch to a saga label (`challenge/saga-...`): the
+   worktree path would no longer match the branch, and the hook enforces `.claude/worktrees/<branch
+   with slashes as dashes>`. The chain's shared identity is the first challenge's label; the combined
+   PR body lists every challenge it carries.
 3. Cap any combined branch at 4 challenges. After 4, start a fresh branch for the next chunk.
 
 Record the chosen strategy per challenge — it determines whether each challenge becomes its
@@ -187,12 +192,20 @@ For each challenge in the wave:
 
 1. Read the full challenge JSON (run from the main repo root):
    ```bash
-   build-crucible-release/bin/crucible --json challenge show --label=<LABEL>
+   Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible --json challenge show --label=<LABEL>
    ```
 2. Re-confirm status is still `todo` (parse from the JSON above). Another agent's parallel
    `/phoe:execute` may have claimed it since Step 2. If status is anything else, drop the
    challenge, log "Pre-empted by parallel agent" in the final report, and continue.
-3. Create the worktree and branch from the main repo root, basing it on the right ref so the PR
+3. **Claim it immediately** — move to `active` *before* creating the worktree, so the window in
+   which a parallel `/phoe:execute` could grab the same challenge is as small as possible. Run from
+   the main repo root so the crucible binary resolves:
+   ```bash
+   Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge move --label=<LABEL> active
+   ```
+   The claim is revertable: if the challenge is later dropped (pre-empted, blocked, base-ref
+   conflict), move it back with `... challenge move --label=<LABEL> todo`.
+4. Create the worktree and branch from the main repo root, basing it on the right ref so the PR
    diff is clean and dependencies are visible without ever writing local `main`:
    - **Default:** base on `origin/main` when the remote is reachable (`REMOTE_REACHABLE=1` from
      Step 1), else local `main`.
@@ -204,9 +217,17 @@ For each challenge in the wave:
    git worktree add .claude/worktrees/challenge-<label> -b challenge/<label> <base-ref>
    ```
    where `<base-ref>` is `origin/main`, `main`, or `challenge/<predecessor-label>` per the rule above.
-4. Move to active (run from the main repo root so the crucible binary resolves):
+   This exact `git worktree add` form is mandatory: it is the only shape the plugin's
+   `branch-worktree-check.py` hook permits, and only it can base the branch on `origin/main` or a
+   predecessor tip. Do **not** substitute `EnterWorktree(name=...)` — that mints its own branch/path
+   naming and cannot control the base ref. Isolation-guard recognition comes separately, via
+   `EnterWorktree(path=...)` in 4b.
+5. **Bootstrap Forge in the new worktree.** A fresh worktree can lack its own
+   `Applications/Forge/.bootstrap-out/forge` even when the main checkout is warm — the implementer's
+   first `/phoe:build` (4b) bootstraps it, but doing it here as part of setup avoids a cold first
+   build surprising the implementer:
    ```bash
-   build-crucible-release/bin/crucible challenge move --label=<LABEL> active
+   python3 .claude/worktrees/challenge-<label>/Applications/Forge/Scripts/bootstrap.py
    ```
 
 For challenges using the **combined branch** strategy (per the rule above), do NOT create a
@@ -229,13 +250,25 @@ directory. To place an implementer in its worktree, the orchestrator calls
 *before* dispatching, so the subagent inherits that cwd.
 
 **Background-session write-guard.** When `/phoe:execute` runs as a background session, Claude
-Code's isolation guard rejects `Write`/`Edit` in any worktree the parent session has not isolated
-into ("parent bg session hasn't isolated yet") — the implementer can `cd` and build via Bash but
-cannot use the native file tools. The `EnterWorktree(path=...)` above also satisfies this guard,
-so do it before dispatching the wave's first implementer. If a subagent still reports it cannot
-Write/Edit, tell it (in the prompt) to author files via Bash — single-quoted heredocs for new
-files, `python` exact-string replace with an `assert count == 1` for edits — which the guard does
-not intercept.
+Code's isolation guard rejects `Write`/`Edit` in any worktree the parent session has not entered
+through the harness ("parent bg session hasn't isolated yet") — a subagent there can `cd` and build
+via Bash but cannot use the native file tools. `EnterWorktree(path=...)` clears the guard **for the
+one worktree currently entered** — and only that one. Entering another worktree makes the previous
+one non-writable again (a single parent session holds one active cwd). This is why a parallel wave
+that entered only the first worktree left later implementers blocked. Two ways to run a wave:
+
+- **Serial-native (keeps native Write/Edit):** `EnterWorktree(path=<A>)` → dispatch A → **await A** →
+  `EnterWorktree(path=<B>)` → dispatch B → … Each implementer runs while its worktree is the active
+  one, so native file tools work — at the cost of running the wave one challenge at a time.
+- **Parallel-Bash (keeps concurrency):** dispatch every implementer in the wave at once, and tell
+  each in its prompt to author files **via Bash** — single-quoted heredocs for new files, `python`
+  exact-string replace with an `assert count == 1` for edits — which the guard does not intercept.
+  Native Write/Edit will be unavailable for all but the one entered worktree; the Bash path is the
+  supported fallback.
+
+Default to **serial-native** for small waves (≤3) where native tooling matters, and **parallel-Bash**
+for larger waves where concurrency is the point. Do not claim native tools for a parallel wave — they
+will silently fail for every worktree but one.
 
 **Never pass `isolation: "worktree"` to implementer subagents.** The branch and worktree already
 exist (4a); `isolation: "worktree"` spawns a *fresh, auto-named* worktree off `main`, so the
@@ -289,9 +322,9 @@ Description: <description>
 4. Implement the changes
 5. Write tests if your implementation introduces new public interfaces or non-trivial logic
    - Tests are NOT needed for: build system changes, config changes, pure wiring/delegation
-6. Run `/phoe:verify` — this runs build, format, lint, and test through Forge with the project's
-   configured profile. Fix any failures before proceeding. Do NOT invoke cmake/ctest directly;
-   `/phoe:verify` is the single entry point for verification.
+6. Run `/phoe:verify` — this runs configure, build, format-check, lint, forbidden-token audit, and
+   test through Forge with the project's configured profile. Fix any failures before proceeding. Do
+   NOT drive the Forge phases by hand to verify; `/phoe:verify` is the single entry point.
 7. Run the challenge's own Verification Commands (from the section above). These are scoped to
    this specific challenge and complement the project-wide `/phoe:verify` sweep. Fix any failures.
 8. Self-review against each acceptance criterion
@@ -317,7 +350,7 @@ Description: <description>
   cannot state the posture, downgrade the wording to "deterministic under <posture>" or
   "best-effort reproducible". Bit-exact across BLAS-threaded numerics or an unpinned
   compression library is false by default, even on a single host.
-- Follow the project's coding conventions (CLAUDE.md) — **and before writing any C++, read `${CLAUDE_PLUGIN_ROOT}/references/style-guide.md` and `${CLAUDE_PLUGIN_ROOT}/references/tooling.md`** so the implementation conforms to enforced conventions (formatting, naming, comments, namespaces, return-value handling, `auto`, scope spacing, tooling). `${CLAUDE_PLUGIN_ROOT}` is the plugin install path — `cat` these via Bash so the shell expands the variable; if it is unset, use `~/phoenixclaudeplugin/references/`
+- Follow the project's coding conventions (CLAUDE.md) — **and before writing any C++, read `${CLAUDE_PLUGIN_ROOT}/references/style-guide.md` and `${CLAUDE_PLUGIN_ROOT}/references/tooling.md`** so the implementation conforms to enforced conventions (formatting, naming, comments, namespaces, return-value handling, `auto`, scope spacing, tooling). `${CLAUDE_PLUGIN_ROOT}` is the plugin install path (fall back to `~/phoenixclaudeplugin/references/` if it is unset)
 - Use plain ASCII only -- no unicode characters
 - **Do not yield your turn until committed + reported.** Run builds and tests in the FOREGROUND; ending your turn with edits unverified or uncommitted (e.g. waiting on a backgrounded build) strands the work and the orchestrator cannot resume you mid-task.
 - **Use worktree-absolute paths.** The paths in your prompt/context use the main-repo form (`/home/ryan/phoenix/...`), but the files you must edit live under the worktree prefix (`.claude/worktrees/challenge-<label>/...`). Reading the main-repo path can serve stale content, and a later `Edit` then fails "File has not been read yet" — read and edit the worktree copy.
@@ -342,16 +375,15 @@ you encountered that slowed you down or required workarounds:
 - Permission issues or sandbox limitations
 - **Context bloat** -- tools or defaults that flooded your context window with low-signal output.
   Call these out specifically so they can be tuned. Examples:
-  - CMake configure/build emitting hundreds or thousands of lines of trace/debug output when
-    only pass/fail + errors are needed
+  - A Forge phase emitting per-node lines when only pass/fail + errors are needed (e.g. `--verbose`
+    left on, or `--json` withheld where a single result object would do)
   - The engine running with verbose trace logging on by default, producing a wall of breadcrumbs
     on every launch (Scribe traces, Vulkan validation spam, asset loader chatter, etc.)
-  - Test runners printing full per-test logs instead of a summary on success
-  - `ctest`, `ninja`, or other tools defaulting to verbose mode and burying the actual failure
+  - The trial runner printing full per-trial logs instead of a summary on success
   - Any tool whose default output is so noisy that you had to grep/head/tail it to stay useful
   When you flag a context-bloat item, name the specific tool/flag/subsystem so the fix is
-  actionable (e.g. "CMake `--log-level=VERBOSE` is on by default in the Forge wrapper" rather
-  than "build output was noisy").
+  actionable (e.g. "`forge build` streamed per-edge lines without `--json`" rather than "build
+  output was noisy").
 - Anything that would help future autonomous runs go smoother
 
 ## Report Format
@@ -383,7 +415,7 @@ For each returning subagent:
 When marking a challenge blocked:
 
 ```bash
-build-crucible-release/bin/crucible challenge move --label=<LABEL> blocked
+Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge move --label=<LABEL> blocked
 ```
 
 Write a checkpoint file:
@@ -465,7 +497,7 @@ Run: git diff origin/main...HEAD (use main...HEAD if origin is unreachable)
 **Challenge Contract** -- capture the challenge verbatim BEFORE dispatching:
 
 ```bash
-build-crucible-release/bin/crucible challenge show <ID>
+Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge show <ID>
 ```
 
 Interpolate that whole output -- title, description, acceptance criteria, verification,
@@ -508,6 +540,11 @@ Paths. Use full repo-relative paths. A git pathspec that matches nothing exits 0
 with empty output, indistinguishable from "no changes here". Before reporting
 anything as missing or unreferenced, re-run the check with the scoping above and
 state which tree you searched.
+
+Lint already ran. 4d's `/phoe:verify` ran `forge lint` (clang-tidy over the changed
+surface, module-import graph included) and it passed. Do not re-adjudicate
+include/import hygiene or punt the module graph to `invoke-lint-agent` unless you see
+a concrete contradiction in the diff — treat the import graph as already cleared.
 ```
 
 **Quality reviewer** -- launch `invoke-code-reviewer` agent:
@@ -571,7 +608,18 @@ blocked instead and let the user re-plan.
 
 Process challenges in **ID order** within the wave, and for each one:
 
-- **Spec FAIL, quality CRITICAL or WARNING, or adversarial CRITICAL or WARNING:** Dispatch a fix subagent with combined feedback from every reviewer that flagged a blocker (spec, quality, adversarial — whichever fired). Wait for it to finish. Re-run `/phoe:verify`. Re-dispatch **all three** reviewers (a fix can introduce new adversarial-class regressions). On second failure: mark blocked with reviewer feedback. **Keep all branches and commits intact.** Skip this challenge and move to the next one in the wave. WARNING is a blocking tier alongside CRITICAL — an autonomous run has no human to waive one, so an unresolved WARNING blocks the challenge for human review rather than shipping with it ignored.
+- **Spec FAIL, quality CRITICAL or WARNING, or adversarial CRITICAL or WARNING:** Dispatch a fix subagent with the combined feedback from every reviewer that flagged a blocker (spec, quality, adversarial — whichever fired).
+
+  **Narrow the fix subagent to the named findings.** It must close *only* the specific findings in the feedback and nothing else. If it notices an unrelated problem while working, it **reports** it in its result — it does not fix it. An over-reaching fix pass that "improves" code the findings did not name has shipped 3 new blocking defects in a single run: the reviewers never vetted those changes, so they re-open the gate instead of closing it. Give the fix subagent this instruction verbatim: *"Fix exactly these findings: `<list>`. Do not refactor, rename, or touch anything the findings do not name. If you spot another problem, describe it under an `## Also Noticed` heading in your report — do not fix it."* Surface anything it reports under `## Also Noticed` in the final run summary.
+
+  Wait for it to finish. Re-run `/phoe:verify`. Re-dispatch **all three** reviewers against the fixed commit (a fix can introduce new adversarial-class regressions).
+
+  **Decide continue-vs-block on the severity trend and the new-defect signal — not a flat round count.** After each fix+re-review round, compare the new blocking findings to the prior round's:
+  - **Converging** — the blocking (CRITICAL+WARNING) count dropped *and* the fix introduced no new blocker the prior round lacked: keep iterating with another narrowed fix. A challenge that walks R1 `1C+6W` → R2 `0C+3W` → R3 `0C+1W` is nearly done; a fixed 2-round cap would strand it wrongly.
+  - **Stalled or regressing** — the blocking count did not drop, *or* the fix introduced a new CRITICAL/WARNING that was absent the round before (the fix is thrashing): stop. Mark the challenge blocked with the full reviewer feedback and the round-by-round trend. **Keep all branches and commits intact.** Skip this challenge and move to the next one in the wave.
+  - Bound total rounds with a sane backstop (e.g. 5) so a pathological oscillation cannot loop forever, but let the trend, not the count, drive the decision.
+
+  WARNING is a blocking tier alongside CRITICAL — an autonomous run has no human to waive one, so an unresolved WARNING blocks the challenge for human review rather than shipping with it ignored.
 - **Quality SUGGESTION or adversarial SUGGESTION:** Dispatch a suggestion-triage subagent with the combined suggestion list (both sources merged, deduplicated). For each suggestion the subagent must decide:
   - **Implement it** if it is clearly in-scope, correct, and adds value -- apply the change directly.
   - **Defer it** if it raises a real question, is ambiguous, or is out of scope for this challenge -- emplace a `// TODO: <one-line description of the work that needs doing>` comment at the most relevant code location so it can be evaluated later. Follow the TODO discipline in the plugin's CLAUDE.md: describe the work, not where the note came from; never embed the challenge label, a PR number, a file path, a line number, a branch name, or any other reference that can go stale.
@@ -585,11 +633,11 @@ A challenge cannot reach 4h (Publish) until all three reviewers have returned an
 
 For each successfully reviewed challenge:
 
-1. Move to review: `build-crucible-release/bin/crucible challenge move --label=<LABEL> review`
+1. Move to review: `Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge move --label=<LABEL> review`
 2. **Reconcile follow-on siblings and docs** (pre-merge pass) -- this implementation may have invalidated later sibling specs *or* `docs/` design/spec files: a rename or API change leaving a sibling's `description`, `strategy`, `affected_files`, or `acceptance_criteria`, or a doc, referring to the old name. Do a best-effort pass now against the committed diff; the authoritative pass runs post-merge in Step 6.
-   1. `build-crucible-release/bin/crucible --json saga show --label=<SAGA_LABEL>` lists remaining todo + blocked siblings after this challenge's position. (Skip for orphans -- no siblings -- but still run the docs scan below.)
-   2. Scan each later sibling's text (`build-crucible-release/bin/crucible --json challenge show --label=<SIBLING_LABEL>`) **and** `docs/` design/spec files against the committed diff for stale references: renamed types / functions / files, changed signatures, moved modules, replaced concepts.
-   3. Fix each surgically -- `build-crucible-release/bin/crucible challenge update --label=<SIBLING_LABEL> [--field=...]` (run `--help` for flags) for sibling text; an in-place edit on this challenge's branch (rides the same PR) for docs. Update only stale references; do not rewrite scope.
+   1. `Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible --json saga show --label=<SAGA_LABEL>` lists remaining todo + blocked siblings after this challenge's position. (Skip for orphans -- no siblings -- but still run the docs scan below.)
+   2. Scan each later sibling's text (`Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible --json challenge show --label=<SIBLING_LABEL>`) **and** `docs/` design/spec files against the committed diff for stale references: renamed types / functions / files, changed signatures, moved modules, replaced concepts.
+   3. Fix each surgically -- `Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge update --label=<SIBLING_LABEL> [--field=...]` (run `--help` for flags) for sibling text; an in-place edit on this challenge's branch (rides the same PR) for docs. Update only stale references; do not rewrite scope.
    4. Record sibling + doc updates for the final report (which siblings/docs, which fields). If a later sibling's scope is genuinely broken (not just a rename), do not rewrite it -- flag it as a blocked-follow-on in the report and let the user re-plan.
 
 **Blocked challenge policy:** Never revert branches or discard commits from blocked challenges. Partial work is valuable context for human resumption via `/phoe:implement <label>`. Always keep branches, commits, and checkpoint files intact.
@@ -619,7 +667,7 @@ If matches exist, mark merged, clean up the branch/worktree, log "Pre-empted by 
 in the final report, and skip to the next challenge:
 
 ```bash
-build-crucible-release/bin/crucible challenge move --label=<LABEL> merged
+Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge move --label=<LABEL> merged
 git worktree remove .claude/worktrees/challenge-<label>  # branch-per-challenge only
 git branch -D challenge/<label>
 ```
@@ -648,16 +696,16 @@ EOF
 )")
 PR_NUM="${PR_URL##*/}"
 echo "Opened PR #${PR_NUM}: ${PR_URL}"
-build-crucible-release/bin/crucible challenge update --label=<LABEL> --replace-review-link="${PR_URL}"
+Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge update --label=<LABEL> --replace-review-link="${PR_URL}"
 ```
 
 ```bash
-# combined-branch
-git push -u origin challenge/saga-<saga-label>
+# combined-branch (named after the first challenge in the chain — see 4a's branch-strategy rule)
+git push -u origin challenge/<first-label>
 PR_URL=$(gh pr create \
-  --head challenge/saga-<saga-label> \
+  --head challenge/<first-label> \
   --base main \
-  --title "<saga title>" \
+  --title "<chain title — summarizes the shipped-together challenges>" \
   --body "$(cat <<'EOF'
 ## Summary
 <bullets covering all challenges in the chain>
@@ -671,7 +719,7 @@ echo "Opened PR #${PR_NUM}: ${PR_URL}"
 # Combined PR covers every challenge in the chain — record the same review link on each one
 # so subsequent `crucible challenge show` calls all surface the PR URL.
 for LBL in <label-1> <label-2> <label-3>; do
-  build-crucible-release/bin/crucible challenge update --label="${LBL}" --replace-review-link="${PR_URL}"
+  Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge update --label="${LBL}" --replace-review-link="${PR_URL}"
 done
 ```
 
@@ -687,7 +735,8 @@ user removes them):
 
 - **branch-per-challenge:** `git worktree remove .claude/worktrees/challenge-<label>` after
   pushing.
-- **combined-branch:** only remove the shared worktree after the chain's PR has been pushed.
+- **combined-branch:** only remove the shared worktree (`.claude/worktrees/challenge-<first-label>`)
+  after the chain's PR has been pushed.
 
 If a PR comment loop later requests fixes, check out the branch, apply the change, rebuild
 (full `/phoe:verify` only when changes are significant), commit with a brief
@@ -756,7 +805,7 @@ Include:
 After each PR lands on remote main, mark the corresponding challenge merged, then run the **end-of-cycle reconciliation** (the authoritative pass) against its merged diff. This fires whenever the merge is observed -- e.g. the next `/phoe:execute` Step 2, or interactively -- not inside the run that opened the PR:
 
 ```bash
-build-crucible-release/bin/crucible challenge move --label=<LABEL> merged
+Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge move --label=<LABEL> merged
 ```
 
 Re-scan the merged diff against every remaining todo/blocked challenge (saga sibling or orphan) **and** `docs/` design/spec files for stale references the pre-merge pass (Step 4g.2) missed or that only the landed diff made certain. Fix challenge text in place with `crucible challenge update`. For stale docs, file a tracked docs-reconcile challenge (`/phoe:plan`) so the edit flows through the normal implement + CI-watch path rather than an untracked side PR -- the original challenge branch is gone post-merge. Flag genuinely scope-broken siblings as blocked for re-plan rather than rewriting them. Report this pass's outcome when it runs.

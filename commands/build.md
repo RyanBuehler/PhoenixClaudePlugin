@@ -1,73 +1,72 @@
 ---
-description: Build the engine (via ForgePrototype) or a tool executable (Forge, Crucible, Vigil). Single source of truth for build procedures.
+description: Build the engine or a tool executable (Crucible, Forge, Vigil) through Forge, the in-process builder. Single source of truth for build procedures.
 ---
 
 Build an executable from source.
 
-- The **engine** is built by **ForgePrototype** — the in-process builder that replaces CMake + Ninja.
-  It configures and compiles natively, and its console output is bounded by design: a full cold
-  build prints ~20 progress heartbeats plus a one-line summary, instead of one streamed line per
-  compile edge (a clean editor build is ~8,800 edges → ~8,800 lines on the old path).
-- The **tool targets** (`forge`, `crucible`, `vigil`) are still built with CMake + Ninja. Their
-  binaries are consumed by other commands via hardcoded `build-<target>-release/bin/...` paths
-  (e.g. the Crucible CLI), so their output location must stay put.
+Everything in Phoenix — the engine **and** the tool applications (`crucible`, `forge`, `vigil`) —
+builds through **Forge**, the in-process builder. There is no external build generator and no
+external test runner; they were removed during the build-system cutover and a CI gate blocks their
+return. Forge configures and compiles natively, and its console output is bounded by design: a full
+cold build prints a handful of phase lines plus a progress heartbeat, not one streamed line per
+compile edge.
 
 ## Arguments
 
-- **`<target>`** — *(optional)* one of `engine`, `forge`, `crucible`, `vigil` (default: `engine`).
+- **`<target>`** — *(optional)* one of `engine`, `crucible`, `forge`, `vigil` (default: `engine`).
 
 ## What This Command Owns
 
 This is the **single source of truth** for building any executable in the Phoenix project.
-`/phoe:test`, `/phoe:lint`, and `/phoe:verify` build and test the engine through ForgePrototype.
+`/phoe:test`, `/phoe:lint`, and `/phoe:verify` build and test the engine through Forge.
 `/phoe:implement`, `/phoe:bugfix`, `/phoe:plan`, `/phoe:execute` call `/phoe:build crucible` to get
-the Crucible CLI. Invoke binaries via their explicit build-dir path. **No symlinks, no ELF files at
-the repo root.**
+the Crucible CLI. Invoke every binary via its explicit output-tree path — **no symlinks, no ELF
+files at the repo root.**
 
----
+## 1. The Forge Binary
 
-# Engine Target (default) — ForgePrototype
-
-## 1. The ForgePrototype Binary
-
-Every engine build goes through the `forge-prototype` binary. Locate it, preferring the bootstrap
+Every build goes through the bootstrapped `forge` binary. Locate it, preferring the bootstrap
 output that CI produces:
 
 ```bash
-fp_bin() {
-  for c in \
-    Applications/ForgePrototype/.bootstrap-out/forge-prototype \
-    build-fp-debug/bin/forge-prototype \
-    build-fp-release/bin/forge-prototype; do
-    [ -x "$c" ] && { echo "$c"; return 0; }
-  done
+forge_bin() {
+  [ -x Applications/Forge/.bootstrap-out/forge ] && { echo Applications/Forge/.bootstrap-out/forge; return 0; }
   return 1
 }
 ```
 
-If `fp_bin` finds nothing, **bootstrap it** (cold-start compile with clang++, no CMake/Ninja):
+If nothing is found, **bootstrap it** (cold-start compile with clang++):
 
 ```bash
-python3 Applications/ForgePrototype/Scripts/bootstrap.py
+python3 Applications/Forge/Scripts/bootstrap.py
 ```
 
-This produces `Applications/ForgePrototype/.bootstrap-out/forge-prototype` and shells out only to
-`git`, `python3`, and the clang toolchain. It is content-keyed: a no-op when ForgePrototype's own
-sources are unchanged, a rebuild otherwise. Re-run it after pulling changes that touch
-`Applications/ForgePrototype/`. Confirm the binary reports `ForgePrototype 2026.0.0`.
+This produces `Applications/Forge/.bootstrap-out/forge` and shells out only to `clang++`,
+`clang-scan-deps`, `ar`, `git`, and Python 3.10+ (plus `wayland-scanner` + `pkg-config` for the
+Linux pane closure). `ccache` is used automatically if present. It is content-keyed: a no-op when
+Forge's own sources are unchanged, a rebuild otherwise. **Re-run it after pulling changes that touch
+`Applications/Forge/`** — a stale bootstrap binary lags its own source and fails cold configures
+with cryptic errors. From there, the bootstrapped binary rebuilds itself and the rest of Phoenix
+through the regular in-process pipeline.
+
+---
+
+# Engine Target (default)
 
 ## 2. Pick the Profile
 
-ForgePrototype builds by **profile**. The engine profiles are:
+Forge builds by **profile**; profiles live in `Applications/Forge/Profiles/*.json` and are named
+after their target. The engine profiles are:
 
-| Profile                       | Build Type | Tests    | Use                                            |
-|-------------------------------|------------|----------|------------------------------------------------|
-| `forge-builds-editor`         | Headless   | enabled  | **default** — the build→test→verify loop       |
-| `forge-builds-editor-release` | Release    | disabled | a **runnable windowed GUI editor**             |
+| Profile          | Build Type | Tests    | Use                                            |
+|------------------|------------|----------|------------------------------------------------|
+| `editor`         | Headless   | enabled  | **default** — the build→test→verify loop       |
+| `editor-release` | Release    | disabled | a **runnable windowed GUI editor**             |
 
-Default to `forge-builds-editor` — it has tests enabled, so `/phoe:test` and `/phoe:verify` work
-against it. Use `forge-builds-editor-release` only when the user wants to *run* the editor GUI
-(Headless has no window). `forge-prototype list profiles` is the live source of truth.
+Default to `editor` — it has tests enabled, so `/phoe:test` and `/phoe:verify` work against it.
+("Headless" is the config name, not a no-window promise — the `editor` profile still maps a real
+window.) Use `editor-release` only when the user wants to *run* the editor GUI. `forge list
+profiles` is the live source of truth.
 
 ## 3. Configure + Build
 
@@ -75,11 +74,11 @@ Always run configure then build. Capture the structured result with `--json` so 
 stays a single machine-parseable object (status, durations, warning/error counts, built-binary path).
 
 ```bash
-FP=$(fp_bin) || { python3 Applications/ForgePrototype/Scripts/bootstrap.py && FP=$(fp_bin); }
-PROFILE=forge-builds-editor   # or forge-builds-editor-release for a GUI editor
+FORGE=$(forge_bin) || { python3 Applications/Forge/Scripts/bootstrap.py && FORGE=$(forge_bin); }
+PROFILE=editor   # or editor-release for a GUI editor
 
-"$FP" configure "$PROFILE" --json
-"$FP" build "$PROFILE" --json
+"$FORGE" configure "$PROFILE" --json
+"$FORGE" build "$PROFILE" --json
 ```
 
 **On failure:** `--json` reports `success:false` with `error_count` but **not** the error text
@@ -88,72 +87,82 @@ the default tier prints a bounded head+tail excerpt of each failing node (root c
 `N errors generated` summary). The failed node is still dirty, so the re-run only recompiles it:
 
 ```bash
-"$FP" build "$PROFILE"   # no --json: surfaces the failing compiler output
+"$FORGE" build "$PROFILE"   # no --json: surfaces the failing compiler output
 ```
 
 - **Output path:** read the built binary's path from the build result's `output_path` field — do
-  not hardcode it. Engine artifacts land under
-  `Applications/ForgePrototype/.forge-out/<profile>/bin/` (Headless engine work uses the
-  `shared-engine-ci-linux-Headless/bin/` tree).
+  not hardcode it. Engine artifacts land under `Applications/Forge/.forge-out/<tree>/bin/` (the
+  `editor` profile shares the `shared-engine-ci-linux-Headless/bin/` tree).
 - **Jobs / memory:** the in-process builder keeps peak compiler output in RAM. On a memory-tight
   host, cap parallelism with `--jobs=N` (~2.5 GB/job); on a workstation the default is fine.
-- **No version probe needed.** ForgePrototype tracks staleness — `configure` + `build` is always
-  safe to re-run; an unchanged tree restats and exits quickly (the rescan can take a minute or two
-  on a no-op, which is expected).
+- **No version probe needed.** Forge tracks staleness — `configure` + `build` is always safe to
+  re-run; an unchanged tree restats and exits quickly (the rescan can take a minute or two on a
+  no-op, which is expected).
+
+**Struct/enum layout changes need a clean build to trust.** When a change alters the in-memory
+layout of a struct/enum in a widely-included header, an incremental module build can leave some TUs
+on the old layout and produce a *phantom* trial segfault near a `vector`/copy of the changed type
+(an ABI/size skew, not a logic bug). For an authoritative clean build, `"$FORGE" clean "$PROFILE"`
+first, then rebuild. Treat such a segfault as a build artifact first, a logic bug second.
 
 ---
 
-# Tool Targets (`forge`, `crucible`, `vigil`) — CMake + Ninja
+# Tool Targets (`crucible`, `forge`, `vigil`)
 
-These binaries are invoked by other commands via fixed `build-<target>-release/bin/` paths, so they
-keep the CMake build dir. Substitute the target's values:
+The tool applications are ordinary Forge profiles — build them exactly like the engine. They share
+the `engine-ci` build group (Headless, linux), so their binaries land in one shared tree:
 
-| Target   | Version  | CMake Flag             | Build Dir              | Binaries                  |
-|----------|----------|------------------------|------------------------|---------------------------|
-| forge    | 2026.0.0 | -DAPPLICATION=Forge    | build-forge-release    | forge                     |
-| crucible | 2026.0.0 | -DAPPLICATION=Crucible | build-crucible-release | crucible, crucible-server |
-| vigil    | 2026.0.0 | -DAPPLICATION=Vigil    | build-vigil-release    | vigil                     |
-
-## 1. Version Check
-
-```bash
-build-<target>-release/bin/<target> --version
+```
+Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/
 ```
 
-Treat as **stale** (rebuild) if: the binary is missing; the command exits non-zero; the output
-doesn't match `<Target> <version>` (e.g. `Crucible 2026.0.0`); or the build dir's `CMakeCache.txt`
-records a different absolute source path (cross-checkout staleness — `grep -m1 '^CMAKE_HOME_DIRECTORY:'
-build-<target>-release/CMakeCache.txt`; if it differs from `pwd`, `rm -rf` the build dir first).
-For `crucible`, **both** binaries must exist or it's stale. If current, report "already current".
+| Target     | Profile    | Binaries produced                    |
+|------------|------------|--------------------------------------|
+| `crucible` | `crucible` | `crucible`, `crucible-server`        |
+| `forge`    | `forge`    | `forge`                              |
+| `vigil`    | `vigil`    | `vigil`                              |
 
-## 2. Clean Rebuild
+Building the `crucible` profile produces **both** `crucible` and `crucible-server` in that bin tree.
 
 ```bash
-rm -rf build-<target>-release
-cmake -S . -B build-<target>-release -G Ninja <flag> -DCMAKE_BUILD_TYPE=Release
-cmake --build build-<target>-release --parallel 16
+FORGE=$(forge_bin) || { python3 Applications/Forge/Scripts/bootstrap.py && FORGE=$(forge_bin); }
+TARGET=crucible   # or forge, or vigil
+
+"$FORGE" configure "$TARGET" --json
+"$FORGE" build     "$TARGET" --json
 ```
 
-`-G Ninja` is required — Phoenix's C++23 modules only build under Ninja. Re-verify with `--version`;
-on a persistent mismatch, **stop and surface it** (a bumped manifest version with un-regenerated
-source, or a silent dependency failure) — never fall back to an older binary.
+The commands that consume the Crucible CLI invoke it at its output-tree path,
+`Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible`. For `crucible`,
+**both** `crucible` and `crucible-server` must exist in that tree or the build is incomplete.
+
+### Version check
+
+The tool binaries report `<Target> <version> (engine <version>)`:
+
+```bash
+Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible --version
+```
+
+Treat as stale (rebuild) if the binary is missing, the command exits non-zero, or the reported
+version does not match the manifest. On a persistent mismatch after a rebuild, **stop and surface
+it** (a bumped manifest version with un-regenerated source, or a silent dependency failure) — never
+fall back to an older binary.
 
 ---
 
 ## Report
 
 State the result: target/profile built, SUCCESS or FAILED with duration, the `output_path` on
-success, and the first failing node's error on failure. For the engine, surface a configure-phase
-failure rather than proceeding to build.
+success, and the first failing node's error on failure. Surface a configure-phase failure rather
+than proceeding to build.
 
 ## Notes
 
-- **Why ForgePrototype for the engine.** The old path streamed every `cmake`/`ninja` line into the
-  session; a clean editor build is ~8,800 edges. ForgePrototype caps progress at ~20 heartbeats and
-  `--json` reduces a successful build to one result object — the dominant `/phoe:build` token cost.
-- **ccache is modules-correct here.** ForgePrototype folds each consumer's transitive imported
-  interface sources into the ccache key, so a changed `.cppm` busts exactly the dependent consumers
-  — safe with C++23 modules, unlike plain ccache on the CMake path.
-- **Engine artifacts** live under `Applications/ForgePrototype/.forge-out/`, not `build-<profile>/`.
-  clang-tidy uses `forge-prototype lint` against the same graph — see `/phoe:lint`.
-- **Worktrees.** Each worktree owns its own `.forge-out/`, `.bootstrap-out/`, and `build-*/` dirs.
+- **ccache is modules-correct here.** Forge folds each consumer's transitive imported interface
+  sources into the ccache key, so a changed `.cppm` busts exactly the dependent consumers — safe
+  with C++23 modules.
+- **clang-tidy** runs through `forge lint` against the same build graph — see `/phoe:lint`.
+- **Worktrees.** Forge resolves the project root from the executable's location, not the cwd, so a
+  bootstrapped binary run from a worktree still builds the worktree it lives in. Each worktree owns
+  its own `.forge-out/`, `.forge/`, and `.bootstrap-out/` dirs.

@@ -14,14 +14,14 @@ Implement a Crucible Challenge end-to-end with human supervision. Accepts a labe
 
 ## 1. Bootstrap
 
-Run `/phoe:build crucible` to ensure both `crucible` and `crucible-server` exist under `build-crucible-release/bin/` and match the expected version. A fresh worktree triggers a one-time clean build; subsequent invocations are no-ops. If `/phoe:build crucible` stops with a version mismatch, stop here and report it to the user.
+Run `/phoe:build crucible` to ensure both `crucible` and `crucible-server` exist under `Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/` and match the expected version. The first build is a clean build; subsequent invocations are no-ops. If `/phoe:build crucible` stops with a version mismatch, stop here and report it to the user.
 
 The Crucible server is a user-managed process outside the plugin's scope — do not start it. If the CLI can't reach a server, the first `crucible` call below will fail with a clear error; surface that to the user and stop.
 
 Confirm Crucible is reachable and initialized for this project:
 
 ```bash
-build-crucible-release/bin/crucible status
+Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible status
 ```
 
 ## 2. Resolve the Challenge
@@ -31,7 +31,7 @@ build-crucible-release/bin/crucible status
 1. List review challenges:
 
 ```bash
-build-crucible-release/bin/crucible --json challenge list --status=review
+Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible --json challenge list --status=review
 ```
 
 2. For each review challenge, probe the local git history for merge evidence (both signals are read-only):
@@ -50,7 +50,7 @@ git rev-parse --verify challenge/<LABEL> 2>/dev/null \
 3. If either signal fires, show the user the matching commit(s) and ask whether to mark the challenge merged. **Never auto-mark.** On confirmation:
 
 ```bash
-build-crucible-release/bin/crucible challenge move --label=<LABEL> merged
+Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge move --label=<LABEL> merged
 ```
 
    Then clean up the stale worktree and branch per Step 17's "On merge" note; the
@@ -63,20 +63,20 @@ Then pick the next todo using saga-aware selection:
 1. List all sagas and their progress:
 
 ```bash
-build-crucible-release/bin/crucible --json saga list
+Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible --json saga list
 ```
 
 2. List all todo challenges:
 
 ```bash
-build-crucible-release/bin/crucible --json challenge list --status=todo
+Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible --json challenge list --status=todo
 ```
 
 3. Pick the best challenge using this priority order:
    - **Saga ordering first** — if a challenge belongs to a saga, only pick it if all earlier challenges in that saga are `merged` or `canceled`. Never skip ahead in a saga's ordering.
    - **Blocked check** — if a saga predecessor is in `review` or `active` (not yet merged), the next challenge cannot proceed. Move it to `blocked` and stop:
      ```bash
-     build-crucible-release/bin/crucible challenge block <NEXT_ID> --blocked_by=<PREDECESSOR_ID> --reason="Awaiting merge of #<PREDECESSOR_ID> on branch challenge/<predecessor-label>"
+     Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge block <NEXT_ID> --blocked_by=<PREDECESSOR_ID> --reason="Awaiting merge of #<PREDECESSOR_ID> on branch challenge/<predecessor-label>"
      ```
      Tell the user which challenge is blocked and why, then try the next eligible challenge. If no unblocked challenges remain, stop.
    - **Priority second** — among eligible challenges, pick the highest priority (critical > high > medium > low).
@@ -84,7 +84,7 @@ build-crucible-release/bin/crucible --json challenge list --status=todo
 
 4. Also check `blocked` challenges: for each, verify if the blocker is now `merged`. If so, auto-unblock:
    ```bash
-   build-crucible-release/bin/crucible challenge unblock <ID> todo
+   Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge unblock <ID> todo
    ```
    Then include the unblocked challenge in the candidate pool.
 
@@ -93,7 +93,7 @@ build-crucible-release/bin/crucible --json challenge list --status=todo
 **If argument is a label**, fetch by label:
 
 ```bash
-build-crucible-release/bin/crucible challenge show --label=<LABEL>
+Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge show --label=<LABEL>
 ```
 
 **Check for existing checkpoint:** Look for `.claude/handoffs/<LABEL>-checkpoint.md`. If found:
@@ -104,6 +104,19 @@ build-crucible-release/bin/crucible challenge show --label=<LABEL>
 4. Proceed to Step 8 (Plan and Implement), using the checkpoint's "remaining work" as the starting point.
 5. Delete the checkpoint file once implementation is complete and all verification passes.
 
+### Claim the challenge immediately
+
+The moment you've resolved *which* challenge to work — before showing context, syncing, or
+branching — **move it to `active`** so a parallel session cannot pick up the same work:
+
+```bash
+Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge move --label=<LABEL> active
+```
+
+This is a claim, not a commitment: if you decide during exploration (Steps 3–5) not to proceed, move
+it back with `... challenge move --label=<LABEL> todo`. Everything below runs against the now-active
+challenge.
+
 ## 3. Show Context
 
 Display the challenge details: title, description, acceptance criteria, and verification steps.
@@ -111,7 +124,7 @@ Display the challenge details: title, description, acceptance criteria, and veri
 **Check for saga membership** — search the saga list for the resolved challenge ID. If it belongs to a saga:
 
 ```bash
-build-crucible-release/bin/crucible saga show --label=<SAGA_LABEL>
+Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible saga show --label=<SAGA_LABEL>
 ```
 
 Show the saga name, where this challenge sits in the ordering, and overall saga progress. This gives full feature context for the implementation.
@@ -138,28 +151,52 @@ git pull --ff-only origin main
 
 ## 5. Create a Dedicated Worktree
 
-From the main repo root:
+From the main repo root, create the worktree and branch (this exact `git worktree add` form is what
+the plugin's `branch-worktree-check.py` hook blesses — it enforces `<type>/<label>` naming at
+`.claude/worktrees/<type>-<label>`):
 
 ```bash
 git worktree add .claude/worktrees/challenge-<label> -b challenge/<label>
-cd .claude/worktrees/challenge-<label>
+```
+
+Then **enter it with the `EnterWorktree` tool** — `EnterWorktree(path=".claude/worktrees/challenge-<label>")`.
+This is not cosmetic. In a background session, Claude Code's isolation guard refuses native
+`Write`/`Edit` in any worktree the session has not entered through the harness ("parent bg session
+hasn't isolated yet"), which forces slow, error-prone Bash/heredoc edits on you and every subagent
+you dispatch. `EnterWorktree(path=...)` registers the worktree with the guard so native file tools
+keep working. It enters *by path* without taking removal ownership, so Step 17's `git worktree
+remove` cleanup still applies unchanged. (Do not create the worktree with `EnterWorktree(name=...)`
+instead — that mints its own branch/path naming and cannot base on a specific ref, breaking the
+`challenge/<label>` convention the rest of this workflow relies on.)
+
+**Bootstrap Forge in the worktree.** A fresh worktree — even one branched from a warm checkout — can
+lack its own `Applications/Forge/.bootstrap-out/forge`. Bootstrap it now so the first `/phoe:verify`
+is an incremental build, not a cold failure:
+
+```bash
+python3 Applications/Forge/Scripts/bootstrap.py
 ```
 
 Run all subsequent steps from inside the worktree directory.
 
-**Crucible CLI absolute path.** The `build-crucible-release/` directory lives at the *main repo root*, not inside the worktree. Once you `cd` into the worktree, the relative path no longer resolves. Resolve the main-repo-rooted absolute path in every bash block that invokes the CLI:
+**Crucible CLI absolute path.** The Crucible CLI is built into the main repo's Forge output tree (`Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/`), not the worktree's. Once you `cd` into the worktree, the relative path resolves against the worktree's own (empty) output tree. Resolve the main-repo-rooted absolute path in every bash block that invokes the CLI:
 
 ```bash
-CRUCIBLE="$(git rev-parse --path-format=absolute --git-common-dir | xargs dirname)/build-crucible-release/bin/crucible"
+CRUCIBLE="$(git rev-parse --path-format=absolute --git-common-dir | xargs dirname)/Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible"
 "$CRUCIBLE" challenge show --label=<LABEL>   # or any crucible subcommand
 ```
 
-All subsequent `build-crucible-release/bin/crucible <args>` snippets in this document assume you've derived `$CRUCIBLE` first — substitute `"$CRUCIBLE" <args>` when running them from inside the worktree.
+All subsequent `Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible <args>` snippets in this document assume you've derived `$CRUCIBLE` first — substitute `"$CRUCIBLE" <args>` when running them from inside the worktree.
 
-## 6. Move to Active
+## 6. Confirm Active
+
+The challenge was claimed as `active` back in Step 2 (before branching), so there is nothing to move
+here — this is just the checkpoint where, if exploration or the worktree setup made you abandon the
+challenge, you revert the claim:
 
 ```bash
-build-crucible-release/bin/crucible challenge move --label=<LABEL> active
+# only if abandoning — otherwise the challenge is already active
+"$CRUCIBLE" challenge move --label=<LABEL> todo
 ```
 
 ## 7. Explore and Understand
@@ -193,7 +230,7 @@ If this challenge is complex (multiple modules, many affected files, or extensiv
 
 ## 8. Plan and Implement
 
-Enter plan mode, create an implementation plan, then execute it. Follow the project's normal development workflow — write code, follow conventions from CLAUDE.md. **Before writing any C++**, read `${CLAUDE_PLUGIN_ROOT}/references/style-guide.md` and `${CLAUDE_PLUGIN_ROOT}/references/tooling.md` so the implementation conforms to the enforced conventions (formatting, naming, comments, namespaces, return-value handling, `auto`, scope spacing, tooling). `${CLAUDE_PLUGIN_ROOT}` is the plugin install path — `cat` these via Bash so the shell expands the variable; if it is unset, use `~/phoenixclaudeplugin/references/`. If the challenge has a `strategy` field, use it as a starting point for the implementation plan.
+Enter plan mode, create an implementation plan, then execute it. Follow the project's normal development workflow — write code, follow conventions from CLAUDE.md. **Before writing any C++**, read `${CLAUDE_PLUGIN_ROOT}/references/style-guide.md` and `${CLAUDE_PLUGIN_ROOT}/references/tooling.md` so the implementation conforms to the enforced conventions (formatting, naming, comments, namespaces, return-value handling, `auto`, scope spacing, tooling). `${CLAUDE_PLUGIN_ROOT}` is the plugin install path (fall back to `~/phoenixclaudeplugin/references/` if it is unset). If the challenge has a `strategy` field, use it as a starting point for the implementation plan.
 
 Comments: default to none. Prefer one line; two or three for the genuinely complex. *Why*, not *what*. Paragraphs belong in the commit message. Full rules in `${CLAUDE_PLUGIN_ROOT}/references/style-guide.md` §Comments.
 
@@ -209,7 +246,7 @@ After implementing the feature code, evaluate whether unit tests are needed. Tes
 
 Tests are NOT required for:
 
-- Build system or CMake-only changes
+- Build-system or profile/config-only changes
 - Configuration file changes (JSON, cfg)
 - Pure wiring or delegation (forwarding calls to already-tested functions)
 - Platform-specific code that can only be tested on the target platform's CI
@@ -232,7 +269,7 @@ All verification must pass before proceeding:
 
 Before committing, systematically evaluate each acceptance criterion from the challenge JSON. The model that wrote the code must not self-approve without structured evaluation.
 
-1. Retrieve the challenge's acceptance criteria: `build-crucible-release/bin/crucible challenge show --label=<LABEL>`
+1. Retrieve the challenge's acceptance criteria: `Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge show --label=<LABEL>`
 2. For **each** criterion, answer explicitly:
    - **Met?** Yes / No / Partially
    - **Evidence:** What in the diff proves this? (file:line, test name, or command output)
@@ -261,7 +298,7 @@ have repeatedly said so, and a paraphrased AC has already been wrong in a dispat
 Before dispatching, capture the challenge verbatim:
 
 ```bash
-build-crucible-release/bin/crucible challenge show <ID>
+Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge show <ID>
 ```
 
 Interpolate that **whole output** — title, description, acceptance criteria, verification,
@@ -285,11 +322,15 @@ tree exists.
 
 ### 10.5b. Search and diff scoping
 
-> **Reading the change.** Do not pipe a whole diff. `git diff --cached --stat` gives you the map;
-> then read each changed file **in place** at its current content, and use `git diff --cached -- <path>`
-> for one file at a time when you need the delta. A whole-diff dump on a mid-size change (30 KB+)
-> overflows the Bash output cap, spills to a temp file, then overflows the Read cap — costing
-> round-trips and tempting you to review a truncated artifact.
+> **Reading the change.** You are reviewing a **frozen commit range** — `<BASE>..<SHA>`, where the
+> orchestrator has filled `<SHA>` with the committed tip and `<BASE>` with `git merge-base
+> origin/main HEAD` (the branch's actual fork point, never a hardcoded `main`). Do not pipe a whole
+> diff. `git diff <BASE>..<SHA> --stat` gives you the map; then read each changed file **in place** at
+> its current content, and use `git diff <BASE>..<SHA> -- <path>` for one file at a time when you need
+> the delta. A whole-diff dump on a mid-size change (30 KB+) overflows the Bash output cap, spills to
+> a temp file, then overflows the Read cap — costing round-trips and tempting you to review a
+> truncated artifact. The range is immutable for the life of your review; nothing in the index shifts
+> under you.
 >
 > **Where to search.** This repository contains many sibling worktrees under `.claude/worktrees/`
 > and build trees under `.forge*/` and `.bootstrap-out/`, all holding near-identical copies of the
@@ -315,18 +356,34 @@ tree exists.
 
 Invoke the code reviewer as a **separate agent** to evaluate the implementation diff. The agent that wrote the code must not be the only judge.
 
-1. Stage all changes: `git add -A`
+1. **Freeze the diff — commit first, then review a SHA.** Never hand a reviewer "the staged diff":
+   the index mutates as you keep working, so a finding filed against `--cached` can land on code a
+   later edit already superseded (one saga had 3 of 6 review passes report on stale code this way).
+   Commit the work on the challenge branch now, then capture the frozen SHA and the review base:
+   ```bash
+   git fetch origin main                          # so the merge-base below is current
+   git add -A
+   git commit -m "<descriptive message referencing the challenge label>"
+   REVIEW_SHA=$(git rev-parse HEAD)
+   REVIEW_BASE=$(git merge-base origin/main HEAD)  # the branch's actual fork point — NOT hardcoded
+                                                   # main; a stacked/diverged branch reviewed against
+                                                   # main shows a predecessor's merged work as noise
+   ```
+   Because the commit already lands here, Step 13 is a no-op unless the fix loop below adds commits.
 2. Launch `invoke-code-reviewer` as a subagent with the prompt:
    > Review the change on this challenge branch. Focus on correctness, safety, modern C++23 opportunities, performance, and project convention compliance. Report findings using CRITICAL/WARNING/SUGGESTION/NOTE severity levels.
    >
-   > [Include the **Challenge Contract** (Step 10.5a) and the **search/diff scoping block** (Step 10.5b) here, verbatim.]
+   > [Include the **Challenge Contract** (Step 10.5a) and the **search/diff scoping block** (Step 10.5b) here, verbatim — substituting the resolved `REVIEW_BASE` and `REVIEW_SHA` values for the `<BASE>..<SHA>` placeholders so the reviewer diffs the frozen range.]
+   >
+   > Lint already ran in Step 9's `/phoe:verify` (`forge lint`, clang-tidy over the changed surface, module-import graph included) and passed — you do not need to re-adjudicate include/import hygiene or punt to `invoke-lint-agent`; treat the import graph as already cleared unless you see a concrete contradiction.
    >
    > End your report with a `## Workflow Friction` section listing anything that made this review harder than it should have been — missing context, ambiguous spec, undocumented convention, tooling gaps — or the single word `none` if nothing applied.
 3. **Gate on zero CRITICAL and zero WARNING findings.** If any CRITICAL or WARNING issues are found:
    - Fix each CRITICAL and WARNING issue
+   - Commit the fix on the branch and **re-freeze**: `REVIEW_SHA=$(git rev-parse HEAD)` (refresh `REVIEW_BASE` too if `origin/main` moved)
    - Re-run `/phoe:verify`
    - Re-run acceptance criteria evaluation (Step 10)
-   - Re-invoke the code reviewer (repeat this step)
+   - Re-invoke the code reviewer against the new SHA (repeat this step)
 4. **WARNING is a blocking tier alongside CRITICAL.** If you judge a WARNING to be a false positive or genuinely out of scope, do not silently proceed — surface it to the user with your reasoning and let them waive it. Record any waived WARNING in the final report; never ship one unaddressed.
 5. **SUGGESTION and NOTE findings** are omitted from the report unless particularly insightful.
 
@@ -338,7 +395,7 @@ Launch `invoke-code-reviewer` as a fresh subagent with the prompt:
 
 > Adversarially review the change on challenge `<LABEL>`. Your job is to attack this implementation, not validate it. Assume the standard review already passed — do not duplicate it.
 >
-> [Include the **Challenge Contract** (Step 10.5a) and the **search/diff scoping block** (Step 10.5b) here, verbatim.]
+> [Include the **Challenge Contract** (Step 10.5a) and the **search/diff scoping block** (Step 10.5b) here, verbatim — substituting the resolved `REVIEW_BASE` and `REVIEW_SHA` values for the `<BASE>..<SHA>` placeholders. Use the same frozen SHA the standard review ran against.]
 >
 > Hunt for:
 >
@@ -353,18 +410,22 @@ Launch `invoke-code-reviewer` as a fresh subagent with the prompt:
 >
 > End your report with a `## Workflow Friction` section listing anything that made this review harder than it should have been — missing context, ambiguous spec, undocumented convention, tooling gaps — or the single word `none` if nothing applied.
 
-**Gate on zero CRITICAL and zero WARNING adversarial findings.** Treat them the same as Step 11: fix every CRITICAL and WARNING, re-run `/phoe:verify`, re-run acceptance criteria evaluation, then re-run **both** the standard and adversarial reviews until both pass. As in Step 11, a WARNING you judge a false positive or out of scope must be surfaced to the user for an explicit waive — never silently dropped — and any waived WARNING recorded in the final report.
+**Gate on zero CRITICAL and zero WARNING adversarial findings.** Treat them the same as Step 11: fix every CRITICAL and WARNING, commit the fix and re-freeze (`REVIEW_SHA=$(git rev-parse HEAD)`), re-run `/phoe:verify`, re-run acceptance criteria evaluation, then re-run **both** the standard and adversarial reviews against the new SHA until both pass. As in Step 11, a WARNING you judge a false positive or out of scope must be surfaced to the user for an explicit waive — never silently dropped — and any waived WARNING recorded in the final report.
 
-## 13. Commit Changes
+## 13. Finalize the Commit
 
-Commit all changes on the challenge branch with a descriptive message referencing the challenge label.
+The implementation was already committed in Step 11 (the freeze), and every review-fix pass added
+its own commit. So there is normally nothing to commit here — the branch already carries the work
+with a message referencing the challenge label. If review produced a string of small fixup commits
+and you want a tidy history, optionally squash them into one before moving on; do **not** leave any
+change uncommitted going into Step 14.
 
 ## 14. Move to Review — Required
 
 Immediately after the commit lands, move the challenge to `review`. This is a mandatory, non-skippable final workflow step — implementation is not considered complete until the challenge is in `review`:
 
 ```bash
-build-crucible-release/bin/crucible challenge move --label=<LABEL> review
+Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge move --label=<LABEL> review
 ```
 
 If this move fails (server down, label mismatch, Crucible not initialized), **stop and surface the error to the user**. Do not report the challenge as done, and do not continue to the report step, until the move has succeeded.
@@ -399,11 +460,11 @@ Reconcile anything this implementation may have invalidated — later saga-sibli
 
 1. If in a saga, list remaining siblings (todo + blocked) after this challenge's position:
    ```bash
-   build-crucible-release/bin/crucible --json saga show --label=<SAGA_LABEL>
+   Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible --json saga show --label=<SAGA_LABEL>
    ```
 2. For each later sibling, fetch its full spec:
    ```bash
-   build-crucible-release/bin/crucible --json challenge show --label=<SIBLING_LABEL>
+   Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible --json challenge show --label=<SIBLING_LABEL>
    ```
 3. Scan each sibling's text — and grep `docs/` design/spec files — for stale references against the diff this challenge produced. Things to look for:
    - Type / class / function / method names that were renamed
@@ -411,7 +472,7 @@ Reconcile anything this implementation may have invalidated — later saga-sibli
    - API signatures or parameter names that changed
    - Module or layer boundaries that shifted
    - Concepts the sibling depends on that no longer exist or have been replaced
-4. Fix each surgically — `build-crucible-release/bin/crucible challenge update --label=<SIBLING_LABEL> [--description=... --strategy=... --affected_files=...]` (run `--help` for flags) for challenge text; an in-place edit on this challenge's branch (rides the same PR) for docs. Update only the references that are actually stale; do not rewrite specs or scope.
+4. Fix each surgically — `Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge update --label=<SIBLING_LABEL> [--description=... --strategy=... --affected_files=...]` (run `--help` for flags) for challenge text; an in-place edit on this challenge's branch (rides the same PR) for docs. Update only the references that are actually stale; do not rewrite specs or scope.
 5. If a sibling or doc has no stale references, leave it alone.
 6. Record which siblings + docs were updated (and what fields/files changed) for the report.
 
@@ -447,7 +508,7 @@ URL string, so a non-GitHub review system (Gitea, Phabricator, internal mirror) 
 without rewording this step:
 
 ```bash
-build-crucible-release/bin/crucible challenge update --label=<LABEL> --replace-review-link="${PR_URL}"
+Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge update --label=<LABEL> --replace-review-link="${PR_URL}"
 ```
 
 `Crucible:` and `Saga:` trailers are mandatory; pull IDs from the JSON already fetched in Step 2/3. Drop the `Saga:` line for orphans.
@@ -471,7 +532,7 @@ If Step 16 opened a PR, run the watch loop in `references/ci-watch.md` against P
 If the challenge belongs to a saga, show updated saga progress:
 
 ```bash
-build-crucible-release/bin/crucible saga show --label=<SAGA_LABEL>
+Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible saga show --label=<SAGA_LABEL>
 ```
 
 Tell the user:
@@ -491,7 +552,7 @@ Tell the user:
 But once the PR is confirmed merged into remote `main` — typically observed on a later `/phoe:implement next` (Step 2) — reconciling the tracking status *is* expected; a merged PR left in `review` is stale bookkeeping (and saga progress only counts `merged`). Verify the landing first (PR `state` is `MERGED` **and** its merge commit is reachable from `origin/main` — a retarget-miss can show `MERGED` without reaching main), then move it to `merged` and run the **end-of-cycle reconciliation** (the authoritative pass) against the merged diff:
 
 ```bash
-build-crucible-release/bin/crucible challenge move --label=<LABEL> merged
+Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge move --label=<LABEL> merged
 ```
 
 Re-scan the merged diff against remaining todo/blocked siblings **and** `docs/` design/spec files for stale references the Step 15 pass missed. Fix challenge text in place with `crucible challenge update`. For stale docs, file a tracked docs-reconcile challenge (`/phoe:plan`) so the edit flows through the normal implement + CI-watch path rather than an untracked side PR — this challenge's branch is gone post-merge. Flag genuinely scope-broken siblings as blocked rather than rewriting them. Report this pass's outcome when it runs.
@@ -508,8 +569,10 @@ reconciliation), after the reconciliation pass above, clean up and report — th
    git worktree remove .claude/worktrees/challenge-<label>
    git branch -D challenge/<label>
    ```
-   If this session is running *inside* that worktree, tear it down with
-   `ExitWorktree` instead — a bare `git worktree remove` dangles the session pin.
+   If this session entered the worktree via `EnterWorktree(path=...)` in Step 5, first
+   `ExitWorktree(keep)` to return to the main checkout — then the `git worktree
+   remove` above is safe. (Entering by path takes no removal ownership, so
+   `ExitWorktree` will not remove it for you.)
 
 2. **Report the next ready challenge — do not implement it.** If the merged
    challenge was in a saga, use Step 2's saga-aware selection (ordering satisfied,
@@ -520,4 +583,4 @@ reconciliation), after the reconciliation pass above, clean up and report — th
 
 Use `/phoe:plan` to create new challenges or extend an existing saga.
 
-> **Note:** When the user moves a challenge to `merged`, it is automatically archived in the server's data dir. If work needs to be revisited, use `build-crucible-release/bin/crucible challenge unarchive --label=<LABEL>` to restore it to `todo` status.
+> **Note:** When the user moves a challenge to `merged`, it is automatically archived in the server's data dir. If work needs to be revisited, use `Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge unarchive --label=<LABEL>` to restore it to `todo` status.

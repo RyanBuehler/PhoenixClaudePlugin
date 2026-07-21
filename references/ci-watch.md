@@ -48,12 +48,34 @@ block per iteration.
 
 The session's token often lacks `checks:read`, so `gh pr checks` / `statusCheckRollup` return
 `Resource not accessible by personal access token` (the PR shows UNSTABLE). Use the **Actions runs
-API**, which the token *can* read. Resolve the PR's head branch once, then list its workflow runs:
+API**, which the token *can* read. Target the PR's exact head **commit** — `head_sha` — not just its
+branch, so a stale run from an earlier push cannot be mistaken for the current one:
 
 ```bash
-BRANCH=$(gh pr view <PR_URL> --json headRefName -q .headRefName)
-gh run list --branch "$BRANCH" --json databaseId,name,status,conclusion --limit 20
+read HEAD_SHA REPO < <(gh pr view <PR_URL> --json headRefOid,headRepository \
+  -q '[.headRefOid, .headRepository.nameWithOwner] | @tsv')
+RUNS=$(gh api "repos/${REPO}/actions/runs?head_sha=${HEAD_SHA}" \
+  --jq '{total: .total_count, runs: [.workflow_runs[] | {databaseId: .id, name: .name, status: .status, conclusion: .conclusion}]}')
+echo "$RUNS"
 ```
+
+**`total_count == 0` is a signal, not "still queued."** A run for the head SHA either exists or it
+doesn't; if none exists after the first check, the usual cause is that GitHub **never scheduled one
+because the PR is mergeconflicting** (a conflicting PR gets no workflow run, ever — indistinguishable
+from "queued" if you only poll for pending). On `total_count == 0`, check mergeability before
+snoozing:
+
+```bash
+gh pr view <PR_URL> --json mergeable,mergeStateStatus -q '[.mergeable, .mergeStateStatus] | @tsv'
+```
+
+If `mergeable == "CONFLICTING"`, stop the watch and report the conflict — snoozing will never turn
+green. Otherwise (runs genuinely not created yet) treat it as PENDING and snooze.
+
+(`gh run list --branch "$BRANCH" --json databaseId,name,status,conclusion --limit 20` is an
+acceptable fallback when the `head_sha` query is unavailable, but it can surface stale runs from
+prior pushes — prefer the `head_sha`-scoped query above. If `gh pr checks` happens to work — a token
+*with* `checks:read` — it is a fine shortcut, but never depend on it.)
 
 Classify each run:
 
@@ -67,10 +89,8 @@ Roll up to a single PR-level state:
 - **READY** -- every run completed and passed.
 - **FAILED** -- at least one run failed. Pull the failing log without a re-run via
   `gh run view <databaseId> --log-failed`.
-- **PENDING** -- otherwise.
-
-(If `gh pr checks` happens to work in your environment — a token *with* `checks:read` — it is a
-fine shortcut, but never depend on it; the `gh run` path is the reliable one here.)
+- **PENDING** -- otherwise (but see the `total_count == 0` mergeability check above before treating a
+  no-runs result as PENDING).
 
 ## On FAILED — one fix-and-retry attempt
 

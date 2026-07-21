@@ -102,9 +102,9 @@ show` carry the PR URL:
 ENTITY=challenge   # or bug, depending on which workflow opened the PR
 LABEL=<label>
 PR_URL=$(gh pr view --json url --jq .url)
-EXISTING=$(build-crucible-release/bin/crucible --json "${ENTITY}" show --label="${LABEL}" | jq -r '.review_link // ""')
+EXISTING=$(Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible --json "${ENTITY}" show --label="${LABEL}" | jq -r '.review_link // ""')
 if [ -z "${EXISTING}" ]; then
-  build-crucible-release/bin/crucible "${ENTITY}" update --label="${LABEL}" --replace-review-link="${PR_URL}"
+  Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible "${ENTITY}" update --label="${LABEL}" --replace-review-link="${PR_URL}"
 fi
 ```
 

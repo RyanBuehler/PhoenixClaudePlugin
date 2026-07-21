@@ -134,9 +134,8 @@ new_code();
 ## Project-Specific Considerations
 
 Before reviewing, read `${CLAUDE_PLUGIN_ROOT}/references/style-guide.md` and `${CLAUDE_PLUGIN_ROOT}/references/tooling.md`
-(`${CLAUDE_PLUGIN_ROOT}` is the plugin install path — `cat` it via Bash so the shell expands the
-variable; if it is unset, fall back to `~/phoenixclaudeplugin/references/`). Flag any
-change that violates them. Specifically check for:
+(the plugin install path; fall back to `~/phoenixclaudeplugin/references/` if `${CLAUDE_PLUGIN_ROOT}`
+is unset). Flag any change that violates them. Specifically check for:
 - Anonymous, "Detail"-named, or generically-named namespaces (must be purpose-named, no
   collisions with existing classes/structs/namespaces)
 - `(void)`, `std::ignore`, or `[[maybe_unused]]` discarding the result of an error-bearing
@@ -173,7 +172,7 @@ change that violates them. Specifically check for:
 
 **No Macros**: Flag new #define. Suggest constexpr/consteval/concepts/templates. Exempt: test registration macros, third-party C API interop.
 
-**No Preprocessor Guards**: Flag #ifdef/#if in shared code. Suggest if constexpr with CMake-generated Build:: constants.
+**No Preprocessor Guards**: Flag #ifdef/#if in shared code. Suggest if constexpr with Forge-resolved Build:: constants (one resolver, all consumers read the constant — never `-D` macros).
 
 **No Lint Bypass Without Comment**: Flag NOLINT/clang-format-off without adjacent explanatory comment.
 
@@ -182,6 +181,8 @@ change that violates them. Specifically check for:
 **Descriptive Names**: Flag abbreviations (except AABB, ID), single-letter variables outside loop counters.
 
 **Export macros are Forge-emitted, not in-tree**: Do NOT flag `<MODULE>_API` macros (`EDITOR_API`, `CORTEX_API`, `MOSAIC_API`, …) as undefined — there is no in-tree `#define`. Forge's `FlagEmitter` emits `-D<MODULE>_API=""` for every module on every compile, so they expand to empty and any header usage is well-formed. `grep 'define <X>_API'` returning nothing is expected, not a defect.
+
+**`git grep "class <Name>"` under-reports `*_API`-annotated types**: a type declared `class MOSAIC_API TesseraRegistry` does not match `git grep 'class TesseraRegistry'` — the export macro sits between `class` and the name. Before concluding a type is undeclared/absent, also grep the bare name (`git grep -nw TesseraRegistry`) or match the macro slot (`git grep -nE 'class ([A-Z]+_API )?TesseraRegistry'`). An absence claim built on the narrow `class <Name>` pattern is a false negative on exactly the public types most likely to be referenced.
 
 ### Portability Requirements (Shared Code)
 
@@ -234,13 +235,30 @@ is undefined. Custom types should follow this convention.
 
 ## Include / Import Findings
 
+**Lint usually already ran.** `/phoe:implement` and `/phoe:execute` run `/phoe:verify` (which
+includes `forge lint` — clang-tidy over the changed surface, module-import graph included) *before*
+dispatching you, and the dispatch prompt says so. When it does, treat the include/import graph as
+already adjudicated: do **not** punt the whole graph back with "run invoke-lint-agent to check the
+imports." Flag only a **concrete** contradiction you can point at in the diff.
+
 You run with `Read, Grep, Glob, Bash` and **no Agent tool** — you cannot invoke `invoke-lint-agent`
-yourself. When review surfaces include- or module-import-shaped symptoms — missing STL headers,
-forward-decl vs full-include mismatches, circular-dependency fragility, missing or unused `import`
-declarations, or wrong module-local header variants — do not silently hand-wave the graph: report
+yourself. When review surfaces a specific include- or module-import-shaped symptom — a missing STL
+header, a forward-decl vs full-include mismatch, circular-dependency fragility, a missing or unused
+`import` declaration, or a wrong module-local header variant — do not silently hand-wave it: report
 the symptom as a finding (NOTE, or WARNING if it likely breaks the build) naming the specific file
-and symbol, and recommend the orchestrator or user run `invoke-lint-agent` / `/phoe:lint` to
-adjudicate it. Flag it precisely; never claim to have run the lint agent.
+and symbol. If (and only if) lint did not run pre-review, you may recommend the orchestrator run
+`invoke-lint-agent` / `/phoe:lint`. Flag it precisely; never claim to have run the lint agent.
+
+## De-duplication and consolidation reviews
+
+When the change *removes* duplication — collapsing N ad-hoc call sites onto one shared helper,
+merging repeated blocks, consolidating parallel implementations — verify by **counted proof**, not
+by spot-check. Take a census: from the unified diff, count the removed cases (deleted call sites,
+deleted blocks, deleted branches), then account for **each** one against the replacement — every
+removed case must be either subsumed by the new shared path or explicitly justified as intentionally
+different. A review that eyeballs "looks consolidated" misses the one case that was silently dropped
+or subtly changed. Report the census in your verdict (`N sites removed, N accounted for`), and flag
+any unaccounted removal as CRITICAL — a lost case is a behavior change, not a cleanup.
 
 After reviewing, the orchestrator may run:
 - `invoke-lint-agent` - clang-tidy plus include/module-import dependency hygiene

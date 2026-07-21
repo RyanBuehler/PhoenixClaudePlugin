@@ -81,32 +81,35 @@ expensive to regenerate (~3–4 min per app for a cold build), and the default r
 preserve incremental build state. If no argument was passed, say "leaving build directories in
 place — pass `all` to wipe them" and continue to step 6.
 
-Forge's profile system produces top-level `build-*/` directories (e.g. `build-editor-debug`,
-`build-crucible-release`, `build-forge-bootstrap`, `build-minimal`). These are regeneratable
-artifacts and frequently go stale after branch switches or toolchain updates — removing them
-forces a clean reconfigure on the next `/phoe:build` run.
+Forge writes all build output under `Applications/Forge/`: `.forge-out/` and `.forge/` hold the
+per-profile build trees, and `.bootstrap-out/` holds the cold-start `forge` binary. These are
+regeneratable artifacts and frequently go stale after branch switches or toolchain updates —
+removing them forces a clean reconfigure (and re-bootstrap) on the next `/phoe:build` run.
 
 List the candidates:
 
 ```bash
-ls -d build-*/ 2>/dev/null
+ls -d Applications/Forge/.forge-out Applications/Forge/.forge Applications/Forge/.bootstrap-out 2>/dev/null
 ```
 
 If any exist:
 
-- Show the list to the user with total disk size (`du -sh build-*/ 2>/dev/null`).
-- Warn that the next build in each profile will be a full cold build (~3–4 min per app).
+- Show the list to the user with total disk size (`du -sh Applications/Forge/.forge-out Applications/Forge/.forge Applications/Forge/.bootstrap-out 2>/dev/null`).
+- Warn that the next build in each profile will be a full cold build (~3–4 min per app) and that
+  `forge` will re-bootstrap first.
 - Ask for explicit confirmation before deleting.
 
-On confirmation, remove all of them:
+On confirmation, wipe the build trees with Forge's own cleaner (which understands its layout), then
+remove the bootstrap binary so it recompiles fresh:
 
 ```bash
-rm -rf build-*/
+Applications/Forge/.bootstrap-out/forge clean --all 2>/dev/null
+rm -rf Applications/Forge/.forge-out Applications/Forge/.forge Applications/Forge/.bootstrap-out
 ```
 
-Do **not** delete build directories inside worktrees (`.claude/worktrees/*/build-*`) from this
-command — those belong to in-flight work and are cleaned when the worktree itself is removed.
-Only touch the main repo's top-level `build-*/` directories.
+Do **not** delete build output inside worktrees (`.claude/worktrees/*/Applications/Forge/.forge*`)
+from this command — those belong to in-flight work and are cleaned when the worktree itself is
+removed. Only touch the main repo's Forge output dirs.
 
 If the working tree is a worktree itself (detect via `git rev-parse --is-inside-work-tree` plus
 `git rev-parse --git-common-dir` differing from `.git`), refuse this step and tell the user to
