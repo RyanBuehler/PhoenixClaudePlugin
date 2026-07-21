@@ -99,11 +99,10 @@ If any exist:
   `forge` will re-bootstrap first.
 - Ask for explicit confirmation before deleting.
 
-On confirmation, wipe the build trees with Forge's own cleaner (which understands its layout), then
-remove the bootstrap binary so it recompiles fresh:
+On confirmation, remove the output roots (this also drops the bootstrap binary, so `forge`
+recompiles fresh on the next build):
 
 ```bash
-Applications/Forge/.bootstrap-out/forge clean --all 2>/dev/null
 rm -rf Applications/Forge/.forge-out Applications/Forge/.forge Applications/Forge/.bootstrap-out
 ```
 

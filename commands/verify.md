@@ -38,6 +38,11 @@ verify-gate failure should surface the failing phase's output inline — the def
 bounded head+tail excerpt and the format/lint/audit diffs — rather than reduce a failure to an
 `error_count` with no error text.
 
+**Stage new files first.** `forge` scopes format-check to the branch diff and lint to the staged
+surface — neither sees an untracked new file. A `.cpp`/`.cppm` you have not `git add`-ed is invisible
+to this gate, so its formatting/lint violations sail through locally and fail CI. `git add` new files
+before running verify so they are in scope.
+
 **On failure**, re-run only the phase that broke to iterate faster (each maps to a sub-skill):
 
 | Failed phase        | Iterate with                              |
@@ -59,10 +64,11 @@ first, a logic bug second.
 
 ## 3. Python-only changes
 
-If the diff is 100% Python (touches no C++, build, or test code), the format-check and lint phases
-have no C++ surface to act on and the build is a fast no-op. For a Python-only change, run the
-touched tool's own suite instead — e.g. `python3 -m unittest discover -s Tools/Tests` — and treat
-"no C++ in scope" as a clean pass, not a failure.
+If the diff is 100% Python (touches no C++, build, or test code), the meaningful gates
+(format-check, lint) have no C++ surface to act on. For a Python-only change, run the touched tool's
+own suite instead — e.g. `python3 -m unittest discover -s Tools/Tests`. Treat "no C++ in scope" as a
+clean pass: if `forge verify editor` reports no files for a phase — or errors out because a phase
+has an empty C++ set — that is the no-C++ signal, not a real failure.
 
 ## 4. Report
 

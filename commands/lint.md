@@ -22,8 +22,8 @@ FORGE=$(forge_bin) || { python3 Applications/Forge/Scripts/bootstrap.py && FORGE
 "$FORGE" lint
 ```
 
-This lints the branch's changed surface (diff against `main`). Pass `--all` to lint the whole repo.
-If nothing changed, it reports no files to process — treat that as a clean pass.
+This lints the staged surface (the files you've `git add`-ed). Pass `--all` to lint the whole repo.
+If nothing is staged, it reports no files to process — treat that as a clean pass.
 
 ## 3. Report
 

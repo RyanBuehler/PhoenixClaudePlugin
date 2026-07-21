@@ -72,10 +72,11 @@ gh pr view <PR_URL> --json mergeable,mergeStateStatus -q '[.mergeable, .mergeSta
 If `mergeable == "CONFLICTING"`, stop the watch and report the conflict — snoozing will never turn
 green. Otherwise (runs genuinely not created yet) treat it as PENDING and snooze.
 
-(`gh run list --branch "$BRANCH" --json databaseId,name,status,conclusion --limit 20` is an
-acceptable fallback when the `head_sha` query is unavailable, but it can surface stale runs from
-prior pushes — prefer the `head_sha`-scoped query above. If `gh pr checks` happens to work — a token
-*with* `checks:read` — it is a fine shortcut, but never depend on it.)
+(As a fallback when the `head_sha` query is unavailable, resolve the branch and list its runs —
+`gh run list --branch "$(gh pr view <PR_URL> --json headRefName -q .headRefName)" --json databaseId,name,status,conclusion --limit 20` —
+but it can surface stale runs from prior pushes, so prefer the `head_sha`-scoped query above. If `gh
+pr checks` happens to work — a token *with* `checks:read` — it is a fine shortcut, but never depend
+on it.)
 
 Classify each run:
 
