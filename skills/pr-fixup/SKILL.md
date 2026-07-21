@@ -99,12 +99,14 @@ field. Before reporting, check and backfill so subsequent sessions and `crucible
 show` carry the PR URL:
 
 ```bash
+# Discover the Crucible CLI (Forge builds it under a per-profile subtree — don't hardcode the path)
+CRUCIBLE=$(find Applications/Forge/.forge-out -type f -path '*/bin/crucible' 2>/dev/null | head -1)
 ENTITY=challenge   # or bug, depending on which workflow opened the PR
 LABEL=<label>
 PR_URL=$(gh pr view --json url --jq .url)
-EXISTING=$(Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible --json "${ENTITY}" show --label="${LABEL}" | jq -r '.review_link // ""')
+EXISTING=$("$CRUCIBLE" --json "${ENTITY}" show --label="${LABEL}" | jq -r '.review_link // ""')
 if [ -z "${EXISTING}" ]; then
-  Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible "${ENTITY}" update --label="${LABEL}" --replace-review-link="${PR_URL}"
+  "$CRUCIBLE" "${ENTITY}" update --label="${LABEL}" --replace-review-link="${PR_URL}"
 fi
 ```
 

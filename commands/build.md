@@ -91,8 +91,8 @@ the default tier prints a bounded head+tail excerpt of each failing node (root c
 ```
 
 - **Output path:** read the built binary's path from the build result's `output_path` field — do
-  not hardcode it. Engine artifacts land under `Applications/Forge/.forge-out/<tree>/bin/` (the
-  `editor` profile shares the `shared-engine-ci-linux-Headless/bin/` tree).
+  not hardcode it. Engine artifacts land under `Applications/Forge/.forge-out/<tree>/bin/`, where
+  `<tree>` is a per-profile name derived from the build group, platform, and build type.
 - **Jobs / memory:** the in-process builder keeps peak compiler output in RAM. On a memory-tight
   host, cap parallelism with `--jobs=N` (~2.5 GB/job); on a workstation the default is fine.
 - **No version probe needed.** Forge tracks staleness — `configure` + `build` is always safe to
@@ -109,12 +109,7 @@ first, then rebuild. Treat such a segfault as a build artifact first, a logic bu
 
 # Tool Targets (`crucible`, `forge`, `vigil`)
 
-The tool applications are ordinary Forge profiles — build them exactly like the engine. They share
-the `engine-ci` build group (Headless, linux), so their binaries land in one shared tree:
-
-```
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/
-```
+The tool applications are ordinary Forge profiles — build them exactly like the engine.
 
 | Target     | Profile    | Binaries produced                    |
 |------------|------------|--------------------------------------|
@@ -122,7 +117,7 @@ Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/
 | `forge`    | `forge`    | `forge`                              |
 | `vigil`    | `vigil`    | `vigil`                              |
 
-Building the `crucible` profile produces **both** `crucible` and `crucible-server` in that bin tree.
+Building the `crucible` profile produces **both** `crucible` and `crucible-server`.
 
 ```bash
 FORGE=$(forge_bin) || { python3 Applications/Forge/Scripts/bootstrap.py && FORGE=$(forge_bin); }
@@ -132,16 +127,25 @@ TARGET=crucible   # or forge, or vigil
 "$FORGE" build     "$TARGET" --json
 ```
 
-The commands that consume the Crucible CLI invoke it at its output-tree path,
-`Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible`. For `crucible`,
-**both** `crucible` and `crucible-server` must exist in that tree or the build is incomplete.
+**Finding the built binary — discover, don't hardcode.** The output lands under
+`Applications/Forge/.forge-out/` in a per-profile subtree whose name depends on the host and build
+config (build group, platform, build type), so never hardcode that subtree in a consuming command —
+read `output_path` from the `build --json` result, or discover it:
+
+```bash
+CRUCIBLE=$(find Applications/Forge/.forge-out -type f -path '*/bin/crucible' 2>/dev/null | head -1)
+```
+
+The commands that consume the Crucible CLI (`/phoe:implement`, `/phoe:bugfix`, `/phoe:plan`,
+`/phoe:execute`) resolve `$CRUCIBLE` this way and call `"$CRUCIBLE"`. For `crucible`, **both**
+`crucible` and `crucible-server` must exist under the output tree or the build is incomplete.
 
 ### Version check
 
 The tool binaries report `<Target> <version> (engine <version>)`:
 
 ```bash
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible --version
+"$CRUCIBLE" --version
 ```
 
 Treat as stale (rebuild) if the binary is missing, the command exits non-zero, or the reported

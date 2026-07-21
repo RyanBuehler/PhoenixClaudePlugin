@@ -10,26 +10,33 @@ Plan a feature from idea to actionable Crucible Challenges grouped under a Saga.
 
 ## 1. Bootstrap
 
-Run `/phoe:build crucible` to ensure both `crucible` and `crucible-server` exist under `Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/` and match the expected version. The first build is a clean build; subsequent invocations are no-ops. If `/phoe:build crucible` stops with a version mismatch, stop here and report it to the user.
+Run `/phoe:build crucible` so both `crucible` and `crucible-server` exist and match the expected version. The first build is a clean build; subsequent invocations are no-ops. If `/phoe:build crucible` stops with a version mismatch, stop here and report it to the user.
 
-The Crucible server is a user-managed process outside the plugin's scope — do not start it. If the CLI can't reach a server, the first `crucible` call below will fail with a clear error; surface that to the user and stop.
+**Locate the Crucible CLI — discover it, don't hardcode a path.** Forge places the binary under `Applications/Forge/.forge-out/` in a per-profile subtree whose name varies with host and build config, so resolve it into `$CRUCIBLE` and reuse that in every block below:
+
+```bash
+CRUCIBLE=$(find Applications/Forge/.forge-out -type f -path '*/bin/crucible' 2>/dev/null | head -1)
+[ -x "$CRUCIBLE" ] || { echo "crucible not found — run /phoe:build crucible first"; exit 1; }
+```
+
+The Crucible server is a user-managed process outside the plugin's scope — do not start it. If the CLI can't reach a server, the first `"$CRUCIBLE"` call below will fail with a clear error; surface that to the user and stop.
 
 Confirm Crucible is reachable and initialized for this project:
 
 ```bash
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible status
+"$CRUCIBLE" status
 ```
 
 If that fails with "not initialized", ask the user for the project name and run:
 
 ```bash
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible init --project="<NAME>"
+"$CRUCIBLE" init --project="<NAME>"
 ```
 
 If a `<saga_label>` argument was provided, verify it exists:
 
 ```bash
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible saga show --label=<SAGA_LABEL>
+"$CRUCIBLE" saga show --label=<SAGA_LABEL>
 ```
 
 If the saga is not found, stop and tell the user.
@@ -158,30 +165,30 @@ All list-style flags use `|` as the separator. Verification entries are intent s
 **Create each challenge:**
 
 ```bash
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge create --title="<TITLE>" --description="<DESC>" --priority="<PRIORITY>" --tags="<T1>|<T2>" --acceptance-criteria="<C1>|<C2>" --strategy="<S1>|<S2>|<S3>" --verification="<V1>|<V2>" --affected-files="<F1>|<F2>" --references="<R1>|<R2>"
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge move --label=<LABEL> todo
+"$CRUCIBLE" challenge create --title="<TITLE>" --description="<DESC>" --priority="<PRIORITY>" --tags="<T1>|<T2>" --acceptance-criteria="<C1>|<C2>" --strategy="<S1>|<S2>|<S3>" --verification="<V1>|<V2>" --affected-files="<F1>|<F2>" --references="<R1>|<R2>"
+"$CRUCIBLE" challenge move --label=<LABEL> todo
 ```
 
 **Create a new saga** (if not extending). `--challenges=...` is **silently ignored** on
 `saga create`, so create the saga first, then attach each challenge with `saga add`:
 
 ```bash
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible saga create --title="<TITLE>" --description="<DESC>" --label="<OPTIONAL_LABEL>"
+"$CRUCIBLE" saga create --title="<TITLE>" --description="<DESC>" --label="<OPTIONAL_LABEL>"
 for LBL in label1 label2 ...; do
-  Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible saga add <SAGA_LABEL> "$LBL"
+  "$CRUCIBLE" saga add <SAGA_LABEL> "$LBL"
 done
 ```
 
 **Extend an existing saga** (if `<saga_label>` was provided):
 
 ```bash
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible saga add <SAGA_LABEL> <CHALLENGE_LABEL>
+"$CRUCIBLE" saga add <SAGA_LABEL> <CHALLENGE_LABEL>
 ```
 
 **Verify the result:**
 
 ```bash
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible saga show --label=<SAGA_LABEL>
+"$CRUCIBLE" saga show --label=<SAGA_LABEL>
 ```
 
 ## 8. Report

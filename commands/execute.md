@@ -15,14 +15,21 @@ Determine which mode by checking if the argument is a number, "next", or a strin
 
 ## 1. Bootstrap
 
-Run `/phoe:build crucible` to ensure both `crucible` and `crucible-server` exist under `Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/` and match the expected version. The first build is a clean build; subsequent invocations are no-ops. If `/phoe:build crucible` stops with a version mismatch, stop here and report it to the user.
+Run `/phoe:build crucible` so both `crucible` and `crucible-server` exist and match the expected version. The first build is a clean build; subsequent invocations are no-ops. If `/phoe:build crucible` stops with a version mismatch, stop here and report it to the user.
 
-The Crucible server is a user-managed process outside the plugin's scope — do not start it. If the CLI can't reach a server, the first `crucible` call below will fail with a clear error; surface that to the user and stop.
+**Locate the Crucible CLI — discover it, don't hardcode a path.** Forge places the binary under `Applications/Forge/.forge-out/` in a per-profile subtree whose name varies with host and build config, so resolve it into `$CRUCIBLE` and reuse that in every block below. Every crucible call in this document runs from the main repo root, so this main-root discovery is the value to carry throughout:
+
+```bash
+CRUCIBLE=$(find Applications/Forge/.forge-out -type f -path '*/bin/crucible' 2>/dev/null | head -1)
+[ -x "$CRUCIBLE" ] || { echo "crucible not found — run /phoe:build crucible first"; exit 1; }
+```
+
+The Crucible server is a user-managed process outside the plugin's scope — do not start it. If the CLI can't reach a server, the first `"$CRUCIBLE"` call below will fail with a clear error; surface that to the user and stop.
 
 Confirm Crucible is reachable and initialized for this project:
 
 ```bash
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible status
+"$CRUCIBLE" status
 ```
 
 Verify workspace is clean:
@@ -60,14 +67,14 @@ If **unreachable** (`REMOTE_REACHABLE=0`), emit a single warning line to the use
 
 Use saga-aware priority logic to select N eligible challenges. The candidate pool is the union of saga-attached `todo` challenges and orphan `todo` challenges (challenges that belong to no saga). Both are first-class — orphans have no themed-saga lineage but participate in priority/dependency selection just like saga members.
 
-1. List all sagas: `Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible --json saga list`
-2. List all todo challenges: `Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible --json challenge list --status=todo`
-3. Note which of those are orphans for downstream filters: `Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible --json challenge list --status=todo --no-saga`. Orphans are challenges with no saga membership; they trivially pass the same-saga ordering check (no predecessors) but still participate in the cross-saga blocker scan and priority selection.
+1. List all sagas: `"$CRUCIBLE" --json saga list`
+2. List all todo challenges: `"$CRUCIBLE" --json challenge list --status=todo`
+3. Note which of those are orphans for downstream filters: `"$CRUCIBLE" --json challenge list --status=todo --no-saga`. Orphans are challenges with no saga membership; they trivially pass the same-saga ordering check (no predecessors) but still participate in the cross-saga blocker scan and priority selection.
 4. Auto-unblock any blocked challenges whose blockers are now merged:
    ```bash
-   Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible --json challenge list --status=blocked
+   "$CRUCIBLE" --json challenge list --status=blocked
    ```
-   For each, check if the `blocked_by` challenge is now merged. If so: `Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge unblock <ID> todo`
+   For each, check if the `blocked_by` challenge is now merged. If so: `"$CRUCIBLE" challenge unblock <ID> todo`
 5. For each candidate, check saga ordering -- only pick challenges whose saga predecessors are all `merged` or `canceled`. Orphans skip this check (no saga, no predecessors).
 6. **Scan for implicit cross-saga blockers (precision-first).** Same-saga ordering only catches explicit dependencies; a challenge may reference a symbol or file from an *unmerged* challenge in a *different* saga via prose. The goal here is to catch the obvious cases (A says "Loads via `Canvas::LoadLayout`" where `Canvas::LoadLayout` is introduced by an unmerged B), **not** to out-smart the implementer. A false-positive skip strands an eligible challenge; a missed implicit blocker becomes one verification failure later — so lean heavily toward letting candidates through. This filter applies to orphans too — they can implicitly block on saga work and vice-versa.
 
@@ -88,7 +95,7 @@ Report skipped candidates (both the implicit-blocker reason and priority/wave-al
 **If argument is a saga label:**
 
 ```bash
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible --json saga show --label=<SAGA_LABEL>
+"$CRUCIBLE" --json saga show --label=<SAGA_LABEL>
 ```
 
 Collect all todo challenges in saga order. These will be executed sequentially. Saga-scoped mode is explicitly bounded — orphans are NOT included even when otherwise eligible.
@@ -192,7 +199,7 @@ For each challenge in the wave:
 
 1. Read the full challenge JSON (run from the main repo root):
    ```bash
-   Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible --json challenge show --label=<LABEL>
+   "$CRUCIBLE" --json challenge show --label=<LABEL>
    ```
 2. Re-confirm status is still `todo` (parse from the JSON above). Another agent's parallel
    `/phoe:execute` may have claimed it since Step 2. If status is anything else, drop the
@@ -201,7 +208,7 @@ For each challenge in the wave:
    which a parallel `/phoe:execute` could grab the same challenge is as small as possible. Run from
    the main repo root so the crucible binary resolves:
    ```bash
-   Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge move --label=<LABEL> active
+   "$CRUCIBLE" challenge move --label=<LABEL> active
    ```
    The claim is revertable: if the challenge is later dropped (pre-empted, blocked, base-ref
    conflict), move it back with `... challenge move --label=<LABEL> todo`.
@@ -415,7 +422,7 @@ For each returning subagent:
 When marking a challenge blocked:
 
 ```bash
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge move --label=<LABEL> blocked
+"$CRUCIBLE" challenge move --label=<LABEL> blocked
 ```
 
 Write a checkpoint file:
@@ -497,7 +504,7 @@ Run: git diff origin/main...HEAD (use main...HEAD if origin is unreachable)
 **Challenge Contract** -- capture the challenge verbatim BEFORE dispatching:
 
 ```bash
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge show <ID>
+"$CRUCIBLE" challenge show <ID>
 ```
 
 Interpolate that whole output -- title, description, acceptance criteria, verification,
@@ -633,11 +640,11 @@ A challenge cannot reach 4h (Publish) until all three reviewers have returned an
 
 For each successfully reviewed challenge:
 
-1. Move to review: `Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge move --label=<LABEL> review`
+1. Move to review: `"$CRUCIBLE" challenge move --label=<LABEL> review`
 2. **Reconcile follow-on siblings and docs** (pre-merge pass) -- this implementation may have invalidated later sibling specs *or* `docs/` design/spec files: a rename or API change leaving a sibling's `description`, `strategy`, `affected_files`, or `acceptance_criteria`, or a doc, referring to the old name. Do a best-effort pass now against the committed diff; the authoritative pass runs post-merge in Step 6.
-   1. `Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible --json saga show --label=<SAGA_LABEL>` lists remaining todo + blocked siblings after this challenge's position. (Skip for orphans -- no siblings -- but still run the docs scan below.)
-   2. Scan each later sibling's text (`Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible --json challenge show --label=<SIBLING_LABEL>`) **and** `docs/` design/spec files against the committed diff for stale references: renamed types / functions / files, changed signatures, moved modules, replaced concepts.
-   3. Fix each surgically -- `Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge update --label=<SIBLING_LABEL> [--field=...]` (run `--help` for flags) for sibling text; an in-place edit on this challenge's branch (rides the same PR) for docs. Update only stale references; do not rewrite scope.
+   1. `"$CRUCIBLE" --json saga show --label=<SAGA_LABEL>` lists remaining todo + blocked siblings after this challenge's position. (Skip for orphans -- no siblings -- but still run the docs scan below.)
+   2. Scan each later sibling's text (`"$CRUCIBLE" --json challenge show --label=<SIBLING_LABEL>`) **and** `docs/` design/spec files against the committed diff for stale references: renamed types / functions / files, changed signatures, moved modules, replaced concepts.
+   3. Fix each surgically -- `"$CRUCIBLE" challenge update --label=<SIBLING_LABEL> [--field=...]` (run `--help` for flags) for sibling text; an in-place edit on this challenge's branch (rides the same PR) for docs. Update only stale references; do not rewrite scope.
    4. Record sibling + doc updates for the final report (which siblings/docs, which fields). If a later sibling's scope is genuinely broken (not just a rename), do not rewrite it -- flag it as a blocked-follow-on in the report and let the user re-plan.
 
 **Blocked challenge policy:** Never revert branches or discard commits from blocked challenges. Partial work is valuable context for human resumption via `/phoe:implement <label>`. Always keep branches, commits, and checkpoint files intact.
@@ -667,7 +674,7 @@ If matches exist, mark merged, clean up the branch/worktree, log "Pre-empted by 
 in the final report, and skip to the next challenge:
 
 ```bash
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge move --label=<LABEL> merged
+"$CRUCIBLE" challenge move --label=<LABEL> merged
 git worktree remove .claude/worktrees/challenge-<label>  # branch-per-challenge only
 git branch -D challenge/<label>
 ```
@@ -696,7 +703,7 @@ EOF
 )")
 PR_NUM="${PR_URL##*/}"
 echo "Opened PR #${PR_NUM}: ${PR_URL}"
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge update --label=<LABEL> --replace-review-link="${PR_URL}"
+"$CRUCIBLE" challenge update --label=<LABEL> --replace-review-link="${PR_URL}"
 ```
 
 ```bash
@@ -719,7 +726,7 @@ echo "Opened PR #${PR_NUM}: ${PR_URL}"
 # Combined PR covers every challenge in the chain — record the same review link on each one
 # so subsequent `crucible challenge show` calls all surface the PR URL.
 for LBL in <label-1> <label-2> <label-3>; do
-  Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge update --label="${LBL}" --replace-review-link="${PR_URL}"
+  "$CRUCIBLE" challenge update --label="${LBL}" --replace-review-link="${PR_URL}"
 done
 ```
 
@@ -808,7 +815,7 @@ Include:
 After each PR lands on remote main, mark the corresponding challenge merged, then run the **end-of-cycle reconciliation** (the authoritative pass) against its merged diff. This fires whenever the merge is observed -- e.g. the next `/phoe:execute` Step 2, or interactively -- not inside the run that opened the PR:
 
 ```bash
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge move --label=<LABEL> merged
+"$CRUCIBLE" challenge move --label=<LABEL> merged
 ```
 
 Re-scan the merged diff against every remaining todo/blocked challenge (saga sibling or orphan) **and** `docs/` design/spec files for stale references the pre-merge pass (Step 4g.2) missed or that only the landed diff made certain. Fix challenge text in place with `crucible challenge update`. For stale docs, file a tracked docs-reconcile challenge (`/phoe:plan`) so the edit flows through the normal implement + CI-watch path rather than an untracked side PR -- the original challenge branch is gone post-merge. Flag genuinely scope-broken siblings as blocked for re-plan rather than rewriting them. Report this pass's outcome when it runs.

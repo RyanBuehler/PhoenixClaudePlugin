@@ -11,14 +11,21 @@ Fix a Crucible Bug end-to-end. Accepts a label or `next` to auto-pick the highes
 
 ## 1. Bootstrap
 
-Run `/phoe:build crucible` to ensure both `crucible` and `crucible-server` exist under `Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/` and match the expected version. The first build is a clean build; subsequent invocations are no-ops. If `/phoe:build crucible` stops with a version mismatch, stop here and report it to the user.
+Run `/phoe:build crucible` so both `crucible` and `crucible-server` exist and match the expected version. The first build is a clean build; subsequent invocations are no-ops. If `/phoe:build crucible` stops with a version mismatch, stop here and report it to the user.
 
-The Crucible server is a user-managed process outside the plugin's scope — do not start it. If the CLI can't reach a server, the first `crucible` call below will fail with a clear error; surface that to the user and stop.
+**Locate the Crucible CLI — discover it, don't hardcode a path.** Forge places the binary under `Applications/Forge/.forge-out/` in a per-profile subtree whose name varies with host and build config, so resolve it into `$CRUCIBLE` and reuse that in every block below:
+
+```bash
+CRUCIBLE=$(find Applications/Forge/.forge-out -type f -path '*/bin/crucible' 2>/dev/null | head -1)
+[ -x "$CRUCIBLE" ] || { echo "crucible not found — run /phoe:build crucible first"; exit 1; }
+```
+
+The Crucible server is a user-managed process outside the plugin's scope — do not start it. If the CLI can't reach a server, the first `"$CRUCIBLE"` call below will fail with a clear error; surface that to the user and stop.
 
 Confirm Crucible is reachable and initialized for this project:
 
 ```bash
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible status
+"$CRUCIBLE" status
 ```
 
 ## 2. Resolve the Bug
@@ -28,7 +35,7 @@ Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible statu
 1. List review bugs:
 
 ```bash
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible --json bug list --status=review
+"$CRUCIBLE" --json bug list --status=review
 ```
 
 2. For each review bug, probe the local git history for merge evidence (both signals are read-only):
@@ -47,7 +54,7 @@ git rev-parse --verify bug/<LABEL> 2>/dev/null \
 3. If either signal fires, show the user the matching commit(s) and ask whether to mark the bug merged. **Never auto-mark.** On confirmation:
 
 ```bash
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible bug move --label=<LABEL> merged
+"$CRUCIBLE" bug move --label=<LABEL> merged
 ```
 
 4. If a review bug shows no merge evidence, leave it in `review`.
@@ -57,7 +64,7 @@ Then pick the next todo using severity-aware selection:
 1. List all todo bugs:
 
 ```bash
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible --json bug list --status=todo
+"$CRUCIBLE" --json bug list --status=todo
 ```
 
 2. Pick the best bug using this priority order:
@@ -70,7 +77,7 @@ Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible --jso
 **If argument is a label**, fetch by label:
 
 ```bash
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible bug show --label=<LABEL>
+"$CRUCIBLE" bug show --label=<LABEL>
 ```
 
 **Check for existing checkpoint:** Look for `.claude/handoffs/bug-<LABEL>-checkpoint.md`. If found:
@@ -87,7 +94,7 @@ The moment you've resolved *which* bug to work — before showing context or bra
 `active`** so a parallel session cannot pick up the same work:
 
 ```bash
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible bug move --label=<LABEL> active
+"$CRUCIBLE" bug move --label=<LABEL> active
 ```
 
 This is a claim, not a commitment: if reproduction fails (Step 6) or you decide not to proceed, move
@@ -124,14 +131,14 @@ python3 Applications/Forge/Scripts/bootstrap.py
 
 Run all subsequent steps from inside the worktree directory.
 
-**Crucible CLI absolute path.** The Crucible CLI is built into the main repo's Forge output tree (`Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/`), not the worktree's. Once you `cd` into the worktree, the relative path resolves against the worktree's own (empty) output tree. Resolve the main-repo-rooted absolute path in every bash block that invokes the CLI:
+**Crucible CLI in the worktree.** The Crucible CLI was built into the *main* repo's Forge output, not the worktree's — a worktree's own `.forge-out/` is empty until it builds. So re-resolve `$CRUCIBLE` against the main repo root (discovered via the git common dir, never hardcoded):
 
 ```bash
-CRUCIBLE="$(git rev-parse --path-format=absolute --git-common-dir | xargs dirname)/Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible"
+CRUCIBLE=$(find "$(git rev-parse --path-format=absolute --git-common-dir | xargs dirname)/Applications/Forge/.forge-out" -type f -path '*/bin/crucible' 2>/dev/null | head -1)
 "$CRUCIBLE" bug show --label=<LABEL>   # or any crucible subcommand
 ```
 
-All subsequent `Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible <args>` snippets in this document assume you've derived `$CRUCIBLE` first — substitute `"$CRUCIBLE" <args>` when running them from inside the worktree.
+Every `"$CRUCIBLE" <args>` snippet below assumes you've derived `$CRUCIBLE` this way first.
 
 ## 5. Confirm Active
 
@@ -223,7 +230,7 @@ All verification must pass before proceeding:
 
 Before committing, systematically evaluate each acceptance criterion from the bug JSON.
 
-1. Retrieve the bug's acceptance criteria: `Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible bug show --label=<LABEL>`
+1. Retrieve the bug's acceptance criteria: `"$CRUCIBLE" bug show --label=<LABEL>`
 2. For **each** criterion, answer explicitly:
    - **Met?** Yes / No / Partially
    - **Evidence:** What in the diff proves this? (file:line, test name, or command output)
@@ -249,7 +256,7 @@ Invoke the code reviewer as a **separate agent** to evaluate the implementation 
 2. Capture the bug contract verbatim — the reviewer cannot reach Crucible from the worktree, and this gate blocks on CRITICAL/WARNING, so a reviewer without the criteria invents the contract and then blocks on it:
 
 ```bash
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible bug show --label=<LABEL>
+"$CRUCIBLE" bug show --label=<LABEL>
 ```
 
    Interpolate that whole output — title, description, reproduction steps, acceptance criteria, verification — into the prompt under a `## Bug Contract (verbatim from Crucible)` heading. Do not summarize. Resolve any `Docs/*.md §x` reference the bug cites: confirm it exists in this worktree, and say so explicitly in the prompt if it does not.
@@ -288,7 +295,7 @@ message referencing the bug label. Optionally squash review fixups into one for 
 Immediately after the commit lands, move the bug to `review`. This is a mandatory, non-skippable final workflow step — the fix is not considered complete until the bug is in `review`:
 
 ```bash
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible bug move --label=<LABEL> review
+"$CRUCIBLE" bug move --label=<LABEL> review
 ```
 
 If this move fails (server down, label mismatch, Crucible not initialized), **stop and surface the error to the user**. Do not report the bug as fixed, and do not continue to the report step, until the move has succeeded.
@@ -319,7 +326,7 @@ intentionally source-neutral — `--replace-review-link` accepts any URL string,
 non-GitHub review system fits without rewording this step:
 
 ```bash
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible bug update --label=<LABEL> --replace-review-link="${PR_URL}"
+"$CRUCIBLE" bug update --label=<LABEL> --replace-review-link="${PR_URL}"
 ```
 
 If the user declines to push, leave the branch local for them to publish later.
@@ -341,7 +348,7 @@ Tell the user:
 But once the PR is confirmed merged into remote `main`, reconciling the tracking status *is* expected — a merged PR left in `review` is stale bookkeeping. Verify the landing first (PR `state` is `MERGED` **and** its merge commit is reachable from `origin/main`), then move it without waiting to be asked again:
 
 ```bash
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible bug move --label=<LABEL> merged
+"$CRUCIBLE" bug move --label=<LABEL> merged
 ```
 
-> **Note:** When the user moves a bug to `merged`, it is automatically archived in the server's data dir. If work needs to be revisited, use `Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible bug unarchive --label=<LABEL>` to restore it to `todo` status.
+> **Note:** When the user moves a bug to `merged`, it is automatically archived in the server's data dir. If work needs to be revisited, use `"$CRUCIBLE" bug unarchive --label=<LABEL>` to restore it to `todo` status.

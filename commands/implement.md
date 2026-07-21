@@ -14,14 +14,21 @@ Implement a Crucible Challenge end-to-end with human supervision. Accepts a labe
 
 ## 1. Bootstrap
 
-Run `/phoe:build crucible` to ensure both `crucible` and `crucible-server` exist under `Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/` and match the expected version. The first build is a clean build; subsequent invocations are no-ops. If `/phoe:build crucible` stops with a version mismatch, stop here and report it to the user.
+Run `/phoe:build crucible` so both `crucible` and `crucible-server` exist and match the expected version. The first build is a clean build; subsequent invocations are no-ops. If `/phoe:build crucible` stops with a version mismatch, stop here and report it to the user.
 
-The Crucible server is a user-managed process outside the plugin's scope — do not start it. If the CLI can't reach a server, the first `crucible` call below will fail with a clear error; surface that to the user and stop.
+**Locate the Crucible CLI — discover it, don't hardcode a path.** Forge places the binary under `Applications/Forge/.forge-out/` in a per-profile subtree whose name varies with host and build config, so resolve it into `$CRUCIBLE` and reuse that in every block below:
+
+```bash
+CRUCIBLE=$(find Applications/Forge/.forge-out -type f -path '*/bin/crucible' 2>/dev/null | head -1)
+[ -x "$CRUCIBLE" ] || { echo "crucible not found — run /phoe:build crucible first"; exit 1; }
+```
+
+The Crucible server is a user-managed process outside the plugin's scope — do not start it. If the CLI can't reach a server, the first `"$CRUCIBLE"` call below will fail with a clear error; surface that to the user and stop.
 
 Confirm Crucible is reachable and initialized for this project:
 
 ```bash
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible status
+"$CRUCIBLE" status
 ```
 
 ## 2. Resolve the Challenge
@@ -31,7 +38,7 @@ Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible statu
 1. List review challenges:
 
 ```bash
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible --json challenge list --status=review
+"$CRUCIBLE" --json challenge list --status=review
 ```
 
 2. For each review challenge, probe the local git history for merge evidence (both signals are read-only):
@@ -50,7 +57,7 @@ git rev-parse --verify challenge/<LABEL> 2>/dev/null \
 3. If either signal fires, show the user the matching commit(s) and ask whether to mark the challenge merged. **Never auto-mark.** On confirmation:
 
 ```bash
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge move --label=<LABEL> merged
+"$CRUCIBLE" challenge move --label=<LABEL> merged
 ```
 
    Then clean up the stale worktree and branch per Step 17's "On merge" note; the
@@ -63,20 +70,20 @@ Then pick the next todo using saga-aware selection:
 1. List all sagas and their progress:
 
 ```bash
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible --json saga list
+"$CRUCIBLE" --json saga list
 ```
 
 2. List all todo challenges:
 
 ```bash
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible --json challenge list --status=todo
+"$CRUCIBLE" --json challenge list --status=todo
 ```
 
 3. Pick the best challenge using this priority order:
    - **Saga ordering first** — if a challenge belongs to a saga, only pick it if all earlier challenges in that saga are `merged` or `canceled`. Never skip ahead in a saga's ordering.
    - **Blocked check** — if a saga predecessor is in `review` or `active` (not yet merged), the next challenge cannot proceed. Move it to `blocked` and stop:
      ```bash
-     Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge block <NEXT_ID> --blocked_by=<PREDECESSOR_ID> --reason="Awaiting merge of #<PREDECESSOR_ID> on branch challenge/<predecessor-label>"
+     "$CRUCIBLE" challenge block <NEXT_ID> --blocked_by=<PREDECESSOR_ID> --reason="Awaiting merge of #<PREDECESSOR_ID> on branch challenge/<predecessor-label>"
      ```
      Tell the user which challenge is blocked and why, then try the next eligible challenge. If no unblocked challenges remain, stop.
    - **Priority second** — among eligible challenges, pick the highest priority (critical > high > medium > low).
@@ -84,7 +91,7 @@ Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible --jso
 
 4. Also check `blocked` challenges: for each, verify if the blocker is now `merged`. If so, auto-unblock:
    ```bash
-   Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge unblock <ID> todo
+   "$CRUCIBLE" challenge unblock <ID> todo
    ```
    Then include the unblocked challenge in the candidate pool.
 
@@ -93,7 +100,7 @@ Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible --jso
 **If argument is a label**, fetch by label:
 
 ```bash
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge show --label=<LABEL>
+"$CRUCIBLE" challenge show --label=<LABEL>
 ```
 
 **Check for existing checkpoint:** Look for `.claude/handoffs/<LABEL>-checkpoint.md`. If found:
@@ -110,7 +117,7 @@ The moment you've resolved *which* challenge to work — before showing context,
 branching — **move it to `active`** so a parallel session cannot pick up the same work:
 
 ```bash
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge move --label=<LABEL> active
+"$CRUCIBLE" challenge move --label=<LABEL> active
 ```
 
 This is a claim, not a commitment: if you decide during exploration (Steps 3–5) not to proceed, move
@@ -124,7 +131,7 @@ Display the challenge details: title, description, acceptance criteria, and veri
 **Check for saga membership** — search the saga list for the resolved challenge ID. If it belongs to a saga:
 
 ```bash
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible saga show --label=<SAGA_LABEL>
+"$CRUCIBLE" saga show --label=<SAGA_LABEL>
 ```
 
 Show the saga name, where this challenge sits in the ordering, and overall saga progress. This gives full feature context for the implementation.
@@ -179,14 +186,14 @@ python3 Applications/Forge/Scripts/bootstrap.py
 
 Run all subsequent steps from inside the worktree directory.
 
-**Crucible CLI absolute path.** The Crucible CLI is built into the main repo's Forge output tree (`Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/`), not the worktree's. Once you `cd` into the worktree, the relative path resolves against the worktree's own (empty) output tree. Resolve the main-repo-rooted absolute path in every bash block that invokes the CLI:
+**Crucible CLI in the worktree.** The Crucible CLI was built into the *main* repo's Forge output, not the worktree's — a worktree's own `.forge-out/` is empty until it builds. So re-resolve `$CRUCIBLE` against the main repo root (discovered via the git common dir, never hardcoded):
 
 ```bash
-CRUCIBLE="$(git rev-parse --path-format=absolute --git-common-dir | xargs dirname)/Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible"
+CRUCIBLE=$(find "$(git rev-parse --path-format=absolute --git-common-dir | xargs dirname)/Applications/Forge/.forge-out" -type f -path '*/bin/crucible' 2>/dev/null | head -1)
 "$CRUCIBLE" challenge show --label=<LABEL>   # or any crucible subcommand
 ```
 
-All subsequent `Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible <args>` snippets in this document assume you've derived `$CRUCIBLE` first — substitute `"$CRUCIBLE" <args>` when running them from inside the worktree.
+Every `"$CRUCIBLE" <args>` snippet below assumes you've derived `$CRUCIBLE` this way first.
 
 ## 6. Confirm Active
 
@@ -269,7 +276,7 @@ All verification must pass before proceeding:
 
 Before committing, systematically evaluate each acceptance criterion from the challenge JSON. The model that wrote the code must not self-approve without structured evaluation.
 
-1. Retrieve the challenge's acceptance criteria: `Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge show --label=<LABEL>`
+1. Retrieve the challenge's acceptance criteria: `"$CRUCIBLE" challenge show --label=<LABEL>`
 2. For **each** criterion, answer explicitly:
    - **Met?** Yes / No / Partially
    - **Evidence:** What in the diff proves this? (file:line, test name, or command output)
@@ -298,7 +305,7 @@ have repeatedly said so, and a paraphrased AC has already been wrong in a dispat
 Before dispatching, capture the challenge verbatim:
 
 ```bash
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge show <ID>
+"$CRUCIBLE" challenge show <ID>
 ```
 
 Interpolate that **whole output** — title, description, acceptance criteria, verification,
@@ -425,7 +432,7 @@ change uncommitted going into Step 14.
 Immediately after the commit lands, move the challenge to `review`. This is a mandatory, non-skippable final workflow step — implementation is not considered complete until the challenge is in `review`:
 
 ```bash
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge move --label=<LABEL> review
+"$CRUCIBLE" challenge move --label=<LABEL> review
 ```
 
 If this move fails (server down, label mismatch, Crucible not initialized), **stop and surface the error to the user**. Do not report the challenge as done, and do not continue to the report step, until the move has succeeded.
@@ -460,11 +467,11 @@ Reconcile anything this implementation may have invalidated — later saga-sibli
 
 1. If in a saga, list remaining siblings (todo + blocked) after this challenge's position:
    ```bash
-   Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible --json saga show --label=<SAGA_LABEL>
+   "$CRUCIBLE" --json saga show --label=<SAGA_LABEL>
    ```
 2. For each later sibling, fetch its full spec:
    ```bash
-   Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible --json challenge show --label=<SIBLING_LABEL>
+   "$CRUCIBLE" --json challenge show --label=<SIBLING_LABEL>
    ```
 3. Scan each sibling's text — and grep `docs/` design/spec files — for stale references against the diff this challenge produced. Things to look for:
    - Type / class / function / method names that were renamed
@@ -472,7 +479,7 @@ Reconcile anything this implementation may have invalidated — later saga-sibli
    - API signatures or parameter names that changed
    - Module or layer boundaries that shifted
    - Concepts the sibling depends on that no longer exist or have been replaced
-4. Fix each surgically — `Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge update --label=<SIBLING_LABEL> [--description=... --strategy=... --affected_files=...]` (run `--help` for flags) for challenge text; an in-place edit on this challenge's branch (rides the same PR) for docs. Update only the references that are actually stale; do not rewrite specs or scope.
+4. Fix each surgically — `"$CRUCIBLE" challenge update --label=<SIBLING_LABEL> [--description=... --strategy=... --affected_files=...]` (run `--help` for flags) for challenge text; an in-place edit on this challenge's branch (rides the same PR) for docs. Update only the references that are actually stale; do not rewrite specs or scope.
 5. If a sibling or doc has no stale references, leave it alone.
 6. Record which siblings + docs were updated (and what fields/files changed) for the report.
 
@@ -508,7 +515,7 @@ URL string, so a non-GitHub review system (Gitea, Phabricator, internal mirror) 
 without rewording this step:
 
 ```bash
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge update --label=<LABEL> --replace-review-link="${PR_URL}"
+"$CRUCIBLE" challenge update --label=<LABEL> --replace-review-link="${PR_URL}"
 ```
 
 `Crucible:` and `Saga:` trailers are mandatory; pull IDs from the JSON already fetched in Step 2/3. Drop the `Saga:` line for orphans.
@@ -532,7 +539,7 @@ If Step 16 opened a PR, run the watch loop in `references/ci-watch.md` against P
 If the challenge belongs to a saga, show updated saga progress:
 
 ```bash
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible saga show --label=<SAGA_LABEL>
+"$CRUCIBLE" saga show --label=<SAGA_LABEL>
 ```
 
 Tell the user:
@@ -552,7 +559,7 @@ Tell the user:
 But once the PR is confirmed merged into remote `main` — typically observed on a later `/phoe:implement next` (Step 2) — reconciling the tracking status *is* expected; a merged PR left in `review` is stale bookkeeping (and saga progress only counts `merged`). Verify the landing first (PR `state` is `MERGED` **and** its merge commit is reachable from `origin/main` — a retarget-miss can show `MERGED` without reaching main), then move it to `merged` and run the **end-of-cycle reconciliation** (the authoritative pass) against the merged diff:
 
 ```bash
-Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge move --label=<LABEL> merged
+"$CRUCIBLE" challenge move --label=<LABEL> merged
 ```
 
 Re-scan the merged diff against remaining todo/blocked siblings **and** `docs/` design/spec files for stale references the Step 15 pass missed. Fix challenge text in place with `crucible challenge update`. For stale docs, file a tracked docs-reconcile challenge (`/phoe:plan`) so the edit flows through the normal implement + CI-watch path rather than an untracked side PR — this challenge's branch is gone post-merge. Flag genuinely scope-broken siblings as blocked rather than rewriting them. Report this pass's outcome when it runs.
@@ -583,4 +590,4 @@ reconciliation), after the reconciliation pass above, clean up and report — th
 
 Use `/phoe:plan` to create new challenges or extend an existing saga.
 
-> **Note:** When the user moves a challenge to `merged`, it is automatically archived in the server's data dir. If work needs to be revisited, use `Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/crucible challenge unarchive --label=<LABEL>` to restore it to `todo` status.
+> **Note:** When the user moves a challenge to `merged`, it is automatically archived in the server's data dir. If work needs to be revisited, use `"$CRUCIBLE" challenge unarchive --label=<LABEL>` to restore it to `todo` status.
