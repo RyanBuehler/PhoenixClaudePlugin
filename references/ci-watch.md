@@ -61,9 +61,9 @@ echo "$RUNS"
 
 **`total_count == 0` is a signal, not "still queued."** A run for the head SHA either exists or it
 doesn't; if none exists after the first check, the usual cause is that GitHub **never scheduled one
-because the PR is mergeconflicting** (a conflicting PR gets no workflow run, ever — indistinguishable
-from "queued" if you only poll for pending). On `total_count == 0`, check mergeability before
-snoozing:
+because the PR is in a merge-conflicting state** (a conflicting PR gets no workflow run, ever —
+indistinguishable from "queued" if you only poll for pending). On `total_count == 0`, check
+mergeability before snoozing:
 
 ```bash
 gh pr view <PR_URL> --json mergeable,mergeStateStatus -q '[.mergeable, .mergeStateStatus] | @tsv'
@@ -184,15 +184,18 @@ Reconnect manually: gh run list --branch <branch>
 
 When a run opens more than one PR, watch them collectively in a single loop:
 
-1. On each iteration, run the per-iteration check (resolve each PR's branch, then
-   `gh run list --branch "$BRANCH"`) against every PR.
+1. On each iteration, run the **per-iteration check above** (resolve each PR's head
+   SHA, then the `actions/runs?head_sha=` query — *not* `gh run list --branch`,
+   which can surface stale runs from prior pushes) against every PR. Apply the same
+   `total_count == 0` → check-mergeability branch per PR, so a conflicting PR is
+   reported as conflicting rather than snoozed forever.
 2. Roll up to a wave-level state:
    - **ANY READY** -- at least one PR has all checks passed. Exit the watch
      and emit the READY message naming which PRs are ready (so the user can
      start merging).
-   - **ALL FAILED** -- every PR has at least one failed check. Apply the one
-     fix-and-retry (see "On FAILED") per failing PR, then exit and report the PRs
-     still red.
+   - **ALL FAILED** -- every PR has at least one failed check (or a conflict). Apply
+     the one fix-and-retry (see "On FAILED") per failing PR, then exit and report
+     the PRs still red.
    - **MIXED PENDING** -- otherwise. Snooze.
 3. The PENDING message lists per-PR status as a compact table:
 

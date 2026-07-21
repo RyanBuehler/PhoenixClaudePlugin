@@ -12,11 +12,6 @@ Plan a feature from idea to actionable Crucible Challenges grouped under a Saga.
 
 Run `/phoe:build crucible` to ensure both `crucible` and `crucible-server` exist under `Applications/Forge/.forge-out/shared-engine-ci-linux-Headless/bin/` and match the expected version. The first build is a clean build; subsequent invocations are no-ops. If `/phoe:build crucible` stops with a version mismatch, stop here and report it to the user.
 
-Resolve the environment suffix for subsequent invocations (include this line at the top of every bash block that touches a binary):
-
-```bash
-```
-
 The Crucible server is a user-managed process outside the plugin's scope — do not start it. If the CLI can't reach a server, the first `crucible` call below will fail with a clear error; surface that to the user and stop.
 
 Confirm Crucible is reachable and initialized for this project:
@@ -72,7 +67,7 @@ Draft a saga and break the work into commit-sized, ordered Challenges.
 - **Tags** — pipe-separated tags (e.g., `cpp|rendering`, `plugin|commands`, `tests`)
 - **Acceptance criteria** — what "done" looks like
 - **Strategy** — ordered implementation steps: patterns to follow (with file paths), functions/classes to extend, specific constraints, and step-by-step approach. Think of this as briefing a capable engineer who cannot ask questions. When creating challenges intended for `/phoe:execute`, the strategy must be thorough enough for fully autonomous implementation.
-- **Verification steps** — describe the **intent** of each verification in plain language, not the literal shell command. Write "build the editor in debug", "run the LayoutSorter tests", "confirm Aurora emits a resize event on window shrink" — never `cmake --build build-clang/ -j24` or `ctest --test-dir build/ -R Foo`. The implementing agent resolves intent to the current invocation (Forge profiles, env-suffixed dirs, etc.), so literal commands go stale the moment the build system shifts.
+- **Verification steps** — describe the **intent** of each verification in plain language, not the literal shell command. Write "build the editor in debug", "run the LayoutSorter tests", "confirm Aurora emits a resize event on window shrink" — never `cmake --build build-clang/ -j24` or `ctest --test-dir build/ -R Foo`. The implementing agent resolves intent to the current invocation (Forge profiles, output paths, etc.), so literal commands go stale the moment the build system shifts.
 - **Affected files** — files likely to be touched. State in the challenge that this list is a **hint, not a contract**: reviewers treat it as advisory, and the clean realization often adds new helper files or touches siblings the list did not predict. Use it to point, not to fence.
 - **References** — related docs, issues, or prior work
 

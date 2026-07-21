@@ -8,8 +8,8 @@ Clean up the current workspace by working through these steps in order. Each ste
 
 ## Arguments
 
-- *(no argument)* — clean git state only (unstaged files, branches, worktrees). Leave `build-*/` directories untouched so subsequent builds stay incremental.
-- **`all`** — additionally wipe top-level `build-*/` directories. Use after toolchain swaps, branch churn that produced stale CMake caches, or before disk-space cleanup.
+- *(no argument)* — clean git state only (unstaged files, branches, worktrees). Leave the Forge output dirs untouched so subsequent builds stay incremental.
+- **`all`** — additionally wipe the Forge output dirs (`Applications/Forge/.forge-out`, `.forge`, `.bootstrap-out`). Use after toolchain swaps, branch churn that left stale build trees, or before disk-space cleanup.
 
 Treat any argument other than the literal `all` as no argument (do not invent partial modes).
 

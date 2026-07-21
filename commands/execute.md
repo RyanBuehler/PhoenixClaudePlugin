@@ -151,7 +151,7 @@ challenges diverge as follows (step numbers still map to 4a-4h):
 
 Worktrees are mandatory for every challenge — the plugin's `branch-worktree-check.py` hook blocks bare `git checkout -b` / `git switch -c` / `git branch <name>` at tool-use time (by design, to enforce one-worktree-per-branch). `git worktree add -b <name>` is the only supported way to create a challenge branch.
 
-Every worktree is an independent checkout with its own Forge output tree (`.forge-out/`), so each worktree pays a first-time cold build (~3–4 min). That cost is inherent to the isolation, not avoidable by branching on main — so the implementer subagent runs `/phoe:build` as its first concrete action (see 4b, step 5 of the subagent prompt).
+Every worktree is an independent checkout with its own Forge output tree (`.forge-out/`), so each worktree pays a first-time cold build (~3–4 min). That cost is inherent to the isolation, not avoidable by branching on main — so the implementer subagent runs `/phoe:build` as its first concrete action (see 4b, step 1 of the subagent prompt).
 
 #### Branch strategy decision (per wave)
 
@@ -731,7 +731,10 @@ flag accepts any URL string, so a non-GitHub review system fits without rewordin
 Refer to each PR as **PR #<N>** (the trailing `/pull/<N>` segment) in narration, the Report table, and the Watch CI step — never URL alone. Record each `PR #<N>` + URL for the final report.
 
 After the wave's PRs are open, clean up worktrees (the branches and commits stay until the
-user removes them):
+user removes them). If the orchestrator's cwd is currently *inside* the worktree being removed
+(you entered it via `EnterWorktree(path=...)` in 4b), `ExitWorktree(keep)` to return to the main
+checkout first — a raw `git worktree remove` on the worktree you are standing in dangles the pin.
+Removing a worktree you are not currently in is fine:
 
 - **branch-per-challenge:** `git worktree remove .claude/worktrees/challenge-<label>` after
   pushing.
