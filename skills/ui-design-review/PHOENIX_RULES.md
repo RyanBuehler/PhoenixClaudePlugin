@@ -126,4 +126,4 @@ Emblema subclasses override `OnAttach()` (called when added to a parent):
 - Typography settings, dimensions
 - Accessed via `Theme::` fields, never hardcoded
 
-`Style/ThemeManager.h` provides runtime theme swap.
+`Style/ThemeCatalog.h` provides runtime theme swap.
