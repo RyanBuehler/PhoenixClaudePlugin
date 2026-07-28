@@ -3,6 +3,7 @@
 ## Hard Requirements
 
 - **NEVER mention Claude Code in commit messages.** No "Generated with Claude Code", no Co-Authored-By Claude, nothing. Commit messages should look like they were written by a human developer.
+- **NEVER manufacture machine load without explicit, per-instance user permission.** No CPU spin loops, fork bombs, memory balloons, disk fillers, or parallel-job storms sized beyond the host. This machine is shared with the user and with other agent sessions, and orphaned load is misattributed to whoever runs next. See [Never manufacture machine load](#never-manufacture-machine-load).
 - **Never combine `cd` and `git` in a compound command** (e.g. `cd /some/dir && git status`). Changing into an untrusted directory before running git exposes you to bare repository attacks where a malicious `.git` config can execute arbitrary code. Always run git commands using absolute paths or from the known working directory.
 
 ## Agent Conduct
@@ -51,6 +52,56 @@ Failure modes this rule prevents include running cmake or ninja in the wrong tre
 Worktrees are the highest-risk setting: the main repo and `.claude/worktrees/<branch>` are two independent checkouts. A cmake build invoked in the wrong tree can report success against code that does not include the current changes, masking a compile failure that only surfaces in CI. Whenever a session has an active worktree, every Bash call that touches the checkout must name the worktree path explicitly.
 
 The `cd`-and-`git` prohibition in **Hard Requirements** is a stricter variant of this rule: git in particular must never be paired with a `cd` into an untrusted directory. For non-git commands the `cd` prefix is fine and is the preferred form when arguments are relative.
+
+### Never manufacture machine load
+
+Do not spawn CPU load generators, busy-wait spinners, fork bombs, memory balloons, disk fillers, or parallel-job storms sized beyond the host. This is a hard prohibition, not a preference, and it requires **explicit user permission for each instance**. "Go debug this flake" is not permission to load the machine. Permission granted once does not carry to the next flake, the next command, or the next session.
+
+The rule covers the class, not one idiom. All of these are prohibited without permission:
+
+- **CPU** — `while :; do :; done` spinners, `yes > /dev/null`, `stress`/`stress-ng`, deliberately oversubscribed `--parallel`/`-j` values.
+- **Memory** — balloon allocations intended to force pressure or swapping.
+- **Disk** — fillers written to exhaust free space or saturate I/O.
+- **Process** — fork storms, and running many heavy builds or test suites concurrently to "see what breaks".
+
+**Why this is a hard rule: the blast radius crosses sessions.** The host is shared with the user and with other agents working in sibling worktrees. Load you create is invisible to them, outlives the command that started it, and gets attributed to whoever runs next — they will spend their session triaging a phantom regression against their own diff.
+
+Observed on the development host (2026-07-27): 80 orphaned spinners in two abandoned batches, aged 20h and 29h, had burned 339.6 CPU-hours between them. Load average on a 16-core machine reached 84.29, roughly 5x oversubscribed, leaving real work about 17 percent of the machine. The concrete damage to other sessions:
+
+- `forge lint` has a per-file cap. Starvation turns that into a hard red carrying **no diagnostic at all**. A two-file lint went 1m31s to 5m16s and failed.
+- `forge verify` builds stretched to ~38 minutes.
+- Wall-clock-threshold trials reddened constantly, and one abandoned experiment left `/tmp` residue that deterministically broke an unrelated module's trials.
+
+**A trailing `kill $LOADPIDS` is not a cleanup contract.** It runs only if the command reaches its end. When the wrapping shell is interrupted, times out, or is moved to the background by the harness, the generators are orphaned, reparented to `systemd --user`, and run forever. That is exactly how the incident above happened.
+
+Where the user has explicitly permitted load testing, the generator must be **self-limiting**, so that no cleanup step is required for it to die:
+
+```bash
+# Each generator carries its own deadline: -k forces SIGKILL if SIGTERM is ignored.
+# Killing the wrapping shell at any point cannot outlive the timeout.
+trap 'kill $(jobs -p) 2>/dev/null' EXIT INT TERM   # armed first; courtesy only, NOT sufficient alone
+for _ in $(seq 1 4); do timeout -k 5 30 sh -c 'while :; do :; done' & done
+wait
+```
+
+The `timeout` is what makes this safe — the `trap` is a courtesy that never runs if the shell is SIGKILLed. Arm it before the first job, so an interrupt during startup still finds a handler, and aim it at `jobs -p` rather than `kill 0`: the latter signals the whole process group and would take an interactive shell down with it. Prefer the smallest load and shortest deadline that reproduces the effect, and tell the user what you are about to start before you start it.
+
+### Diagnosing a starved host
+
+Before concluding that a lint timeout, a build slowdown, or a wall-clock trial failure is caused by your own diff, check whether the machine is starved:
+
+```bash
+uptime                                                        # load average vs. core count
+ps -eo pid,ppid,etime,time,pcpu,comm --sort=-pcpu | head -20  # who is burning CPU, and for how long
+```
+
+Read the signals this way:
+
+- Load average well above the core count means your timings mean nothing. Re-run when it drops rather than chasing the result.
+- A `timeout after Ns` that carries **no diagnostics** is starvation, not a finding. Real lint findings come with text.
+- A long `etime` on a process whose parent is `systemd --user` (PPID 1 reparenting) is an orphan from an abandoned session, not something the current work started.
+
+If you find orphaned load generators, report them to the user with their PIDs and ages and ask before killing anything — they may belong to a session that is still running.
 
 ## Branch & Worktree Workflow
 

@@ -574,6 +574,8 @@ for i in {1..1000}; do
 done
 ```
 
+A repetition loop this long occupies the machine for as long as it runs, and the host is shared with the user and other agent sessions. Pick the smallest iteration count that actually exposes the race, and say how long you expect it to take before starting it. **Never add background CPU load to "make the race more likely" without explicit user permission** — see *Never manufacture machine load* in `CLAUDE.md`. If you believe load is genuinely required to reproduce, stop and ask.
+
 ## Performance Considerations
 
 ### Contention Reduction
