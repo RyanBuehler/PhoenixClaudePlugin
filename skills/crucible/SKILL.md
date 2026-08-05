@@ -233,7 +233,15 @@ crucible <entity> comment-edit <id|--label=X> --index=N --body="..."
 crucible <entity> comment-delete <id|--label=X> --index=N
 ```
 
-Comments are 0-indexed within the record.
+**`--index=N` is 1-based, and `N` is a stable comment ID — not a position.** The first comment is
+`#1`. Deletes never renumber the survivors, so the numbering goes non-contiguous: delete `#1` of
+three and the rest stay `#2`/`#3`, and the next comment added becomes `#4`. **Read the index off
+`<entity> comments`** — never count it from the listing's order, and never count from zero.
+
+An out-of-range index is rejected (`Error: Comment index N not found`), but a wrong-but-existing
+index silently succeeds and reports `Comment #N updated`. So an off-by-one does not error — it
+overwrites a real comment, and `comment-delete` destroys one outright. There is no comment history
+and no undo.
 
 ## Renaming labels
 
