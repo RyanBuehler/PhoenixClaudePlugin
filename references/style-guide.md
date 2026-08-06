@@ -308,74 +308,14 @@ default-constructed `T` as a silent failure.
 
 ## Comments
 
-Code should read as self-documenting. Reach for a comment only when the *why* is not obvious
-from the code itself, or when a reader needs a nudge past something complex. A comment is a
-small aid, not a technical write-up.
+Comment and TODO rules moved to [`comments.md`](comments.md) — that document is the
+source of truth, and its rules carry stable IDs (`C1`…`C20`). The header comment at the
+top of a file is [`header.md`](header.md) (`H1`…`H24`), which also owns `#pragma once`
+and the module/import preamble; log message text is
+[`logging.md`](logging.md) (`L1`…`L32`).
 
-- **Default to no comment.** Add one only when it tells a future reader something the code
-  cannot.
-- **Short.** Most comments are a single line. Two or three lines is the ceiling — if it needs
-  more, the explanation belongs in the commit message, PR description, or a design note, not
-  the source.
-- **Explain *why*, not *what*.** Never restate what the code does. `// increment counter`
-  above `++counter;` is noise.
-- **Nothing that can go stale.** No file paths, no line numbers, no symbol names from
-  elsewhere, no Crucible labels, no PR numbers, no branch names, no commit hashes, no dates,
-  no author tags. If a reader should "see also" something, the reader can grep.
-- **No temporal narration.** Forbidden words in comments include "previously", "now", "new",
-  "legacy", "refactored", "was", "used to". Future readers see only the current code;
-  commentary about what *used* to be there is noise. Decisions about why code changed belong
-  in the commit message and PR description.
-- **No decorative banners.** Section headers like `// ===== Helpers =====` or ASCII rules
-  are forbidden. Use scope and naming instead.
-- **No author, date, or ticket tags inside comments.** `git blame` is authoritative.
-- **Form.** Use `//` for single-line comments. For multi-line comments, use `/* ... */`.
-  Do not stack multiple `//` lines to form a paragraph.
-- **Placement.** Prefer a comment on its own line directly above the code it explains.
-  Trailing end-of-line comments are reserved for brief annotations (labeling an `else` whose
-  `if` is far above, tagging a `switch` case, etc.) and must stay short.
-- **Public API declarations require a comment.** Every exported class, struct, free function,
-  and public member function declared in a module's public header gets at least a single-line
-  comment describing its purpose. Prefer one line; use the multi-line `/* ... */` form only
-  when a single line genuinely cannot convey the contract.
-
-The `std::memory_order` comment rule is a canonical example of a non-obvious *why* that
-belongs in a comment.
-
-## TODO Comments
-
-TODOs in code are notes to a future programmer who has none of today's context. Write them
-so they stay useful as the codebase moves around them.
-
-- **Keep them short.** One line, one sentence. If a TODO needs a paragraph, the work needs a
-  Crucible challenge or bug, not a comment.
-- **Describe the work, not the origin.** State what needs to happen, not where the note came
-  from.
-- **No parenthesized prefix.** Write `// TODO: ...`, never `// TODO(anything): ...`. The
-  `TODO(label):` form is forbidden regardless of what the label is — Crucible labels, saga
-  names, PR numbers, owner handles, ticket IDs, dates, and file-path shorthand all belong
-  somewhere else (commit message, PR description, tracker). A grep for `TODO(` in source
-  files should return zero hits.
-- **Never reference anything that can go stale.** No file paths, no line numbers, no Crucible
-  labels, no PR numbers, no branch names, no commit hashes, no agent names, no date. All of
-  those drift the moment something is renamed, rebased, squashed, archived, or merged. The
-  TODO should still make sense a year later when none of that context exists.
-- **Do not annotate work you just did.** TODOs that explain a refactor, justify a recent
-  rename, or narrate a decision belong in the commit message and PR description — not the
-  source. Future readers see only the current code; commentary about what *used* to be there
-  is noise.
-- **Do not annotate trivially obvious follow-ups.** "TODO: also update the header" is
-  something you do now, not later.
-
-Good:
-
-    // TODO: handle UTF-8 surrogate pairs in token splitter
-
-Bad:
-
-    // TODO(execute-saga-canvas-overhaul): per code review on PR #312, see Engine/Modules/Rendering/Mosaic/Canvas.cpp:142
-    // TODO: previously this used a raw pointer, switched to CanvasLease in this commit
-    // TODO: address feedback from challenge `add-viewport-resize`
+Two rules elsewhere in this guide lean on them: `std::memory_order` requires an
+explaining comment (C5), and a lint bypass requires a justification comment (C14).
 
 ## Design Practices
 
