@@ -17,23 +17,19 @@ design practice; agents and commands reference it before writing or reviewing co
   plans: no "legacy buffer loads as empty" acceptance criteria, no "backwards-compat trial"
   test cases.
 
-## Formatting
+## Formatting Residue
 
-| Rule | Description |
-| --- | --- |
-| Column width | Limit lines to 150 characters (matches `.clang-format` `ColumnLimit`). |
-| Indentation | Use tabs configured to a width of four spaces. |
-| Brace style | Follow Allman braces (opening brace on its own line). |
-| Alignment | Align consecutive assignments and trailing comments when practical. |
-| Includes | Sort case-insensitively and group related headers together. |
+Column width, indentation, braces, alignment, include ordering, and the blank line between
+definition blocks are **clang-format's**, catalogued in [`formatting.md`](formatting.md).
+Never check them by hand and never report them as drift — run `/phoe:format`.
 
-Blank line after every `}` that closes a scope (function, class, struct, namespace, enum,
-control-flow block, lambda body) before the next non-`}` token. Exceptions — no blank line
-is required when the next token is:
+What the formatter cannot decide is left here.
 
-- Another closing brace of an enclosing scope
-- An `else` / `else if` continuation of the just-closed `if`
-- A trailing `;` (e.g. closing a struct or lambda definition)
+**Blank line after a control-flow `}`.** `SeparateDefinitionBlocks` separates definitions,
+not blocks inside a function body. A `}` closing an `if`, `for`, `while`, `switch`, or
+lambda body gets a blank line before the next non-`}` token. Exceptions — no blank line is
+required when the next token is another closing brace of an enclosing scope, an `else` or
+`else if` continuing the just-closed `if`, or a trailing `;`.
 
 ```cpp
 // Required:
@@ -57,6 +53,10 @@ void DoThing()
     NextStep();
 }
 ```
+
+**Init-statements.** A variable used only inside an `if` or `switch` belongs in the
+condition's init-statement, not in the enclosing scope. The formatter has no opinion; the
+narrower scope is the rule.
 
 ## Naming
 

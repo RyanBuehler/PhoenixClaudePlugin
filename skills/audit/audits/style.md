@@ -10,6 +10,11 @@ audit touches that territory.
 Not in this sweep: comments and TODOs (`audits/comments.md`), the file preamble
 (`audits/header.md`), module and subsystem boundaries (`audits/architecture.md`).
 
+**Never load `references/formatting.md`.** Everything in it is mechanical — column width,
+indentation, braces, alignment, include ordering, blank lines between definitions. A file
+violating any of it is unformatted, not drifted; the finding is "run `/phoe:format`", and
+it is one line, not a list.
+
 ## What to look at
 
 Whole file. This is the broadest sweep in the set and the most expensive; prefer
@@ -17,8 +22,10 @@ Whole file. This is the broadest sweep in the set and the most expensive; prefer
 
 ## Detection
 
-**Formatting** — only what clang-format does not enforce: a missing blank line after a
-closing `}`, an `if` that should carry an init-statement.
+**Formatting residue** (§Formatting Residue) — the two things the formatter cannot decide:
+a missing blank line after a `}` closing a control-flow block *inside a function body*
+(`SeparateDefinitionBlocks` covers definitions only), and a variable that belongs in an
+`if`/`switch` init-statement rather than the enclosing scope.
 
 **Naming** (§Naming) — member/global/static/local prefixes, the atomic-bool prefix,
 abbreviations, `Old*`→`Previous*`, `Maybe*`→`Tentative*`, `Kind*`→`Type*` and

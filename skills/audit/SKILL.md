@@ -31,8 +31,8 @@ notes, not blockers.
 |---|---|---|---|
 | `logging` | Log level, message content, form, machine readability | `audits/logging.md` | `references/logging.md` |
 | `comments` | In-source comments and TODOs | `audits/comments.md` | `references/comments.md` |
-| `header` | The top of a file — its comment, guard, and import preamble | `audits/header.md` | `references/header.md` |
-| `style` | Naming, formatting, language features, error handling | `audits/style.md` | `references/style-guide.md` |
+| `header` | The top of a file — copyright notice, description, guard, import preamble | `audits/header.md` | `references/header.md` |
+| `style` | Naming, language features, error handling, design practices | `audits/style.md` | `references/style-guide.md` |
 | `architecture` | Module/subsystem boundaries, ownership tiers, object handoff | `audits/architecture.md` | `CLAUDE.md` |
 | `profiling` | Whether a system's cost is visible and correctly attributed | `audits/profiling.md` | `references/profiling.md` |
 | `optimization` | Waste — allocation, copies, redundant work, layout | `audits/optimization.md` | `references/optimization.md` |

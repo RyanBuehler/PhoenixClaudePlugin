@@ -75,7 +75,7 @@ the identity of the thing instead.
 stable prefix on every line — concurrent emitters break adjacency, so a continuation
 line that reads as a fragment can surface alone.
 
-**L11** — **Never a terminal period.** A message is one clause and stops.
+**L11** — **Never a terminal period.** A message is one clause and it stops.
 
 > ✗ `Trace("Initialized.")`
 > ✓ `Trace("Initialized")`
