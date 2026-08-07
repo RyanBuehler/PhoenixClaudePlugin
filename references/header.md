@@ -11,6 +11,7 @@ Comments in the body are [`comments.md`](comments.md). Rules carry stable IDs (`
 
 ```cpp
 // Copyright (c) 2025 Ryan Buehler. All rights reserved.
+
 // ScopedProfile - RAII profiling scope marker.
 // Compiles to an empty struct when profiling is disabled (true zero overhead).
 module;
@@ -55,8 +56,9 @@ a file; `--check` runs in CI and fails on a missing or malformed notice.
 A description line is worth writing and nothing enforces it. A file without one is **not**
 a finding. These rules govern the ones that exist.
 
-**H7** — The form is `// <Subject> - <role>.` — one space, hyphen, one space — on the line
-directly below the notice.
+**H7** — The form is `// <Subject> - <role>.` — one space, hyphen, one space — separated
+from the notice by a blank line. The notice is a legal statement and the description is
+about the code; they are not one paragraph.
 
 **H8** — Terminal period. It is a sentence describing the file, and it ends like one.
 
