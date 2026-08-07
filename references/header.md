@@ -49,7 +49,8 @@ Android glue. A file carrying a foreign notice is left alone entirely.
 **H5** — Generated code and build output are out of scope.
 
 **H6** — The notice is maintained by `Tools/copyright.py`, not by hand. Run it after adding
-a file; `--check` runs in CI and fails on a missing or malformed notice.
+a file. `python3 Tools/copyright.py --check` exits non-zero on a missing or malformed
+notice; it is not yet wired into CI or `forge verify`, so nothing enforces it today.
 
 ## §2 The description — optional
 
