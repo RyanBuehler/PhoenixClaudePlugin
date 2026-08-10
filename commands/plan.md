@@ -243,6 +243,16 @@ done
 "$CRUCIBLE" saga add <SAGA_LABEL> <CHALLENGE_LABEL>
 ```
 
+**Comment on any open challenge whose ground this plan moves.** When a new challenge renames, moves,
+or supersedes something an already-open challenge points at, say so on that challenge — what moved to
+what name, and which behaviors introduced since must not be dropped. Its description is frozen text
+written against an older tree; the comment is what tells its implementer the ground shifted at all,
+and it is read as authoritative at pickup.
+
+```bash
+"$CRUCIBLE" challenge comment --label=<OPEN_LABEL> --body="<what moved; what must not be dropped>"
+```
+
 **Verify the result:**
 
 ```bash

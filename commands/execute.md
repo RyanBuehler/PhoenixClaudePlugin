@@ -304,6 +304,9 @@ Title: <title>
 Label: <label>
 Description: <description>
 
+## Comments (verbatim from `crucible challenge comments --label=<label>`; "none" if empty)
+<comments -- these are newer than the description and win wherever the two disagree>
+
 ## Strategy
 <strategy items, numbered -- or "No strategy provided, use your judgment based on the codebase">
 
@@ -370,6 +373,10 @@ Description: <description>
 ## Constraints
 - Do NOT enter plan mode
 - Do NOT ask the user questions -- if you need information, read the codebase
+- **Comments outrank the description.** This challenge may have sat in the backlog while the tree
+  moved under it; a comment recording an intervening rename, or a behavior that landed since and
+  must not be dropped, is newer than the description. Follow the comment where the two disagree,
+  and report which description text you found stale -- do not reconcile it silently.
 - Do NOT modify files outside the challenge's scope unless absolutely necessary
 - **Grounding -- cite only what exists.** Before referencing any project helper, type,
   toolchain, tool, inspector page, script, vendored dependency, or directory -- in code,
@@ -686,7 +693,8 @@ For each successfully reviewed challenge:
    1. `"$CRUCIBLE" --json saga show --label=<SAGA_LABEL>` lists remaining todo + blocked siblings after this challenge's position. (Skip for orphans -- no siblings -- but still run the docs scan below.)
    2. Scan each later sibling's text (`"$CRUCIBLE" --json challenge show --label=<SIBLING_LABEL>`) **and** `docs/` design/spec files against the committed diff for stale references: renamed types / functions / files, changed signatures, moved modules, replaced concepts.
    3. Fix each surgically -- `"$CRUCIBLE" challenge update --label=<SIBLING_LABEL> [--field=...]` (run `--help` for flags) for sibling text; an in-place edit on this challenge's branch (rides the same PR) for docs. Update only stale references; do not rewrite scope.
-   4. Record sibling + doc updates for the final report (which siblings/docs, which fields). If a later sibling's scope is genuinely broken (not just a rename), do not rewrite it -- flag it as a blocked-follow-on in the report and let the user re-plan.
+   4. **Comment on every open challenge whose ground this work moved** -- sibling or orphan, and in addition to the `challenge update` above. The trigger is landing work that renames, moves, or supersedes something the challenge points at: `"$CRUCIBLE" challenge comment --label=<OTHER_LABEL> --body="<what moved; what must not be dropped>"`. Record what moved to what name, and which behaviors introduced since must not be dropped by the eventual rewrite -- editing the words fixes the text, but only the comment tells the implementer the ground moved at all.
+   5. Record sibling + doc updates for the final report (which siblings/docs, which fields). If a later sibling's scope is genuinely broken (not just a rename), do not rewrite it -- flag it as a blocked-follow-on in the report and let the user re-plan.
 
 **Blocked challenge policy:** Never revert branches or discard commits from blocked challenges. Partial work is valuable context for human resumption via `/phoe:implement <label>`. Always keep branches, commits, and checkpoint files intact.
 
@@ -859,7 +867,7 @@ After each PR lands on remote main, mark the corresponding challenge merged, the
 "$CRUCIBLE" challenge move --label=<LABEL> merged
 ```
 
-Re-scan the merged diff against every remaining todo/blocked challenge (saga sibling or orphan) **and** `docs/` design/spec files for stale references the pre-merge pass (Step 4g.2) missed or that only the landed diff made certain. Fix challenge text in place with `crucible challenge update`. For stale docs, file a tracked docs-reconcile challenge (`/phoe:plan`) so the edit flows through the normal implement + CI-watch path rather than an untracked side PR -- the original challenge branch is gone post-merge. Flag genuinely scope-broken siblings as blocked for re-plan rather than rewriting them. Report this pass's outcome when it runs.
+Re-scan the merged diff against every remaining todo/blocked challenge (saga sibling or orphan) **and** `docs/` design/spec files for stale references the pre-merge pass (Step 4g.2) missed or that only the landed diff made certain. Fix challenge text in place with `crucible challenge update`, and comment (Step 4g.2, item 4) on any challenge whose ground the merged diff moved. For stale docs, file a tracked docs-reconcile challenge (`/phoe:plan`) so the edit flows through the normal implement + CI-watch path rather than an untracked side PR -- the original challenge branch is gone post-merge. Flag genuinely scope-broken siblings as blocked for re-plan rather than rewriting them. Report this pass's outcome when it runs.
 
 ## 7. Watch CI — Required
 
