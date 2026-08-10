@@ -128,6 +128,17 @@ challenge.
 
 Display the challenge details: title, description, acceptance criteria, and verification steps.
 
+**Read the challenge's comments — they outrank the description:**
+
+```bash
+"$CRUCIBLE" challenge comments --label=<LABEL>
+```
+
+A challenge sits in the backlog while the tree moves under it, so a comment recording an intervening
+rename or a behavior that landed since is newer than the description and wins wherever the two
+disagree. Where they do, say so — name the stale description text and what you followed instead —
+rather than reconciling it silently.
+
 **Check for saga membership** — search the saga list for the resolved challenge ID. If it belongs to a saga:
 
 ```bash
@@ -480,8 +491,17 @@ Reconcile anything this implementation may have invalidated — later saga-sibli
    - Module or layer boundaries that shifted
    - Concepts the sibling depends on that no longer exist or have been replaced
 4. Fix each surgically — `"$CRUCIBLE" challenge update --label=<SIBLING_LABEL> [--description=... --strategy=... --affected_files=...]` (run `--help` for flags) for challenge text; an in-place edit on this challenge's branch (rides the same PR) for docs. Update only the references that are actually stale; do not rewrite specs or scope.
-5. If a sibling or doc has no stale references, leave it alone.
-6. Record which siblings + docs were updated (and what fields/files changed) for the report.
+5. **Comment on every open challenge whose ground this work moved** — sibling or orphan, and in
+   addition to any `challenge update`. The trigger is landing work that renames, moves, or supersedes
+   something the challenge points at. Record what moved to what name, and which behaviors introduced
+   since must not be dropped by the eventual rewrite. Editing the words fixes the text; the comment is
+   what tells the implementer the ground moved at all, and what a rewrite would otherwise silently
+   drop.
+   ```bash
+   "$CRUCIBLE" challenge comment --label=<OTHER_LABEL> --body="<what moved; what must not be dropped>"
+   ```
+6. If a sibling or doc has no stale references, leave it alone.
+7. Record which siblings + docs were updated (and what fields/files changed) for the report.
 
 This is the pre-merge pass; the authoritative pass re-runs post-merge in Step 17. Do not edit the implementation itself from this step — metadata + docs reconciliation only. If the implementation surfaced a real scope problem in a later challenge (not a rename), note it in the report and let the user decide whether to re-plan.
 
@@ -562,7 +582,7 @@ But once the PR is confirmed merged into remote `main` — typically observed on
 "$CRUCIBLE" challenge move --label=<LABEL> merged
 ```
 
-Re-scan the merged diff against remaining todo/blocked siblings **and** `docs/` design/spec files for stale references the Step 15 pass missed. Fix challenge text in place with `crucible challenge update`. For stale docs, file a tracked docs-reconcile challenge (`/phoe:plan`) so the edit flows through the normal implement + CI-watch path rather than an untracked side PR — this challenge's branch is gone post-merge. Flag genuinely scope-broken siblings as blocked rather than rewriting them. Report this pass's outcome when it runs.
+Re-scan the merged diff against remaining todo/blocked siblings **and** `docs/` design/spec files for stale references the Step 15 pass missed. Fix challenge text in place with `crucible challenge update`, and comment (Step 15, item 5) on any challenge whose ground the merged diff moved. For stale docs, file a tracked docs-reconcile challenge (`/phoe:plan`) so the edit flows through the normal implement + CI-watch path rather than an untracked side PR — this challenge's branch is gone post-merge. Flag genuinely scope-broken siblings as blocked rather than rewriting them. Report this pass's outcome when it runs.
 
 ### On merge — clean up and surface the next challenge
 
