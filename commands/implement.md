@@ -258,7 +258,15 @@ Tests are NOT required for:
 - Pure wiring or delegation (forwarding calls to already-tested functions)
 - Platform-specific code that can only be tested on the target platform's CI
 
-> **Subagent worktree isolation (applies to every dispatch below).** `invoke-test-engineer` and `invoke-code-reviewer` carry `isolation: worktree`, so the harness drops them in a *fresh* worktree branched from `main` — without this challenge's still-uncommitted changes, so they cannot read or build the code under review and resort to copying files in. Instead, dispatch this test/review work as a **general-purpose** subagent and pass it the absolute path of this challenge worktree (`.claude/worktrees/challenge-<label>`) so it operates on the real, uncommitted code in place. Keep the specialist prompts below verbatim — only the dispatch vehicle changes.
+> **Subagent worktree isolation.** `invoke-test-engineer` and `invoke-code-reviewer` carry
+> `isolation: worktree`, so the harness drops them in a *fresh* worktree branched from `main` —
+> without this challenge's still-uncommitted changes, so they cannot read the code under review and
+> resort to copying files in. Every dispatch below therefore passes the absolute path of this
+> challenge worktree (`.claude/worktrees/challenge-<label>`). **The dispatch vehicle differs by
+> job:** the test-writing dispatch here needs to write, so it goes as a **general-purpose** subagent;
+> the review dispatches in Steps 11 and 12 are **read-only** and go as `Explore`. Do not merge the
+> two — see `${CLAUDE_PLUGIN_ROOT}/references/dispatch-briefs.md` §1. Keep the specialist prompts
+> below verbatim; only the vehicle changes.
 
 When tests are applicable, launch `invoke-test-engineer` as a subagent to write them. Provide it with the implementation diff and the module context so it can place tests correctly and follow Trials conventions. **Ask it to end its report with a `## Workflow Friction` section** listing anything that made the task harder than it should have been — missing context, ambiguous spec, undocumented convention, tooling gaps — or the single word `none` if nothing applied. These notes are aggregated in Step 14.5.
 
@@ -268,9 +276,17 @@ All verification must pass before proceeding:
 
 **a. Challenge verification steps** — run any commands from the challenge's `verification` field (shown in the challenge JSON).
 
-**b. Full project verification** — run `/phoe:verify` (build + format check + lint + test). All must pass.
+**b. Full project verification** — run `/phoe:verify` (format check → build → lint → forbidden-token
+audit → test). All must pass. `/phoe:verify` covers **one profile**: if this challenge touched
+anything under `Applications/Forge/`, or edited a build profile, verify that profile explicitly too —
+a green editor verify does not run Forge's own trials and has twice hidden a broken one.
 
-**c. If any verification fails** — fix the issue and re-verify. Do not proceed until everything passes.
+**c. A cold build outlives the command timeout** and gets backgrounded by the harness. Wait on it
+properly — capture the PID or the log, scoped to this worktree — per
+`${CLAUDE_PLUGIN_ROOT}/references/dispatch-briefs.md` §4. A process-name match is either unscoped
+(never finishes) or silently matches nothing (returns instantly, looking like a completed build).
+
+**d. If any verification fails** — fix the issue and re-verify. Do not proceed until everything passes.
 
 ## 10. Acceptance Criteria Evaluation
 
@@ -290,74 +306,44 @@ Do not proceed to code review until all mechanically-verifiable criteria are met
 
 ## 10.5. Review Dispatch Preamble — include in every reviewer prompt
 
-Steps 11 and 12 both dispatch reviewer subagents. Paste the blocks below into each reviewer
-prompt. They exist because the failure modes they prevent **fail in the direction of a false
-clean** — a reviewer that cannot find something reports it as absent, and that conclusion reaches
-the PR body.
+Steps 11 and 12 both dispatch reviewer subagents, and both gate on zero CRITICAL and zero WARNING
+findings. The brief they receive is assembled per
+`${CLAUDE_PLUGIN_ROOT}/references/dispatch-briefs.md`, which is the single source for these blocks —
+read it before dispatching. Every failure mode it prevents **fails in the direction of a false
+clean**: a reviewer that cannot find something reports it as absent, and that conclusion reaches the
+PR body.
 
 ### 10.5a. Ship the contract — never a paraphrase
 
-Steps 11 and 12 gate on zero CRITICAL and zero WARNING findings. A reviewer that cannot read the
-acceptance criteria **invents the contract from the code and fixtures, then blocks on it**. The
-challenge body lives server-side in Crucible and is not reachable from the worktree — reviewers
-have repeatedly said so, and a paraphrased AC has already been wrong in a dispatch.
-
-Before dispatching, capture the challenge verbatim:
+The challenge body lives server-side in Crucible and is not reachable from the worktree, so a
+reviewer that cannot read the acceptance criteria **invents the contract from the code and fixtures,
+then blocks on it**. Capture the challenge verbatim before dispatching:
 
 ```bash
 "$CRUCIBLE" challenge show <ID>
 ```
 
-Interpolate that **whole output** — title, description, acceptance criteria, verification,
-references — into the reviewer prompt under a `## Challenge Contract (verbatim from Crucible)`
-heading. Do not summarize it, and do not re-word the acceptance criteria: their exact wording is
-what the reviewer judges scope against.
+Interpolate that **whole output** into the reviewer prompt under a
+`## Challenge Contract (verbatim from Crucible)` heading — do not summarize, and do not re-word the
+acceptance criteria. Then resolve the design-doc references and assemble the build-state block per
+`dispatch-briefs.md` §2, which also covers the two brief-assembly rules this workflow must follow:
+**resolve `REVIEW_BASE`/`REVIEW_SHA` with `git rev-parse` / `git merge-base` at dispatch time**
+(never transcribe or hand-extend a hash), and **generate the reviewer's file list from the range**
+with `git diff --name-only`, never from the challenge's `Files` field.
 
-Then resolve every design-doc reference the challenge or the code comments cite
-(`Docs/Cortex_DD.md §4.6`, `Docs/PublishPath_DD.md`, …):
+### 10.5b. The preamble itself
 
-- Confirm the file exists in **this worktree** and the cited section is actually present.
-- If it exists, give the reviewer the path and section number.
-- If the file or section does **not** exist, say so explicitly in the prompt — e.g.
-  *"`Docs/ForgePlatformModel_DD.md` is referenced but absent from this worktree; do not weigh
-  comments against it."* Reviewers have built headline findings on cited sections that were never
-  there.
+Paste `dispatch-briefs.md` §3 — **Review dispatch preamble** — verbatim into each reviewer prompt,
+substituting the resolved `REVIEW_BASE`/`REVIEW_SHA` for its `<BASE>`/`<SHA>` placeholders. It
+covers reading the frozen commit rather than the working tree, the path and pathspec hazards, the
+command guard, the zsh traps, and the requirement that every cited path and symbol be resolved
+before it is reported.
 
-Also state which build directory is warm (e.g. `Applications/Forge/.forge/`) and whether a build
-has been run on this branch, so a reviewer does not report a static-only review claiming no build
-tree exists.
+### 10.5c. Dispatch read-only
 
-### 10.5b. Search and diff scoping
-
-> **Reading the change.** You are reviewing a **frozen commit range** — `<BASE>..<SHA>`, where the
-> orchestrator has filled `<SHA>` with the committed tip and `<BASE>` with `git merge-base
-> origin/main HEAD` (the branch's actual fork point, never a hardcoded `main`). Do not pipe a whole
-> diff. `git diff <BASE>..<SHA> --stat` gives you the map; then read each changed file **in place** at
-> its current content, and use `git diff <BASE>..<SHA> -- <path>` for one file at a time when you need
-> the delta. A whole-diff dump on a mid-size change (30 KB+) overflows the Bash output cap, spills to
-> a temp file, then overflows the Read cap — costing round-trips and tempting you to review a
-> truncated artifact. The range is immutable for the life of your review; nothing in the index shifts
-> under you.
->
-> **Where to search.** This repository contains many sibling worktrees under `.claude/worktrees/`
-> and build trees under `.forge*/` and `.bootstrap-out/`, all holding near-identical copies of the
-> same sources. Scope every search to the worktree root you were given. Prefer `git grep`, which
-> searches only tracked files in the current tree and skips build output entirely. If you must use
-> `grep -r`/`find`, exclude `.forge*/`, `.bootstrap-out/`, and `.claude/worktrees/` explicitly — a
-> generated `compile_commands.json` alone can exceed the output cap.
->
-> **How to search.** Bash runs under **zsh**, which expands unquoted globs *before* the command
-> sees them: an unquoted `--include=*.h` that matches nothing aborts the entire command with
-> "no matches found". Quote every glob-bearing flag (`--include='*.h'`) or use
-> `git grep -n <pattern> -- '<pathspec>'`. **Empty output from a search means the command may never
-> have run** — confirm the command actually executed before concluding a symbol is absent.
->
-> **Paths.** Use full repo-relative paths and verify they exist before relying on a negative result.
-> `git diff --stat` elides long path prefixes, and a git pathspec that matches nothing **exits 0
-> with empty output** — indistinguishable from "this file has no changes."
->
-> Before reporting that anything is missing, absent, or unreferenced, re-run the check with the
-> scoping above. State which tree you searched.
+Both review dispatches go as `Explore` with the absolute path of this challenge worktree — never as
+a write-capable agent. `dispatch-briefs.md` §1 has the rationale and the read-only clause to include
+in the prompt.
 
 ## 11. Automated Code Review
 
@@ -377,15 +363,20 @@ Invoke the code reviewer as a **separate agent** to evaluate the implementation 
                                                    # main shows a predecessor's merged work as noise
    ```
    Because the commit already lands here, Step 13 is a no-op unless the fix loop below adds commits.
-2. Launch `invoke-code-reviewer` as a subagent with the prompt:
+2. Dispatch the reviewer **read-only** (`Explore`, Step 10.5c) with the absolute path of this
+   challenge worktree, using the prompt:
    > Review the change on this challenge branch. Focus on correctness, safety, modern C++23 opportunities, performance, and project convention compliance. Report findings using CRITICAL/WARNING/SUGGESTION/NOTE severity levels.
    >
-   > [Include the **Challenge Contract** (Step 10.5a) and the **search/diff scoping block** (Step 10.5b) here, verbatim — substituting the resolved `REVIEW_BASE` and `REVIEW_SHA` values for the `<BASE>..<SHA>` placeholders so the reviewer diffs the frozen range.]
+   > [Include the **Challenge Contract** (Step 10.5a), the **review dispatch preamble** (Step 10.5b) and the **read-only clause** (Step 10.5c) here, verbatim — substituting the resolved `REVIEW_BASE` and `REVIEW_SHA` values for the `<BASE>..<SHA>` placeholders so the reviewer diffs the frozen range.]
    >
    > Lint already ran in Step 9's `/phoe:verify` (`forge lint`, clang-tidy over the changed surface, module-import graph included) and passed — you do not need to re-adjudicate include/import hygiene or punt to `invoke-lint-agent`; treat the import graph as already cleared unless you see a concrete contradiction.
    >
    > End your report with a `## Workflow Friction` section listing anything that made this review harder than it should have been — missing context, ambiguous spec, undocumented convention, tooling gaps — or the single word `none` if nothing applied.
 3. **Gate on zero CRITICAL and zero WARNING findings.** If any CRITICAL or WARNING issues are found:
+   - Resolve every path and symbol each finding cites before acting on it
+     (`${CLAUDE_PLUGIN_ROOT}/references/dispatch-briefs.md` §5) — findings routinely name paths that
+     do not exist while being otherwise correct. Say so when a citation does not resolve, and
+     re-locate the real target rather than fixing the nearest plausible thing.
    - Fix each CRITICAL and WARNING issue
    - Commit the fix on the branch and **re-freeze**: `REVIEW_SHA=$(git rev-parse HEAD)` (refresh `REVIEW_BASE` too if `origin/main` moved)
    - Re-run `/phoe:verify`
@@ -398,11 +389,12 @@ Invoke the code reviewer as a **separate agent** to evaluate the implementation 
 
 After the standard review passes, dispatch an **adversarial** reviewer subagent. The standard review asks "is this code well-formed?"; the adversarial review asks "how does this break?". A PR cannot be opened until this gate has run and any CRITICAL findings are resolved.
 
-Launch `invoke-code-reviewer` as a fresh subagent with the prompt:
+Dispatch a fresh **read-only** subagent (`Explore`, Step 10.5c) with the absolute path of this
+challenge worktree and the prompt:
 
 > Adversarially review the change on challenge `<LABEL>`. Your job is to attack this implementation, not validate it. Assume the standard review already passed — do not duplicate it.
 >
-> [Include the **Challenge Contract** (Step 10.5a) and the **search/diff scoping block** (Step 10.5b) here, verbatim — substituting the resolved `REVIEW_BASE` and `REVIEW_SHA` values for the `<BASE>..<SHA>` placeholders. Use the same frozen SHA the standard review ran against.]
+> [Include the **Challenge Contract** (Step 10.5a), the **review dispatch preamble** (Step 10.5b) and the **read-only clause** (Step 10.5c) here, verbatim — substituting the resolved `REVIEW_BASE` and `REVIEW_SHA` values for the `<BASE>..<SHA>` placeholders. Use the same frozen SHA the standard review ran against.]
 >
 > Hunt for:
 >

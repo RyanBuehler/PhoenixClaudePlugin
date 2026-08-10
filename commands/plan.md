@@ -74,9 +74,43 @@ Draft a saga and break the work into commit-sized, ordered Challenges.
 - **Tags** — pipe-separated tags (e.g., `cpp|rendering`, `plugin|commands`, `tests`)
 - **Acceptance criteria** — what "done" looks like
 - **Strategy** — ordered implementation steps: patterns to follow (with file paths), functions/classes to extend, specific constraints, and step-by-step approach. Think of this as briefing a capable engineer who cannot ask questions. When creating challenges intended for `/phoe:execute`, the strategy must be thorough enough for fully autonomous implementation.
-- **Verification steps** — describe the **intent** of each verification in plain language, not the literal shell command. Write "build the editor in debug", "run the LayoutSorter tests", "confirm Aurora emits a resize event on window shrink" — never `cmake --build build-clang/ -j24` or `ctest --test-dir build/ -R Foo`. The implementing agent resolves intent to the current invocation (Forge profiles, output paths, etc.), so literal commands go stale the moment the build system shifts.
-- **Affected files** — files likely to be touched. State in the challenge that this list is a **hint, not a contract**: reviewers treat it as advisory, and the clean realization often adds new helper files or touches siblings the list did not predict. Use it to point, not to fence.
-- **References** — related docs, issues, or prior work
+- **Verification steps** — describe the **intent** of each verification in plain language, not the literal shell command. Write "build the editor in debug", "run the LayoutSorter tests", "confirm Aurora emits a resize event on window shrink" — never `cmake --build build-clang/ -j24` or `ctest --test-dir build/ -R Foo`. The implementing agent resolves intent to the current invocation (Forge profiles, output paths, etc.), so literal commands go stale the moment the build system shifts. **Intent is not a licence to be unrunnable** — see "Verification must be executable" below.
+- **Affected files** — **only the files the change is expected to modify.** Files a reader merely needs in order to judge the work go in **References**, prefixed `Context:`. The two readings of this field diverge constantly and reviewers pay for it: four separate reviews treated an unchanged entry as an implementation gap, and one was sent through sixteen hundred lines of an input file the commit never touches. With the split, a reviewer can treat an unchanged entry here as a real question and an unchanged `Context:` entry as expected. The list is still a **hint, not a contract** — the clean realization often adds helper files the list did not predict — but every entry should be a file you expect the commit to touch.
+- **References** — related docs, issues, or prior work, plus the `Context: <path> — <why it matters>` entries displaced from Affected files.
+
+**Verification must be executable.** A verification block is what settles whether the work is done,
+so a reviewer must be able to run it and reach a verdict without repairing it first. Four separate
+reviews hit blocks that could not be run as written. Each entry must satisfy:
+
+- **Runnable in this repository as stated.** Use the scoped search form (`git grep -n <pattern> --
+  '<pathspec>'`); an unscoped recursive search over the repo root sweeps the build trees and sibling
+  agent worktrees and returns near-identical duplicates.
+- **A named profile must build on the target host *and* be scoped to run the trials in question.**
+  One criterion named a profile that neither builds here nor would ever run the guard trials even on
+  a working machine — unsatisfiable anywhere. If a differently scoped profile expresses the intent,
+  name that one.
+- **Where a harness already performs the check, name the harness.** One block described packaging a
+  standalone and running it from another directory — a procedure that maps one-to-one onto an
+  existing harness a workflow already runs. The reviewer found it only by searching.
+- **The step must be performable against the branch.** One depended on a slot no production schema
+  wires, discoverable only by tracing registrations.
+- **A criterion that cannot be checked mechanically says so.** Mark it explicitly, so a reviewer
+  spends its effort on the criteria that can be.
+
+Before the challenge leaves planning, read its criteria against each other for contradiction. One
+challenge asked both that trials assert real relationships and that a table encode them, with
+nothing saying whether the trials must bind to real code — which is the whole question of whether
+they can catch a regression.
+
+**Cite symbols, never line numbers.** Challenge descriptions and strategies must point at a file
+plus a searchable name — a function, type, constant, or a distinctive literal — never `File.cpp:412`.
+Line numbers drift as soon as anything above them changes, so a citation is typically stale before
+the challenge is picked up and the reader has to find the thing by name anyway, which is what the
+citation was supposed to save. One spec review found six cited positions in a single contract that
+had all drifted against the very pre-image it was reviewing; another challenge's citations had
+drifted twelve commits; a third turned a line-range read into a false finding when the offsets
+disagreed with a symbol search of the same file. Symbol names do not go stale. Where a position
+genuinely matters, name what is *at* that position in terms a search can find.
 
 **Co-specified header/compile pairs.** When a challenge both drops a declaration from a header
 (e.g. "remove the forward declaration of X", "stop exporting Y") *and* requires downstream
@@ -121,7 +155,10 @@ Launch `invoke-spec-reviewer` as a subagent with the prompt:
 > Audit the following draft Crucible saga and challenges for **spec quality** — there is no implementation yet, so this is a forward-looking review of the contract, not a compliance check. For each challenge, evaluate:
 >
 > - **Completeness** — are description, acceptance criteria, strategy, verification, and affected_files concrete enough to brief a capable engineer who cannot ask questions? `/phoe:execute` runs these specs autonomously, so missing context is a future failure.
-> - **Ambiguity** — are any criteria phrased so they admit multiple correct implementations, or in ways that cannot be mechanically verified? Verification entries must be intent strings, never literal shell commands.
+> - **Ambiguity** — are any criteria phrased so they admit multiple correct implementations, or in ways that cannot be mechanically verified? Verification entries must be intent strings, never literal shell commands. Do any two criteria within one challenge pull against each other?
+> - **Runnable verification** — can each verification entry be executed as written, in this repository, and yield a verdict? Flag unscoped searches, profiles that do not build on the target host or are not scoped to the trials named, procedures that duplicate an existing harness instead of naming it, and steps that cannot be performed against the branch at all. A criterion that cannot be checked mechanically must be marked as such.
+> - **Citations** — does any description or strategy cite a line number? Every citation must name a searchable symbol instead; line numbers drift within a single challenge's lifetime.
+> - **Files vs context** — does `affected_files` list anything the change is not expected to modify? Context-only files belong in `references` under a `Context:` prefix.
 > - **Ordering** — do dependencies implied by strategy, affected_files, or referenced symbols match the current sequence? Earlier challenges must not depend on later ones.
 > - **Missing context** — which file paths, prior-art references, or project conventions need to be cited for the implementer to ground their approach in Phoenix patterns?
 > - **Scope** — is each challenge commit-sized? Is anything bundled that should split, or split that should bundle?
@@ -160,7 +197,9 @@ If only a single challenge results, offer to create just a standalone challenge 
 
 After approval, create the challenges and saga using the CLI.
 
-All list-style flags use `|` as the separator. Verification entries are intent strings, not literal shell commands: `"Build the editor in debug"`, `"Run the LayoutSorter tests"`, `"Confirm Aurora emits a resize event on window shrink"`. Implementers resolve intent to the current invocation; literal commands like `cmake --build build/` rot when the build system shifts.
+All list-style flags use `|` as the separator. Verification entries are intent strings, not literal shell commands: `"Build the editor in debug"`, `"Run the LayoutSorter tests"`, `"Confirm Aurora emits a resize event on window shrink"`. Implementers resolve intent to the current invocation; literal commands like `cmake --build build/` rot when the build system shifts. Each entry must still be executable as stated against this repository (see step 4).
+
+`--affected-files` carries only files the change is expected to modify. Context files go into `--references` as `Context: <path> — <why>`.
 
 **Create each challenge:**
 

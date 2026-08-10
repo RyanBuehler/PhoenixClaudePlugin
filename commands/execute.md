@@ -323,7 +323,23 @@ Description: <description>
 
 ## Your Job
 
-1. **Populate the worktree's build tree (FOREGROUND).** Your `cwd` is a fresh git worktree with an empty `Applications/Forge/.forge-out/` tree. Build once as your first action — Forge configures and builds via the active profile. Run the build in the **foreground** and wait for it to finish in this same turn; do NOT launch it in the background and yield your turn waiting for a completion notification — that strands you with edits unverified and uncommitted. If a build helper would background itself, run the underlying build command directly in the foreground. Do this before exploring: you'll want the built module artifacts present so `grep`/`Read`-based exploration works correctly on modules that use C++23 modules, and so your later `/phoe:verify` run is an incremental build, not a cold one.
+1. **Populate the worktree's build tree, and wait for it.** Your `cwd` is a fresh git worktree with an empty `Applications/Forge/.forge-out/` tree. Build once as your first action — Forge configures and builds via the active profile. Do this before exploring: you'll want the built module artifacts present so `grep`/`Read`-based exploration works correctly on modules that use C++23 modules, and so your later `/phoe:verify` run is an incremental build, not a cold one.
+
+   A cold build here **exceeds the ten-minute command timeout**, so the harness backgrounds it whether or not you asked. Do not try to hold it in the foreground — that contract cannot be honored and it fails silently, leaving you believing you are waiting when you are not. Start it with a log inside this worktree, record its PID, and wait on that PID:
+
+   ```bash
+   nohup <build command> > .forge-build.log 2>&1 &
+   echo $! > .forge-build.pid
+   ```
+   ```bash
+   BUILD_PID=$(cat .forge-build.pid)
+   while kill -0 "$BUILD_PID" 2>/dev/null; do sleep 30; done
+   tail -40 .forge-build.log
+   ```
+
+   **Do not wait by matching process command lines.** An unscoped match on the compiler or builder name returns hits from every sibling agent building concurrently — 106 in one run — so the wait never finishes. A pattern that scopes by placing this worktree's path next to the compiler name matches *nothing*, because the compiler binary appears on the command line before the include flag carrying that path; the wait then returns instantly, which looks exactly like a completed build. And a watcher pattern that matches its own command line never exits. A captured PID has none of these failure modes. Confirm from the log's final lines that the build reported a result before you act on it.
+
+   Still do not end your turn with edits unverified or uncommitted — wait here, then continue.
 2. Read the affected files and explore related Phoenix code to understand the context. **Ground your approach in Phoenix's own patterns** — if the challenge touches UI, read Mosaic/Tessera/Emblema code; if it touches input, read Impulse; if it touches the renderer, read Aurora/Prism/Vulkan code. Do NOT generalize from external frameworks (ImGui, Qt, React, etc.) or from memory of how similar problems are solved elsewhere — that frequently ships wrong assumptions into the diff. When in doubt, grep for analogous existing features and mirror their shape.
 3. Follow the strategy steps (if provided) or plan your own approach based on what you read in step 2
 4. Implement the changes
@@ -359,7 +375,7 @@ Description: <description>
   compression library is false by default, even on a single host.
 - Follow the project's coding conventions (CLAUDE.md) — **and before writing any C++, read `${CLAUDE_PLUGIN_ROOT}/references/style-guide.md` and `${CLAUDE_PLUGIN_ROOT}/references/tooling.md`** so the implementation conforms to enforced conventions (formatting, naming, comments, namespaces, return-value handling, `auto`, scope spacing, tooling). `${CLAUDE_PLUGIN_ROOT}` is the plugin install path (fall back to `~/phoenixclaudeplugin/references/` if it is unset)
 - Use plain ASCII only -- no unicode characters
-- **Do not yield your turn until committed + reported.** Run builds and tests in the FOREGROUND; ending your turn with edits unverified or uncommitted (e.g. waiting on a backgrounded build) strands the work and the orchestrator cannot resume you mid-task.
+- **Do not yield your turn until committed + reported.** Ending your turn with edits unverified or uncommitted strands the work and the orchestrator cannot resume you mid-task. A build that outruns the command timeout is backgrounded by the harness regardless — wait it out with the PID loop in step 1 rather than yielding.
 - **Use worktree-absolute paths.** The paths in your prompt/context use the main-repo form (`/home/ryan/phoenix/...`), but the files you must edit live under the worktree prefix (`.claude/worktrees/challenge-<label>/...`). Reading the main-repo path can serve stale content, and a later `Edit` then fails "File has not been read yet" — read and edit the worktree copy.
 - **This shell is zsh.** Quote `grep --include` globs (`'*.cpp'`, not `*.cpp`) and do not rely on unquoted `$VAR` word-splitting — pass file lists literally or use arrays. An unquoted multi-file variable collapses to a single argument and silently checks nothing.
 - **Numeric safety.** Any clamp / `min` / `max` over a caller-supplied float must guard with `isfinite`/`isnan` FIRST — `std::clamp`/`min`/`max` pass NaN straight through into casts and persisted state. This is a recurring CRITICAL class the adversarial reviewer keeps catching.
@@ -465,7 +481,14 @@ For each completed challenge, working inside its worktree (`.claude/worktrees/ch
    "Rebase conflict with origin/main on files: <list>". **Keep the branch intact.** Skip.
 
 3. Run full project verification via `/phoe:verify` from inside the worktree. Forge drives the full
-   sequence: configure + build, format check, lint (clang-tidy on changed files), and test.
+   sequence: format check, configure + build, lint (clang-tidy on changed files), forbidden-token
+   audit, and test.
+
+   **One verify run covers one profile.** If the challenge touched anything under
+   `Applications/Forge/`, or edited a build profile, verify that profile explicitly as well — the
+   editor profile does not run Forge's own trials, and a green editor verify has twice hidden a
+   broken Forge trial. Record the profiles actually verified; 4e's brief has to report them, and a
+   change that edits a profile must name that profile in the set.
 
 4. Run challenge-specific verification commands from the challenge JSON.
 
@@ -475,7 +498,7 @@ For each completed challenge, working inside its worktree (`.claude/worktrees/ch
 
 ### 4e. Review (spec + quality + adversarial in parallel per challenge)
 
-Process challenges in ID order. For each challenge, dispatch all three reviewers simultaneously (they are read-only, so parallel dispatch is safe), wait for all to return, then move to the next challenge. Reviewers diff the challenge branch against its upstream base with three-dot range `origin/main...HEAD` (use `main...HEAD` when origin is unreachable) — this captures the full PR diff regardless of how many commits the branch carries, and never depends on local `main`.
+Process challenges in ID order. For each challenge, dispatch all three reviewers simultaneously — as **read-only** `Explore` agents pointed at the challenge worktree, which is what makes parallel dispatch safe — wait for all to return, then move to the next challenge. Reviewers work over the frozen range `$REVIEW_BASE..$REVIEW_SHA` resolved below, which pins the review to a commit while the shared checkout keeps moving underneath it.
 
 **A reviewer that returns with zero tool uses and no verdict is a failed dispatch, not a pass.** Reviewers occasionally terminate early (no `git diff` run, no per-criterion table). Detect this — an empty or verdict-less return — and re-dispatch that reviewer once with the same prompt; never treat an empty review as a clean gate.
 
@@ -495,10 +518,12 @@ Review spec compliance for challenge: <label>
 <strategy from challenge JSON, if present>
 
 ## Diff
-Run: git diff origin/main...HEAD (use main...HEAD if origin is unreachable)
+Run: git diff <BASE>..<SHA> -- <path>, one path at a time; read reviewed content
+with git show <SHA>:<path>.
 
 ## Files Changed
-<list from git diff --name-only origin/main...HEAD>
+<list generated by `git diff --name-only <BASE>..<SHA>` — never copied from the
+challenge's Files field, which is a hint and goes stale>
 ```
 
 **Challenge Contract** -- capture the challenge verbatim BEFORE dispatching:
@@ -519,40 +544,34 @@ cited section is present. If it is absent, say so explicitly in the prompt -- re
 have built headline findings on sections that were never there. Also state which build
 directory is warm and whether a build has run on this branch.
 
-**Review Dispatch Preamble** -- paste this block verbatim into BOTH reviewer prompts
-below. Every failure mode it prevents fails toward a *false clean*: a reviewer that
-cannot find something reports it as absent, and that reaches the PR body.
+**Review Dispatch Preamble** -- paste `${CLAUDE_PLUGIN_ROOT}/references/dispatch-briefs.md`
+§3 verbatim into ALL THREE reviewer prompts below. Read that file before dispatching;
+it is the single source for this block, and every failure mode it prevents fails toward
+a *false clean*: a reviewer that cannot find something reports it as absent, and that
+reaches the PR body. It covers reading the frozen commit instead of the working tree,
+the stat-path and pathspec hazards, the command guard, the zsh traps, and the rule that
+every cited path and symbol is resolved before it is reported.
 
+Resolve the range once, at dispatch time, and substitute the values into the preamble's
+`<BASE>`/`<SHA>` placeholders -- never transcribe a hash from earlier output or extend a
+short one by hand (see `dispatch-briefs.md` §2; a hash that shared only a nine-character
+prefix with the real head read to two reviewers as a broken worktree):
+
+```bash
+REVIEW_SHA=$(git -C .claude/worktrees/challenge-<label> rev-parse HEAD)
+REVIEW_BASE=$(git -C .claude/worktrees/challenge-<label> merge-base origin/main HEAD)
 ```
-Reading the change. Do not pipe a whole diff. `git diff origin/main...HEAD --stat`
-gives you the map; read each changed file in place, and use
-`git diff origin/main...HEAD -- <path>` per file for the delta. A whole-diff dump
-on a 30 KB+ change overflows the Bash output cap, spills to a temp file, then
-overflows the Read cap.
 
-Where to search. This repository holds many sibling worktrees under
-`.claude/worktrees/` and build trees under `.forge*/` and `.bootstrap-out/`, all
-carrying near-identical copies of the same sources. Scope every search to the
-worktree root you were given. Prefer `git grep`, which searches only tracked files
-in the current tree. If you use `grep -r`/`find`, exclude `.forge*/`,
-`.bootstrap-out/`, and `.claude/worktrees/` -- a generated compile_commands.json
-alone can exceed the output cap.
+**Build state.** State which build directory is warm, whether a build has run on this
+branch, **which profile the shared build tree is currently configured for**, and **which
+profiles were actually verified in 4d**. A change that edits a profile must name that
+profile in the verified set -- one brief listed six verified profiles while the commit
+edited six others.
 
-How to search. Bash runs under zsh: an unquoted `--include=*.h` that matches
-nothing aborts the whole command with "no matches found". Quote every glob-bearing
-flag or use `git grep -n <pattern> -- '<pathspec>'`. Empty output may mean the
-command never ran -- confirm it executed before concluding a symbol is absent.
-
-Paths. Use full repo-relative paths. A git pathspec that matches nothing exits 0
-with empty output, indistinguishable from "no changes here". Before reporting
-anything as missing or unreferenced, re-run the check with the scoping above and
-state which tree you searched.
-
-Lint already ran. 4d's `/phoe:verify` ran `forge lint` (clang-tidy over the changed
-surface, module-import graph included) and it passed. Do not re-adjudicate
-include/import hygiene or punt the module graph to `invoke-lint-agent` unless you see
-a concrete contradiction in the diff — treat the import graph as already cleared.
-```
+**Dispatch all three reviewers read-only** (`Explore`) with the absolute worktree path,
+and include the read-only clause from `dispatch-briefs.md` §1. A write-capable reviewer
+pointed at a live worktree has destroyed uncommitted work and corrupted the shared build
+tree; read-only dispatch cost nothing in review quality.
 
 **Quality reviewer** -- launch `invoke-code-reviewer` agent:
 
@@ -616,6 +635,8 @@ blocked instead and let the user re-plan.
 Process challenges in **ID order** within the wave, and for each one:
 
 - **Spec FAIL, quality CRITICAL or WARNING, or adversarial CRITICAL or WARNING:** Dispatch a fix subagent with the combined feedback from every reviewer that flagged a blocker (spec, quality, adversarial — whichever fired).
+
+  **Make the fix subagent verify every citation first.** Review findings routinely name a path or symbol that does not exist while being otherwise correct — from stat-summary path elision, a stale contract file list, or the applications-vs-engine tree confusion. Instruct it to resolve each cited path and symbol against the reviewed commit before acting, to report any that do not resolve rather than fixing the nearest plausible thing, and to re-check a finding's factual claims (one fix pass was built on a prior review's assertion that a function had no production consumer; a single search disproved it). See `${CLAUDE_PLUGIN_ROOT}/references/dispatch-briefs.md` §5.
 
   **Narrow the fix subagent to the named findings.** It must close *only* the specific findings in the feedback and nothing else. If it notices an unrelated problem while working, it **reports** it in its result — it does not fix it. An over-reaching fix pass that "improves" code the findings did not name has shipped 3 new blocking defects in a single run: the reviewers never vetted those changes, so they re-open the gate instead of closing it. Give the fix subagent this instruction verbatim: *"Fix exactly these findings: `<list>`. Do not refactor, rename, or touch anything the findings do not name. If you spot another problem, describe it under an `## Also Noticed` heading in your report — do not fix it."* Surface anything it reports under `## Also Noticed` in the final run summary.
 

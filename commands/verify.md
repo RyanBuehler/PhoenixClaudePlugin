@@ -11,6 +11,11 @@ forbidden-token audit → test in one in-process pass, exactly as CI does. That 
 gate; the sub-skills (`/phoe:build`, `/phoe:format`, `/phoe:lint`, `/phoe:test`) exist for debugging
 one phase in isolation, not for re-assembling the sequence by hand.
 
+Two things it is **not**, both of which have convinced agents they verified work they had not:
+
+- **It verifies one profile, not the project.** See §2a.
+- **On this host it does not reach its test phase.** See §2b.
+
 ## 1. Locate the Builder
 
 Every phase runs through the bootstrapped `forge` binary. Locate it, bootstrapping if absent:
@@ -42,6 +47,37 @@ bounded head+tail excerpt and the format/lint/audit diffs — rather than reduce
 surface — neither sees an untracked new file. A `.cpp`/`.cppm` you have not `git add`-ed is invisible
 to this gate, so its formatting/lint violations sail through locally and fail CI. `git add` new files
 before running verify so they are in scope.
+
+**Format before you build, never after.** A source file newer than its trial binary trips the test
+phase's staleness guard, so a `forge format` run after a build invalidates the test step and costs a
+full rebuild. Order is format → build → test.
+
+### 2a. Scope — one verify covers one profile
+
+`forge verify editor` proves nothing about any other profile. Most importantly it **does not run
+Forge's own trials**: a change under `Applications/Forge/` can be green here and broken in CI. That
+has happened twice, and a human caught it, not this workflow.
+
+- A change touching the builder needs `"$FORGE" verify forge` explicitly, in addition to `editor`.
+- **A change that edits a build profile must verify that profile.** Do not report a set of profiles
+  as verified unless each one was actually run — a dispatch brief once listed six verified profiles
+  while the commit under review edited six *others*, none of which any listed run touched.
+- When reporting verification to a user, a reviewer, or a PR body, name the profiles you ran. "Verify
+  passed" without a profile is not a claim anyone can check.
+
+### 2b. Host reality — verify aborts before its test phase
+
+On this machine `forge verify` **does not complete**: it aborts at the toolchain audit on a Vulkan
+pin drift, after having paid for the full lint, and yields no test result. This is a known ordering
+defect in Forge, tracked separately; until it lands, treat verify as a two-command sequence and do
+not read an abort at the audit as a failure of the change:
+
+```bash
+"$FORGE" verify editor     # expect: aborts at the toolchain audit, after lint
+"$FORGE" test editor       # the test result verify never produced
+```
+
+A run that stopped at the audit has **not** tested anything. Do not report it as a passing verify.
 
 **On failure**, re-run only the phase that broke to iterate faster (each maps to a sub-skill):
 

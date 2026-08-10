@@ -261,21 +261,24 @@ Invoke the code reviewer as a **separate agent** to evaluate the implementation 
 
    Interpolate that whole output — title, description, reproduction steps, acceptance criteria, verification — into the prompt under a `## Bug Contract (verbatim from Crucible)` heading. Do not summarize. Resolve any `Docs/*.md §x` reference the bug cites: confirm it exists in this worktree, and say so explicitly in the prompt if it does not.
 
-3. Launch `invoke-code-reviewer` as a subagent with the prompt:
+3. **Dispatch the reviewer read-only, into this worktree.** Reviews are read-only work: dispatch as
+   `Explore` and pass the absolute path of this bug worktree so the reviewer can see the committed
+   fix without a fresh isolated tree of its own. Do **not** dispatch a write-capable agent here — see
+   `${CLAUDE_PLUGIN_ROOT}/references/dispatch-briefs.md` §1 for why (a write-capable reviewer
+   destroyed an orchestrator's uncommitted work and corrupted the shared build tree).
+
+   Assemble the brief per `dispatch-briefs.md` §2 — resolved hashes, a file list generated from the
+   range, and an accurate build-state block — then use this prompt:
+
    > Review the change on this bug fix branch. Focus on correctness, safety, modern C++23 opportunities, performance, and project convention compliance. Verify the fix addresses the root cause and doesn't introduce regressions. Report findings using CRITICAL/WARNING/SUGGESTION/NOTE severity levels.
    >
    > [Include the **Bug Contract** captured above here, verbatim.]
    >
-   > Lint already ran in Step 9's `/phoe:verify` (`forge lint`, clang-tidy over the changed surface, module-import graph included) and passed — do not re-adjudicate include/import hygiene or punt to `invoke-lint-agent` unless you see a concrete contradiction.
-   >
-   > **Reading the change.** You are reviewing a **frozen commit range** — the orchestrator has filled `<SHA>` with the committed tip (`REVIEW_SHA`) and `<BASE>` with `git merge-base origin/main HEAD` (`REVIEW_BASE`, the branch's actual fork point, never a hardcoded `main`). Do not pipe a whole diff. `git diff <BASE>..<SHA> --stat` gives you the map; read each changed file **in place**, and use `git diff <BASE>..<SHA> -- <path>` per file for the delta. A whole-diff dump on a 30 KB+ change overflows the Bash output cap, spills to a temp file, then overflows the Read cap. The range is immutable for the life of your review.
-   >
-   > **Where to search.** This repository holds many sibling worktrees under `.claude/worktrees/` and build trees under `.forge*/` and `.bootstrap-out/`, all carrying near-identical copies of the same sources. Scope every search to the worktree root you were given. Prefer `git grep`, which searches only tracked files in the current tree. If you use `grep -r`/`find`, exclude `.forge*/`, `.bootstrap-out/`, and `.claude/worktrees/`.
-   >
-   > **How to search.** Bash runs under **zsh**: an unquoted `--include=*.h` that matches nothing aborts the whole command with "no matches found". Quote every glob-bearing flag or use `git grep -n <pattern> -- '<pathspec>'`. **Empty output may mean the command never ran** — confirm it executed before concluding a symbol is absent.
-   >
-   > **Paths.** Use full repo-relative paths. A git pathspec that matches nothing **exits 0 with empty output**, which is indistinguishable from "no changes here". Before reporting anything as missing or unreferenced, re-run the check with the scoping above and state which tree you searched.
+   > [Paste the **Review dispatch preamble** — `${CLAUDE_PLUGIN_ROOT}/references/dispatch-briefs.md` §3 — verbatim, substituting the resolved `REVIEW_BASE`/`REVIEW_SHA` for `<BASE>`/`<SHA>`.]
 4. **Gate on zero CRITICAL and zero WARNING findings.** If any CRITICAL or WARNING issues are found:
+   - Resolve every path and symbol the finding cites before acting on it, per
+     `${CLAUDE_PLUGIN_ROOT}/references/dispatch-briefs.md` §5 — findings routinely name paths that
+     do not exist while being otherwise correct. Say so when a citation does not resolve.
    - Fix each CRITICAL and WARNING issue
    - Commit the fix on the branch and **re-freeze**: `REVIEW_SHA=$(git rev-parse HEAD)` (refresh `REVIEW_BASE` too if `origin/main` moved)
    - Re-run `/phoe:verify`

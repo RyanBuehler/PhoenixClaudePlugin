@@ -10,7 +10,15 @@ Crucible is the project's bespoke saga/challenge/bug tracker. A `crucible` CLI c
 ## Hard rules
 
 - **The server is managed externally.** Never `start`, `kill`, `probe`, `curl`, `pkill`, or otherwise touch `crucible-server`. If commands fail to connect, report the failure — do not try to start a server.
-- **The binary is project-local, not on PATH.** Forge builds it under `Applications/Forge/.forge-out/*/bin/crucible` (the profile subtree name varies by host/build, so don't hardcode it). Discover it once and reuse the value: `CRUCIBLE=$(find Applications/Forge/.forge-out -type f -path '*/bin/crucible' | head -1)`, then call `"$CRUCIBLE" ...`. There is no system-wide `crucible`. Build via `/phoe:build crucible` if the binary is missing.
+- **The binary is project-local, not on PATH.** Forge builds it under a per-profile subtree whose name varies by host/build, so don't hardcode it. **Search the configured build tree (`.forge/`) as well as the bootstrap output (`.forge-out/`), newest first** — `.forge-out/` can hold a months-stale copy that still reports a plausible version number, and picking it up costs a round trip on every fresh session:
+
+  ```bash
+  CRUCIBLE=$(find Applications/Forge/.forge Applications/Forge/.forge-out \
+      -type f -path '*/bin/crucible' -printf '%T@ %p\n' 2>/dev/null \
+    | sort -rn | head -1 | cut -d' ' -f2-)
+  ```
+
+  Then call `"$CRUCIBLE" ...`. There is no system-wide `crucible`. Build via `/phoe:build crucible` if the binary is missing.
 - **Storage lives at `~/.local/share/crucible-server/`** (`challenges/`, `sagas/`, `bugs/`, `archive/`, `bug-archive/`, `config.json`). Never edit those files by hand — go through the CLI so the server stays consistent.
 - **Use the CLI, not raw JSON.** This is reinforced by user feedback: do not hand-author challenge/saga/bug JSON files when a CLI subcommand exists.
 - **The CLI is the source of truth for status.** Never grep the filesystem or pgrep the server to answer status questions — ask the CLI.
@@ -160,6 +168,13 @@ crucible bug create \
 
 Pipe-separated lists (`a|b|c`) are accepted on create for any list-valued field. The server also accepts `,` as a separator. The CLI emits a deprecation warning on `update` for pipe-separated forms (see below).
 
+**`Warning: affected_files path does not exist` is unreliable — ignore it, and check the paths
+yourself.** The existence check runs against the *server's* notion of the project root, not the
+directory the command was run from, so paths that plainly exist in the repo root are warned about
+anyway (`--affected-files="CLAUDE.md"` from the repo root warns). Treating the warning as
+load-bearing trains you to ignore a check that should be. Verify paths with `ls`/`git ls-files`
+before creating, and don't use `--strict-paths` — it turns these false warnings into hard errors.
+
 ## Updating — list fields
 
 `<entity> update` accepts the obvious scalar flags (`--title`, `--description`, `--status`, `--priority`, `--severity`).
@@ -188,6 +203,20 @@ So you append a new acceptance criterion with `--append-acceptance="..."`, repla
 
 For sagas, `update` exposes `--append-validation-criteria=` and `--remove-validation-criteria=` directly.
 
+**The `--append-*` / `--replace-*` / `--clear-*` family is a *challenge* feature. `bug update` does
+not have it.** A bug's list fields (`--tags`, `--acceptance-criteria`, `--verification`,
+`--affected-files`, `--references`) accept only the pipe-separated whole-list form, which **replaces**
+the list — to add one tag you must restate every tag. Reaching for the challenge form fails with
+`Error: Unknown flag: --append-tags`, which reads like a typo rather than an entity difference. Read
+the current list off `bug show` first, then send the full replacement:
+
+```bash
+crucible bug update <id> --tags="existing1|existing2|new"
+```
+
+(`--review-link` / `--replace-review-link` / `--clear-review-link` *are* available on bugs — that
+one is a scalar, not a list.)
+
 ## Saga membership
 
 ```
@@ -214,6 +243,12 @@ crucible challenge unblock <id|--label=X> [<target-status>]    # default todo
 ```
 
 `--blocked_by` (underscore!) is the one underscore flag in the surface. `--reason` is hyphen-style.
+
+**`challenge move <id> blocked` is refused** — it errors with *"not supported because it requires
+`--blocked_by`"* and points you at `challenge block`. There is no reason-only block, so a challenge
+blocked by newly discovered work has nothing to point at yet: **file the blocker challenge first**,
+then `challenge block <id> --blocked_by=<new-id>`. (Bugs are different — `bug move <id> blocked`
+works, because bugs have no `block`/`unblock` subcommands at all.)
 
 ### When to block — and when NOT to
 
@@ -262,11 +297,26 @@ Labels must be kebab-case.
 The CLI reads the file client-side (essential when client and server live in different mount namespaces, e.g. sandboxed containers):
 
 ```
-crucible challenge import <path>          # default: upsert by label
+crucible challenge import <path>          # upsert by label — but see the caveat below
 crucible challenge import <path> --create-new   # force new id, suffixed label
 crucible saga import <path>
 crucible bug import <path>
 ```
+
+**The upsert only matches *active* records, and it fails silently.** `import --help` promises
+update-in-place when a record with the file's label exists — but the lookup skips the archive, so a
+label that lives only in `list-archive` (anything `merged` or `canceled`) does not match. Import then
+takes the create path: a **new id, a suffixed label, and no warning**. Following the documented
+upsert during one consolidation produced a duplicate that had to be deleted by hand.
+
+A silent duplicate is worse than a rejection, so check before you import and after:
+
+```bash
+crucible <entity> show --label=<LABEL> --include-archived   # does it already exist, archived or not?
+crucible <entity> list | grep <LABEL>                       # exactly one afterwards?
+```
+
+If the record is archived, `unarchive` it first and then import, rather than importing on top of it.
 
 ## Discovering flags when unsure
 
@@ -283,7 +333,10 @@ If still in doubt, the source of truth is `Applications/Crucible/Source/Private/
 - **`Error: Unknown flag: --saga`** on `challenge list` — there is no `--saga` filter. Use `crucible saga show <id>` to enumerate a saga's challenges, or filter list by `--tag` if you tagged consistently.
 - **`saga create --challenges=a|b|c` succeeded but saga is empty** — known quirk; `--challenges` is silently dropped on create. Use `crucible saga add` after creation.
 - **`Failed to load challenge N: Failed to read file: .../N.json`** — challenge IDs are sparse. The number you tried is unallocated or archived. Use `crucible challenge list` / `list-archive` to find real IDs.
-- **`crucible: command not found`** — the binary is not on PATH; it lives under `Applications/Forge/.forge-out/*/bin/crucible`. Discover it with `find Applications/Forge/.forge-out -type f -path '*/bin/crucible' | head -1`, or build it first via `/phoe:build crucible`.
+- **`crucible: command not found`** — the binary is not on PATH. Discover it with the newest-first search in **Hard rules** above, which covers both `.forge/` and `.forge-out/`; or build it via `/phoe:build crucible`.
+- **`bug list --tag=<X>` returns every bug** — the tag filter is silently ignored on bugs (a nonsense tag returns the full list too, while `--status`/`--priority`/`--severity` do filter). Do not read the unfiltered result as "every bug carries this tag". Filter client-side instead: `crucible --json bug list > bugs.json`, then select on `tags` — and redirect it, the JSON runs to ~145 KB for a few dozen bugs.
+- **`Error: Unknown flag: --append-tags` on `bug update`** — the incremental list verbs are challenge-only. Restate the whole list with the pipe-separated form.
+- **A second record appears after `import`** — the upsert missed an archived label. See **Importing JSON**.
 - **Connection errors** — server is down or wrong port. **Do not start it yourself.** Report the failure to the user.
 
 ## Output format reminders
