@@ -133,7 +133,8 @@ config (build group, platform, build type), so never hardcode that subtree in a 
 read `output_path` from the `build --json` result, or discover it:
 
 ```bash
-CRUCIBLE=$(find Applications/Forge/.forge-out -type f -path '*/bin/crucible' 2>/dev/null | head -1)
+CRUCIBLE=$(find Applications/Forge/.forge Applications/Forge/.forge-out -type f \
+    -path '*/bin/crucible' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
 ```
 
 The commands that consume the Crucible CLI (`/phoe:implement`, `/phoe:bugfix`, `/phoe:plan`,

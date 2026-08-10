@@ -100,7 +100,8 @@ show` carry the PR URL:
 
 ```bash
 # Discover the Crucible CLI (Forge builds it under a per-profile subtree — don't hardcode the path)
-CRUCIBLE=$(find Applications/Forge/.forge-out -type f -path '*/bin/crucible' 2>/dev/null | head -1)
+CRUCIBLE=$(find Applications/Forge/.forge Applications/Forge/.forge-out -type f \
+    -path '*/bin/crucible' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
 ENTITY=challenge   # or bug, depending on which workflow opened the PR
 LABEL=<label>
 PR_URL=$(gh pr view --json url --jq .url)

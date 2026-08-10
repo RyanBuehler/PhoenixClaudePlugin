@@ -19,9 +19,15 @@ code.
 The two halves of that sentence are both load-bearing, and the obvious fixes for each break the
 other:
 
-- The specialist reviewer agents (`invoke-code-reviewer`, `invoke-spec-reviewer`, every
-  `phoe:invoke-*`) carry `isolation: worktree`, so the harness drops them in a *fresh* tree branched
-  from `main` — without the work under review. That is why the dispatch must name the live worktree.
+- **Most `phoe:invoke-*` specialists carry `isolation: worktree`** in their frontmatter
+  (`invoke-test-engineer`, `invoke-build-engineer`, `invoke-lint-agent`, and the rest — check the
+  agent file before assuming), so the harness drops them in a *fresh* tree branched from `main`,
+  without the work under review. That is why a dispatch must name the live worktree rather than rely
+  on the agent finding it.
+- **"Read-only" in an agent's description is not read-only in its tools.**
+  `invoke-code-reviewer` and `invoke-spec-reviewer` carry no `isolation` key — they land in the
+  caller's tree — and both list `Bash`, which writes. `invoke-spec-reviewer` even describes itself as
+  "read-only analysis". Judge a dispatch by its tool list, not its prose.
 - A reviewer with write tools pointed at a tree its author is still working in **will corrupt it.**
   One such reviewer appended a probe trial to a trials file, reverted it with a checkout of that
   path, and destroyed the orchestrator's own uncommitted trial in the same file. It also left an
@@ -66,9 +72,18 @@ value cannot survive into the prompt at all.
 git diff --name-only "$REVIEW_BASE".."$REVIEW_SHA"
 ```
 
-A contract's `Files` list is a hint written before the work; it goes stale and it names context.
-Transcribing it into a brief is how a reviewer came to read sixteen hundred lines of a file the
-commit never touched.
+A contract's `Files` list is a hint written before the work, and it goes stale. Transcribing it into
+a brief is how a reviewer came to read sixteen hundred lines of a file the commit never touched.
+
+**Pass the affected/context distinction through.** Challenges authored under the current
+`/phoe:plan` guidance put only files the change is *expected to modify* in `affected_files`, and put
+files that are merely background in `references`, prefixed `Context:`. Say so in the brief, so the
+reviewer knows how to read a mismatch:
+
+> `affected_files` lists what this change was expected to modify — an entry the diff leaves untouched
+> is a question worth raising. Entries under `Context:` in references are background only; they are
+> *expected* to be unchanged. Older challenges predate this split and may mix the two — when in
+> doubt, trust the generated file list above, not the contract.
 
 **State the build state accurately.** The brief's build-state block must name:
 
@@ -150,8 +165,9 @@ Paste the block below **verbatim** into every reviewer prompt, substituting the 
 > **Empty output is not evidence.** Three different mechanisms produce empty output that looks
 > exactly like a genuine negative result:
 >
-> 1. A git pathspec that matches nothing **exits 0 and prints nothing** — identical to an unchanged
->    file.
+> 1. A pathspec that matches nothing makes `git diff`/`git show` **exit 0 and print nothing** —
+>    identical to an unchanged file. (`git grep` differs: it exits 1 there, so a zero exit from
+>    `git grep` with no output is a genuine no-match.)
 > 2. A shell trap (below) can abort the command before it runs.
 > 3. The background-session command guard can refuse the command outright.
 >
@@ -185,8 +201,9 @@ Paste the block below **verbatim** into every reviewer prompt, substituting the 
 >   commit. Put every flag *before* the pattern.
 > - **`git grep` rejects `--include`** (`error: unknown option 'include=*.cpp'`). Use a pathspec after
 >   `--` instead.
-> - **A pattern containing `>` or leading `-` needs `-e`.** Unquoted, zsh reads `>` as a redirection
->   and silently creates a file; a leading `-` is parsed as a flag. Write
+> - **Two separate hazards in one pattern like `->Method`.** An unquoted `>` is read by zsh as a
+>   redirection and silently creates a file — **quoting** fixes that. A leading `-` is parsed by the
+>   command as a flag — only **`-e`** fixes that. A pattern with both needs both:
 >   `git grep -n -e '->Method' -- '<pathspec>'`.
 >
 > **Verify every citation before you report it.** Each path and symbol you name in a finding must
@@ -209,19 +226,35 @@ believes it is waiting and is not.
 Give the implementer a wait mechanism instead:
 
 > Your build will outlive the command timeout, so start it in the background with a log inside
-> **this worktree** and wait on the process you started:
+> **this worktree** and wait on the process you started. Write both files under `.forge-build/`,
+> which the repository already ignores — a stray `.pid` in the working tree shows up as an
+> uncommitted change and a reviewer is instructed to flag it.
 >
 > ```bash
 > cd <worktree>
-> nohup "$FORGE" build <profile> > .forge-build.log 2>&1 &
-> echo $! > .forge-build.pid
+> mkdir -p .forge-build
+> FORGE=Applications/Forge/.bootstrap-out/forge     # bootstrap first if absent
+> nohup "$FORGE" build <profile> > .forge-build/build.log 2>&1 &
+> echo $! > .forge-build/build.pid
 > ```
 >
+> Then poll in **bounded** batches. A single unbounded `while` loop is itself subject to the same
+> command timeout that forced the build into the background, and being killed mid-wait looks like a
+> failure rather than an unfinished build. Cap each call well under the timeout and re-run it until
+> the process is gone:
+>
 > ```bash
-> BUILD_PID=$(cat <worktree>/.forge-build.pid)
-> while kill -0 "$BUILD_PID" 2>/dev/null; do sleep 30; done
-> tail -40 <worktree>/.forge-build.log
+> BUILD_PID=$(cat <worktree>/.forge-build/build.pid)
+> for _ in $(seq 1 16); do                                   # ~8 min, then return
+>   kill -0 "$BUILD_PID" 2>/dev/null || break
+>   sleep 30
+> done
+> kill -0 "$BUILD_PID" 2>/dev/null && echo "STILL BUILDING — run this block again" \
+>   || tail -40 <worktree>/.forge-build/build.log
 > ```
+>
+> If it prints `STILL BUILDING`, run the same block again. That is a normal cold build, not a
+> failure — do not proceed to edits or verification, and do not end your turn.
 >
 > Do not wait by matching process command lines. Two shapes of that loop are broken:
 >

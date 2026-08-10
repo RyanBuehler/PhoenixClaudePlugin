@@ -1,5 +1,5 @@
 ---
-description: Full CI-mirror verification sequence — configure, build, format check, lint, forbidden-token audit, and test through Forge. The mandatory pre-commit check.
+description: Full CI-mirror verification sequence — configure, build, format check, lint, policy audits, and test through Forge. The mandatory pre-commit check.
 ---
 
 Run the full CI-mirror verification sequence. Stop on the first failure.
@@ -7,7 +7,9 @@ Run the full CI-mirror verification sequence. Stop on the first failure.
 Run this **before committing**. A commit made without passing verification is incomplete work.
 
 `forge verify <profile>` *is* the CI mirror: it runs configure → build → format-check → lint →
-forbidden-token audit → test in one in-process pass, exactly as CI does. That single command is the
+**policy audits** → test in one in-process pass, exactly as CI does. The audits are five, run in a
+fixed order — forbidden-token, **toolchain**, trial-friend, IO-seam, heap-seam — and any one of them
+short-circuits the run before `test`. That single command is the
 gate; the sub-skills (`/phoe:build`, `/phoe:format`, `/phoe:lint`, `/phoe:test`) exist for debugging
 one phase in isolation, not for re-assembling the sequence by hand.
 
@@ -48,9 +50,10 @@ surface — neither sees an untracked new file. A `.cpp`/`.cppm` you have not `g
 to this gate, so its formatting/lint violations sail through locally and fail CI. `git add` new files
 before running verify so they are in scope.
 
-**Format before you build, never after.** A source file newer than its trial binary trips the test
-phase's staleness guard, so a `forge format` run after a build invalidates the test step and costs a
-full rebuild. Order is format → build → test.
+**Run `forge format` before you build, never after.** This is about the *manual* rewrite command, not
+verify's internal `format-check` phase, which only inspects and cannot invalidate anything. A
+`forge format` run after a build leaves sources newer than their trial binaries, which trips the test
+phase's staleness guard and costs a full rebuild. So: `forge format` first, then verify.
 
 ### 2a. Scope — one verify covers one profile
 
@@ -67,8 +70,10 @@ has happened twice, and a human caught it, not this workflow.
 
 ### 2b. Host reality — verify aborts before its test phase
 
-On this machine `forge verify` **does not complete**: it aborts at the toolchain audit on a Vulkan
-pin drift, after having paid for the full lint, and yields no test result. This is a known ordering
+On this machine `forge verify` **does not complete**: it aborts at the **toolchain audit** — the
+second of the five policy audits, and a different phase from the forbidden-token audit — on a Vulkan
+pin drift, after having paid for the full lint, and yields no test result. The failure reads
+`error: vulkan: version <installed> but the pin is <pinned>`. This is a known ordering
 defect in Forge, tracked separately; until it lands, treat verify as a two-command sequence and do
 not read an abort at the audit as a failure of the change:
 
@@ -87,6 +92,8 @@ A run that stopped at the audit has **not** tested anything. Do not report it as
 | format-check        | `"$FORGE" format` then re-check (`/phoe:format`) |
 | lint                | `"$FORGE" lint` (`/phoe:lint`)            |
 | forbidden-token audit | fix the flagged path/token; see CLAUDE.md "Forbidden tokens" |
+| toolchain audit     | the host outran a pinned SDK version — not caused by your change; see §2b |
+| trial-friend / IO-seam / heap-seam audit | run the named `Tools/audit_*.py` directly for its full output |
 | test                | `"$FORGE" test editor --output-on-failure` (`/phoe:test`) |
 
 Re-run `"$FORGE" verify editor` once the phase passes, so the full sequence confirms nothing else

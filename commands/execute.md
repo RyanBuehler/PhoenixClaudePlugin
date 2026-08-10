@@ -17,10 +17,11 @@ Determine which mode by checking if the argument is a number, "next", or a strin
 
 Run `/phoe:build crucible` so both `crucible` and `crucible-server` exist and match the expected version. The first build is a clean build; subsequent invocations are no-ops. If `/phoe:build crucible` stops with a version mismatch, stop here and report it to the user.
 
-**Locate the Crucible CLI — discover it, don't hardcode a path.** Forge places the binary under `Applications/Forge/.forge-out/` in a per-profile subtree whose name varies with host and build config, so resolve it into `$CRUCIBLE`. Every crucible call in this document runs from the main repo root. Each Bash block is a fresh shell, so the variable will not carry across the separate blocks — re-run this `find` (or substitute the path it resolved) in each block that calls the CLI:
+**Locate the Crucible CLI — discover it, don't hardcode a path.** Forge places the binary in a per-profile subtree whose name varies with host and build config, under both the configured build tree (`Applications/Forge/.forge/`) and the bootstrap output (`Applications/Forge/.forge-out/`) — take the **newest**, since a stale `.forge-out/` copy still reports a plausible version, so resolve it into `$CRUCIBLE`. Every crucible call in this document runs from the main repo root. Each Bash block is a fresh shell, so the variable will not carry across the separate blocks — re-run this `find` (or substitute the path it resolved) in each block that calls the CLI:
 
 ```bash
-CRUCIBLE=$(find Applications/Forge/.forge-out -type f -path '*/bin/crucible' 2>/dev/null | head -1)
+CRUCIBLE=$(find Applications/Forge/.forge Applications/Forge/.forge-out -type f \
+    -path '*/bin/crucible' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
 [ -x "$CRUCIBLE" ] || { echo "crucible not found — run /phoe:build crucible first"; exit 1; }
 ```
 
@@ -325,21 +326,31 @@ Description: <description>
 
 1. **Populate the worktree's build tree, and wait for it.** Your `cwd` is a fresh git worktree with an empty `Applications/Forge/.forge-out/` tree. Build once as your first action — Forge configures and builds via the active profile. Do this before exploring: you'll want the built module artifacts present so `grep`/`Read`-based exploration works correctly on modules that use C++23 modules, and so your later `/phoe:verify` run is an incremental build, not a cold one.
 
-   A cold build here **exceeds the ten-minute command timeout**, so the harness backgrounds it whether or not you asked. Do not try to hold it in the foreground — that contract cannot be honored and it fails silently, leaving you believing you are waiting when you are not. Start it with a log inside this worktree, record its PID, and wait on that PID:
+   A cold build here **exceeds the ten-minute command timeout**, so the harness backgrounds it whether or not you asked. Do not try to hold it in the foreground — that contract cannot be honored and it fails silently, leaving you believing you are waiting when you are not. Start it with a log inside this worktree, record its PID, and wait on that PID. `.forge-build/` is gitignored, so neither file dirties the tree:
 
    ```bash
-   nohup <build command> > .forge-build.log 2>&1 &
-   echo $! > .forge-build.pid
+   mkdir -p .forge-build
+   nohup <build command> > .forge-build/build.log 2>&1 &
+   echo $! > .forge-build/build.pid
    ```
+
+   Poll in **bounded** batches — an unbounded `while` loop hits the same timeout that backgrounded the build, and being killed mid-wait reads as a failure rather than an unfinished build:
+
    ```bash
-   BUILD_PID=$(cat .forge-build.pid)
-   while kill -0 "$BUILD_PID" 2>/dev/null; do sleep 30; done
-   tail -40 .forge-build.log
+   BUILD_PID=$(cat .forge-build/build.pid)
+   for _ in $(seq 1 16); do                                  # ~8 min, then return
+     kill -0 "$BUILD_PID" 2>/dev/null || break
+     sleep 30
+   done
+   kill -0 "$BUILD_PID" 2>/dev/null && echo "STILL BUILDING — run this block again" \
+     || tail -40 .forge-build/build.log
    ```
+
+   `STILL BUILDING` means run the same block again; it is a normal cold build, not a failure.
 
    **Do not wait by matching process command lines.** An unscoped match on the compiler or builder name returns hits from every sibling agent building concurrently — 106 in one run — so the wait never finishes. A pattern that scopes by placing this worktree's path next to the compiler name matches *nothing*, because the compiler binary appears on the command line before the include flag carrying that path; the wait then returns instantly, which looks exactly like a completed build. And a watcher pattern that matches its own command line never exits. A captured PID has none of these failure modes. Confirm from the log's final lines that the build reported a result before you act on it.
 
-   Still do not end your turn with edits unverified or uncommitted — wait here, then continue.
+   Full detail, including why each naive form fails, is in `${CLAUDE_PLUGIN_ROOT}/references/dispatch-briefs.md` §4. Still do not end your turn with edits unverified or uncommitted — keep re-running the poll block, then continue.
 2. Read the affected files and explore related Phoenix code to understand the context. **Ground your approach in Phoenix's own patterns** — if the challenge touches UI, read Mosaic/Tessera/Emblema code; if it touches input, read Impulse; if it touches the renderer, read Aurora/Prism/Vulkan code. Do NOT generalize from external frameworks (ImGui, Qt, React, etc.) or from memory of how similar problems are solved elsewhere — that frequently ships wrong assumptions into the diff. When in doubt, grep for analogous existing features and mirror their shape.
 3. Follow the strategy steps (if provided) or plan your own approach based on what you read in step 2
 4. Implement the changes
@@ -481,8 +492,8 @@ For each completed challenge, working inside its worktree (`.claude/worktrees/ch
    "Rebase conflict with origin/main on files: <list>". **Keep the branch intact.** Skip.
 
 3. Run full project verification via `/phoe:verify` from inside the worktree. Forge drives the full
-   sequence: format check, configure + build, lint (clang-tidy on changed files), forbidden-token
-   audit, and test.
+   sequence: configure + build, format-check, lint (clang-tidy on changed files), the policy audits,
+   and test.
 
    **One verify run covers one profile.** If the challenge touched anything under
    `Applications/Forge/`, or edited a build profile, verify that profile explicitly as well — the
@@ -506,7 +517,9 @@ The adversarial reviewer is a **mandatory pre-PR gate** — no challenge advance
 
 For each verified challenge:
 
-**Spec reviewer** -- launch `invoke-spec-reviewer` agent:
+**Spec reviewer** -- dispatch read-only (`Explore`) with the worktree path. Do NOT launch
+`invoke-spec-reviewer`: it carries `Bash`, so it can mutate the tree under review, and this
+review must not. Use its prompt, not its agent type:
 
 ```
 Review spec compliance for challenge: <label>
@@ -533,8 +546,8 @@ challenge's Files field, which is a hint and goes stale>
 ```
 
 Interpolate that whole output -- title, description, acceptance criteria, verification,
-references -- into BOTH reviewer prompts under a `## Challenge Contract (verbatim from
-Crucible)` heading. Do not summarize; the exact AC wording is what the reviewer judges
+references -- into ALL THREE reviewer prompts under a `## Challenge Contract (verbatim
+from Crucible)` heading. Do not summarize; the exact AC wording is what the reviewer judges
 scope against. Both review gates block on CRITICAL/WARNING, so a reviewer that cannot
 read the criteria invents the contract from the fixtures and then blocks on it.
 
@@ -562,6 +575,9 @@ REVIEW_SHA=$(git -C .claude/worktrees/challenge-<label> rev-parse HEAD)
 REVIEW_BASE=$(git -C .claude/worktrees/challenge-<label> merge-base origin/main HEAD)
 ```
 
+When origin is unreachable (`REMOTE_REACHABLE=0` from Step 1), there is no `origin/main` ref --
+use `merge-base main HEAD` instead, and say in the brief that the base is local `main`.
+
 **Build state.** State which build directory is warm, whether a build has run on this
 branch, **which profile the shared build tree is currently configured for**, and **which
 profiles were actually verified in 4d**. A change that edits a profile must name that
@@ -573,7 +589,8 @@ and include the read-only clause from `dispatch-briefs.md` §1. A write-capable 
 pointed at a live worktree has destroyed uncommitted work and corrupted the shared build
 tree; read-only dispatch cost nothing in review quality.
 
-**Quality reviewer** -- launch `invoke-code-reviewer` agent:
+**Quality reviewer** -- dispatch read-only (`Explore`) with the worktree path, using the
+`invoke-code-reviewer` prompt below rather than that agent type (same reason):
 
 ```
 Review the change on this challenge branch.
@@ -586,7 +603,8 @@ CRITICAL/WARNING/SUGGESTION/NOTE severity levels.
 <Review Dispatch Preamble, verbatim>
 ```
 
-**Adversarial reviewer** -- launch a second `invoke-code-reviewer` agent (fresh, no shared context with the quality reviewer) with this prompt:
+**Adversarial reviewer** -- dispatch a second read-only (`Explore`) subagent, fresh with no
+shared context with the quality reviewer, with this prompt:
 
 ```
 Adversarially review the change on challenge: <label>.

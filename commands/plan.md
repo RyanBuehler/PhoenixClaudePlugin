@@ -12,10 +12,11 @@ Plan a feature from idea to actionable Crucible Challenges grouped under a Saga.
 
 Run `/phoe:build crucible` so both `crucible` and `crucible-server` exist and match the expected version. The first build is a clean build; subsequent invocations are no-ops. If `/phoe:build crucible` stops with a version mismatch, stop here and report it to the user.
 
-**Locate the Crucible CLI — discover it, don't hardcode a path.** Forge places the binary under `Applications/Forge/.forge-out/` in a per-profile subtree whose name varies with host and build config, so resolve it into `$CRUCIBLE` and use `"$CRUCIBLE"` in every crucible call below. Each Bash block is a fresh shell, so the variable will not carry across the separate blocks — re-run this `find` (or substitute the path it resolved) in each block that calls the CLI:
+**Locate the Crucible CLI — discover it, don't hardcode a path.** Forge places the binary in a per-profile subtree whose name varies with host and build config, under both the configured build tree (`Applications/Forge/.forge/`) and the bootstrap output (`Applications/Forge/.forge-out/`) — take the **newest**, since a stale `.forge-out/` copy still reports a plausible version, so resolve it into `$CRUCIBLE` and use `"$CRUCIBLE"` in every crucible call below. Each Bash block is a fresh shell, so the variable will not carry across the separate blocks — re-run this `find` (or substitute the path it resolved) in each block that calls the CLI:
 
 ```bash
-CRUCIBLE=$(find Applications/Forge/.forge-out -type f -path '*/bin/crucible' 2>/dev/null | head -1)
+CRUCIBLE=$(find Applications/Forge/.forge Applications/Forge/.forge-out -type f \
+    -path '*/bin/crucible' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
 [ -x "$CRUCIBLE" ] || { echo "crucible not found — run /phoe:build crucible first"; exit 1; }
 ```
 

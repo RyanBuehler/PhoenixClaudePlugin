@@ -16,10 +16,11 @@ Implement a Crucible Challenge end-to-end with human supervision. Accepts a labe
 
 Run `/phoe:build crucible` so both `crucible` and `crucible-server` exist and match the expected version. The first build is a clean build; subsequent invocations are no-ops. If `/phoe:build crucible` stops with a version mismatch, stop here and report it to the user.
 
-**Locate the Crucible CLI — discover it, don't hardcode a path.** Forge places the binary under `Applications/Forge/.forge-out/` in a per-profile subtree whose name varies with host and build config, so resolve it into `$CRUCIBLE` and use `"$CRUCIBLE"` in every crucible call below. Each Bash block is a fresh shell, so the variable will not carry across the separate blocks — re-run this `find` (or substitute the path it resolved) in each block that calls the CLI:
+**Locate the Crucible CLI — discover it, don't hardcode a path.** Forge places the binary in a per-profile subtree whose name varies with host and build config, under both the configured build tree (`Applications/Forge/.forge/`) and the bootstrap output (`Applications/Forge/.forge-out/`) — take the **newest**, since a stale `.forge-out/` copy still reports a plausible version, so resolve it into `$CRUCIBLE` and use `"$CRUCIBLE"` in every crucible call below. Each Bash block is a fresh shell, so the variable will not carry across the separate blocks — re-run this `find` (or substitute the path it resolved) in each block that calls the CLI:
 
 ```bash
-CRUCIBLE=$(find Applications/Forge/.forge-out -type f -path '*/bin/crucible' 2>/dev/null | head -1)
+CRUCIBLE=$(find Applications/Forge/.forge Applications/Forge/.forge-out -type f \
+    -path '*/bin/crucible' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
 [ -x "$CRUCIBLE" ] || { echo "crucible not found — run /phoe:build crucible first"; exit 1; }
 ```
 
@@ -189,7 +190,9 @@ Run all subsequent steps from inside the worktree directory.
 **Crucible CLI in the worktree.** The Crucible CLI was built into the *main* repo's Forge output, not the worktree's — a worktree's own `.forge-out/` is empty until it builds. So re-resolve `$CRUCIBLE` against the main repo root (discovered via the git common dir, never hardcoded):
 
 ```bash
-CRUCIBLE=$(find "$(git rev-parse --path-format=absolute --git-common-dir | xargs dirname)/Applications/Forge/.forge-out" -type f -path '*/bin/crucible' 2>/dev/null | head -1)
+MAIN_ROOT=$(git rev-parse --path-format=absolute --git-common-dir | xargs dirname)
+CRUCIBLE=$(find "$MAIN_ROOT/Applications/Forge/.forge" "$MAIN_ROOT/Applications/Forge/.forge-out" \
+    -type f -path '*/bin/crucible' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
 "$CRUCIBLE" challenge show --label=<LABEL>   # or any crucible subcommand
 ```
 
@@ -258,15 +261,16 @@ Tests are NOT required for:
 - Pure wiring or delegation (forwarding calls to already-tested functions)
 - Platform-specific code that can only be tested on the target platform's CI
 
-> **Subagent worktree isolation.** `invoke-test-engineer` and `invoke-code-reviewer` carry
-> `isolation: worktree`, so the harness drops them in a *fresh* worktree branched from `main` —
-> without this challenge's still-uncommitted changes, so they cannot read the code under review and
-> resort to copying files in. Every dispatch below therefore passes the absolute path of this
-> challenge worktree (`.claude/worktrees/challenge-<label>`). **The dispatch vehicle differs by
-> job:** the test-writing dispatch here needs to write, so it goes as a **general-purpose** subagent;
-> the review dispatches in Steps 11 and 12 are **read-only** and go as `Explore`. Do not merge the
-> two — see `${CLAUDE_PLUGIN_ROOT}/references/dispatch-briefs.md` §1. Keep the specialist prompts
-> below verbatim; only the vehicle changes.
+> **Subagent worktree isolation.** `invoke-test-engineer` carries `isolation: worktree`, so the
+> harness drops it in a *fresh* worktree branched from `main` — without this challenge's
+> still-uncommitted changes, so it cannot read the code under test and resorts to copying files in.
+> Every dispatch below therefore passes the absolute path of this challenge worktree
+> (`.claude/worktrees/challenge-<label>`). **The dispatch vehicle differs by job:** the test-writing
+> dispatch here needs to write, so it goes as a **general-purpose** subagent; the review dispatches
+> in Steps 11 and 12 are **read-only** and go as `Explore`. Do not merge the two — and note that
+> `invoke-code-reviewer` is not a read-only vehicle despite the name: it carries `Bash`. See
+> `${CLAUDE_PLUGIN_ROOT}/references/dispatch-briefs.md` §1. Keep the specialist prompts below
+> verbatim; only the vehicle changes.
 
 When tests are applicable, launch `invoke-test-engineer` as a subagent to write them. Provide it with the implementation diff and the module context so it can place tests correctly and follow Trials conventions. **Ask it to end its report with a `## Workflow Friction` section** listing anything that made the task harder than it should have been — missing context, ambiguous spec, undocumented convention, tooling gaps — or the single word `none` if nothing applied. These notes are aggregated in Step 14.5.
 
@@ -276,8 +280,8 @@ All verification must pass before proceeding:
 
 **a. Challenge verification steps** — run any commands from the challenge's `verification` field (shown in the challenge JSON).
 
-**b. Full project verification** — run `/phoe:verify` (format check → build → lint → forbidden-token
-audit → test). All must pass. `/phoe:verify` covers **one profile**: if this challenge touched
+**b. Full project verification** — run `/phoe:verify` (configure → build → format-check → lint →
+policy audits → test). All must pass. `/phoe:verify` covers **one profile**: if this challenge touched
 anything under `Applications/Forge/`, or edited a build profile, verify that profile explicitly too —
 a green editor verify does not run Forge's own trials and has twice hidden a broken one.
 
@@ -369,7 +373,6 @@ Invoke the code reviewer as a **separate agent** to evaluate the implementation 
    >
    > [Include the **Challenge Contract** (Step 10.5a), the **review dispatch preamble** (Step 10.5b) and the **read-only clause** (Step 10.5c) here, verbatim — substituting the resolved `REVIEW_BASE` and `REVIEW_SHA` values for the `<BASE>..<SHA>` placeholders so the reviewer diffs the frozen range.]
    >
-   > Lint already ran in Step 9's `/phoe:verify` (`forge lint`, clang-tidy over the changed surface, module-import graph included) and passed — you do not need to re-adjudicate include/import hygiene or punt to `invoke-lint-agent`; treat the import graph as already cleared unless you see a concrete contradiction.
    >
    > End your report with a `## Workflow Friction` section listing anything that made this review harder than it should have been — missing context, ambiguous spec, undocumented convention, tooling gaps — or the single word `none` if nothing applied.
 3. **Gate on zero CRITICAL and zero WARNING findings.** If any CRITICAL or WARNING issues are found:

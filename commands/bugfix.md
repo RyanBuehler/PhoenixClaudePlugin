@@ -13,10 +13,11 @@ Fix a Crucible Bug end-to-end. Accepts a label or `next` to auto-pick the highes
 
 Run `/phoe:build crucible` so both `crucible` and `crucible-server` exist and match the expected version. The first build is a clean build; subsequent invocations are no-ops. If `/phoe:build crucible` stops with a version mismatch, stop here and report it to the user.
 
-**Locate the Crucible CLI — discover it, don't hardcode a path.** Forge places the binary under `Applications/Forge/.forge-out/` in a per-profile subtree whose name varies with host and build config, so resolve it into `$CRUCIBLE` and use `"$CRUCIBLE"` in every crucible call below. Each Bash block is a fresh shell, so the variable will not carry across the separate blocks — re-run this `find` (or substitute the path it resolved) in each block that calls the CLI:
+**Locate the Crucible CLI — discover it, don't hardcode a path.** Forge places the binary in a per-profile subtree whose name varies with host and build config, under both the configured build tree (`Applications/Forge/.forge/`) and the bootstrap output (`Applications/Forge/.forge-out/`) — take the **newest**, since a stale `.forge-out/` copy still reports a plausible version, so resolve it into `$CRUCIBLE` and use `"$CRUCIBLE"` in every crucible call below. Each Bash block is a fresh shell, so the variable will not carry across the separate blocks — re-run this `find` (or substitute the path it resolved) in each block that calls the CLI:
 
 ```bash
-CRUCIBLE=$(find Applications/Forge/.forge-out -type f -path '*/bin/crucible' 2>/dev/null | head -1)
+CRUCIBLE=$(find Applications/Forge/.forge Applications/Forge/.forge-out -type f \
+    -path '*/bin/crucible' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
 [ -x "$CRUCIBLE" ] || { echo "crucible not found — run /phoe:build crucible first"; exit 1; }
 ```
 
@@ -134,7 +135,9 @@ Run all subsequent steps from inside the worktree directory.
 **Crucible CLI in the worktree.** The Crucible CLI was built into the *main* repo's Forge output, not the worktree's — a worktree's own `.forge-out/` is empty until it builds. So re-resolve `$CRUCIBLE` against the main repo root (discovered via the git common dir, never hardcoded):
 
 ```bash
-CRUCIBLE=$(find "$(git rev-parse --path-format=absolute --git-common-dir | xargs dirname)/Applications/Forge/.forge-out" -type f -path '*/bin/crucible' 2>/dev/null | head -1)
+MAIN_ROOT=$(git rev-parse --path-format=absolute --git-common-dir | xargs dirname)
+CRUCIBLE=$(find "$MAIN_ROOT/Applications/Forge/.forge" "$MAIN_ROOT/Applications/Forge/.forge-out" \
+    -type f -path '*/bin/crucible' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
 "$CRUCIBLE" bug show --label=<LABEL>   # or any crucible subcommand
 ```
 
@@ -214,6 +217,12 @@ Add a trial when the bug exposes a flaw that could plausibly recur:
 
 When a trial is warranted, launch `invoke-test-engineer` as a subagent to write it. Provide the fix diff, the root cause, and the reproduction steps so the trial exercises the specific flaw — not just the surrounding happy path — and follows Trials conventions.
 
+`invoke-test-engineer` carries `isolation: worktree`, so the harness drops it in a *fresh* tree
+branched from `main`, without this bug's uncommitted fix. Pass it the absolute path of this bug
+worktree so it writes against the real code. This is the one dispatch in this workflow that is
+write-capable by design — the reviews in Step 11 are not
+(`${CLAUDE_PLUGIN_ROOT}/references/dispatch-briefs.md` §1).
+
 ## 9. Verify
 
 All verification must pass before proceeding:
@@ -222,9 +231,18 @@ All verification must pass before proceeding:
 
 **b. Bug verification steps** — run any commands from the bug's `verification` field.
 
-**c. Full project verification** — run `/phoe:verify` (build + format check + lint + test). All must pass.
+**c. Full project verification** — run `/phoe:verify` (configure → build → format-check → lint →
+policy audits → test). All must pass. It covers **one profile**: if the fix touched anything under
+`Applications/Forge/`, or edited a build profile, verify that profile explicitly as well, and name
+the profiles you actually ran when you report. See `/phoe:verify` §2a, and §2b for why a run that
+aborts at the toolchain audit has tested nothing.
 
-**d. If any verification fails** — fix the issue and re-verify. Do not proceed until everything passes.
+**d. A cold build outlives the command timeout** and gets backgrounded by the harness. Wait on it
+with the bounded, worktree-scoped poll in
+`${CLAUDE_PLUGIN_ROOT}/references/dispatch-briefs.md` §4 — a process-name match is either unscoped
+(never finishes) or silently matches nothing (returns instantly, looking like a completed build).
+
+**e. If any verification fails** — fix the issue and re-verify. Do not proceed until everything passes.
 
 ## 10. Acceptance Criteria Evaluation
 
