@@ -140,6 +140,19 @@ edit.)
 deps (X11/ALSA/Vulkan) are allowed. A spec must not instruct the implementer to pull one in — spec
 the pure in-tree approach (e.g. a hand-rolled k-means / connected-components) instead.
 
+**One challenge owns a shared mechanism; the others refer to it.** When two challenges in a saga
+constrain the same mechanism — the same threading model, registration point, or storage layout —
+read their criteria against each other before creating either. Two challenges that describe it
+differently cannot both be the design, and the conflict surfaces only once the first has landed and
+the second's contract no longer matches the tree. Name the challenge that owns the mechanism and have
+every sibling refer to it ("the opt-in marker `<label>` introduces") instead of restating it.
+
+**Read each criterion literally and ask what that permits.** A criterion whose literal satisfaction is
+a defect is worse than a vague one, because a conscientious implementer follows it — "parallelizing a
+processor requires no change to its process body" is satisfied by a one-word registration change that
+silently parallelizes processors that are not safe to run that way. For each criterion, name the
+cheapest change that satisfies its exact words; if that change would be wrong, reword until it isn't.
+
 Challenges must be:
 - **Commit-sized** — completable in a single focused session
 - **Self-contained** — can be verified independently
@@ -167,6 +180,8 @@ only in this conversation and nothing is implemented yet.)
 > - **Missing context** — which file paths, prior-art references, or project conventions need to be cited for the implementer to ground their approach in Phoenix patterns?
 > - **Scope** — is each challenge commit-sized? Is anything bundled that should split, or split that should bundle?
 > - **Cross-challenge coherence** — does any challenge reference a symbol, file, or concept not introduced by an earlier challenge in this saga and not already present in the codebase?
+> - **Mechanism conflicts** — do two challenges constrain the same mechanism (threading model, registration point, storage layout) in ways that cannot both be the design? One must own it and the rest refer to it, never restate it.
+> - **Literal satisfaction** — for each criterion, what is the cheapest change that satisfies its exact words? Flag any criterion whose literal satisfaction would itself be a defect.
 >
 > Report findings as a per-challenge punch list with severity: **BLOCKER** (spec is unusable as written), **CONCERN** (spec is risky and should be revised), or **SUGGESTION** (refinement).
 
