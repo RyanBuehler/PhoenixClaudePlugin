@@ -373,7 +373,6 @@ Invoke the code reviewer as a **separate agent** to evaluate the implementation 
    >
    > [Include the **Challenge Contract** (Step 10.5a), the **review dispatch preamble** (Step 10.5b) and the **read-only clause** (Step 10.5c) here, verbatim — substituting the resolved `REVIEW_BASE` and `REVIEW_SHA` values for the `<BASE>..<SHA>` placeholders so the reviewer diffs the frozen range.]
    >
-   >
    > End your report with a `## Workflow Friction` section listing anything that made this review harder than it should have been — missing context, ambiguous spec, undocumented convention, tooling gaps — or the single word `none` if nothing applied.
 3. **Gate on zero CRITICAL and zero WARNING findings.** If any CRITICAL or WARNING issues are found:
    - Resolve every path and symbol each finding cites before acting on it

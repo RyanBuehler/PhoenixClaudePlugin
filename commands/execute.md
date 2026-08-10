@@ -356,8 +356,10 @@ Description: <description>
 4. Implement the changes
 5. Write tests if your implementation introduces new public interfaces or non-trivial logic
    - Tests are NOT needed for: build system changes, config changes, pure wiring/delegation
-6. Run `/phoe:verify` — this runs configure, build, format-check, lint, forbidden-token audit, and
-   test through Forge with the project's configured profile. Fix any failures before proceeding. Do
+6. Run `/phoe:verify` — this runs configure, build, format-check, lint, the five policy audits
+   (forbidden-token, toolchain, trial-friend, IO-seam, heap-seam), and test through Forge with the
+   project's configured profile. Any audit short-circuits the run before `test`, so a run that
+   stopped at one has tested nothing. Fix any failures before proceeding. Do
    NOT drive the Forge phases by hand to verify; `/phoe:verify` is the single entry point.
 7. Run the challenge's own Verification Commands (from the section above). These are scoped to
    this specific challenge and complement the project-wide `/phoe:verify` sweep. Fix any failures.
@@ -548,7 +550,7 @@ challenge's Files field, which is a hint and goes stale>
 Interpolate that whole output -- title, description, acceptance criteria, verification,
 references -- into ALL THREE reviewer prompts under a `## Challenge Contract (verbatim
 from Crucible)` heading. Do not summarize; the exact AC wording is what the reviewer judges
-scope against. Both review gates block on CRITICAL/WARNING, so a reviewer that cannot
+scope against. All three review gates block on CRITICAL/WARNING, so a reviewer that cannot
 read the criteria invents the contract from the fixtures and then blocks on it.
 
 Resolve every design-doc reference the challenge or the code cites (`Docs/Cortex_DD.md

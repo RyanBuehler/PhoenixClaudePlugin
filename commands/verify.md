@@ -9,9 +9,9 @@ Run this **before committing**. A commit made without passing verification is in
 `forge verify <profile>` *is* the CI mirror: it runs configure → build → format-check → lint →
 **policy audits** → test in one in-process pass, exactly as CI does. The audits are five, run in a
 fixed order — forbidden-token, **toolchain**, trial-friend, IO-seam, heap-seam — and any one of them
-short-circuits the run before `test`. That single command is the
-gate; the sub-skills (`/phoe:build`, `/phoe:format`, `/phoe:lint`, `/phoe:test`) exist for debugging
-one phase in isolation, not for re-assembling the sequence by hand.
+short-circuits the run before `test`. That single command is the gate; the sub-skills
+(`/phoe:build`, `/phoe:format`, `/phoe:lint`, `/phoe:test`) exist for debugging one phase in
+isolation, not for re-assembling the sequence by hand.
 
 Two things it is **not**, both of which have convinced agents they verified work they had not:
 
@@ -92,7 +92,7 @@ A run that stopped at the audit has **not** tested anything. Do not report it as
 | format-check        | `"$FORGE" format` then re-check (`/phoe:format`) |
 | lint                | `"$FORGE" lint` (`/phoe:lint`)            |
 | forbidden-token audit | fix the flagged path/token; see CLAUDE.md "Forbidden tokens" |
-| toolchain audit     | the host outran a pinned SDK version — not caused by your change; see §2b |
+| toolchain audit     | usually the host outran a pinned SDK version (see §2b); genuinely yours if you edited `Tools/toolchain.lock.json` or a manifest `dependencies` block |
 | trial-friend / IO-seam / heap-seam audit | run the named `Tools/audit_*.py` directly for its full output |
 | test                | `"$FORGE" test editor --output-on-failure` (`/phoe:test`) |
 

@@ -151,7 +151,10 @@ Challenges must be:
 
 Before presenting the draft to the user, dispatch a spec reviewer subagent to audit the saga and its challenges for spec quality. The agent that drafted the plan is rarely the best judge of its own gaps — a fresh reader catches ambiguity, missing context, and ordering mistakes that the drafter has already rationalized away.
 
-Launch `invoke-spec-reviewer` as a subagent with the prompt:
+Launch `invoke-spec-reviewer` as a subagent with the prompt. (This is a deliberate exception to the
+read-only rule in `${CLAUDE_PLUGIN_ROOT}/references/dispatch-briefs.md` §1: that rule protects a live
+worktree holding uncommitted code under review, and there is no such tree here — the draft exists
+only in this conversation and nothing is implemented yet.)
 
 > Audit the following draft Crucible saga and challenges for **spec quality** — there is no implementation yet, so this is a forward-looking review of the contract, not a compliance check. For each challenge, evaluate:
 >

@@ -166,8 +166,9 @@ Paste the block below **verbatim** into every reviewer prompt, substituting the 
 > exactly like a genuine negative result:
 >
 > 1. A pathspec that matches nothing makes `git diff`/`git show` **exit 0 and print nothing** —
->    identical to an unchanged file. (`git grep` differs: it exits 1 there, so a zero exit from
->    `git grep` with no output is a genuine no-match.)
+>    identical to an unchanged file. `git grep` exits 1 instead, but that does **not** disambiguate
+>    anything: a dead pathspec and a genuinely absent pattern both give exit 1 with no output and no
+>    diagnostic. A `git grep` miss is never by itself evidence of absence.
 > 2. A shell trap (below) can abort the command before it runs.
 > 3. The background-session command guard can refuse the command outright.
 >
