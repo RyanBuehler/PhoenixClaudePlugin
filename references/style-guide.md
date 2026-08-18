@@ -72,6 +72,16 @@ Use `Type` not `Kind` for discriminator names — both the bare word and as a su
 (`NodeType`, not `NodeKind`; `Type`, not `Kind`). C++ has no `kind` keyword; the older
 "avoid `type` because it's reserved-ish" reflex doesn't apply here.
 
+Never end a function name on a dangling preposition. A trailing preposition is fine — good,
+even — when the argument after it is its object: `NodeAt(Index)`, `ConfigFor(ChannelCount)`,
+`LoadFrom(Path)`, `ScrollBy(Delta)` each read as one phrase that the call completes. It
+dangles when nothing in the signature supplies that object, so the name asks a question it
+never answers: `IsValidIn(Thing, bIsRoot)` leaves "valid in *what*?" hanging, because a
+boolean describing the place is not the place. Either drop the preposition
+(`IsValid(Thing, bIsRoot)`) or promote its object to the parameter that follows it
+(`IsValidIn(Thing, Scope)`). The test is mechanical: read the name and the argument list as
+a sentence, and check the preposition has something to point at.
+
 Acronyms in **module, directory, manifest, and file-format names are written all-caps**:
 `GLTF` (not `Gltf`), `KTX`, `HTTP`, `PBR`, `BRDF`. This extends to the manifest filename
 (`GLTFManifest.json`), the API export macro (`GLTF_API`), and the on-disk format constants.
