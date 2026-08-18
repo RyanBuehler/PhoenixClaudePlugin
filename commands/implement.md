@@ -534,7 +534,7 @@ without rewording this step:
 
 `Crucible:` and `Saga:` trailers are mandatory; pull IDs from the JSON already fetched in Step 2/3. Drop the `Saga:` line for orphans.
 
-Refer to the PR as **PR #<N>** (the trailing `/pull/<N>` segment) in all subsequent narration, the Watch CI step, and the report — never URL alone.
+Refer to the PR as **PR #<N>** (the trailing `/pull/<N>` segment) in all subsequent narration and the report — never URL alone.
 
 Compose the summary from the challenge title and the key changes — keep it concise; the
 challenge spec in Crucible is the detailed record. If the user declines to push, leave the
@@ -543,10 +543,6 @@ branch local for them to publish later.
 If PR review comments come back later, check out the branch, apply fixes, rebuild to confirm
 they compile (full `/phoe:verify` only when changes are significant — new logic, API changes,
 new files), commit with a brief "Address review: …" message, and push.
-
-## 16.5. Watch CI — Required
-
-If Step 16 opened a PR, run the watch loop in `references/ci-watch.md` against PR #<N> before advancing to Step 17. Mandatory; skip only on the conditions listed in `ci-watch.md`. It babysits CI to a terminal green or red, making **one** automated fix-and-retry on the first failure before stopping to wait for you.
 
 ## 17. Report
 
@@ -565,7 +561,6 @@ Tell the user:
 - Follow-on sibling updates, if any (which siblings were updated and what fields changed)
 - Reconciliation outcome (pre-merge pass, Step 15): siblings + `docs/` scanned against the committed diff — which were updated, or "none stale" (required — a present line makes a skipped reconciliation visible). The authoritative post-merge pass runs later when the PR lands and reports its own outcome then.
 - Pull request: **PR #<N>** + URL (or "branch left local; not pushed"). Always lead with `PR #<N>`.
-- CI watch outcome: READY / FAILED / expired / skipped (reason)
 - The challenge is now in `review` status — user inspects before it lands
 
 **Do not merge the PR yourself, and do not mark the challenge `merged` before the merge has landed.** The user decides whether to merge, request changes, or close. The `review` → `merged` transition tracks reality; it must not run ahead of it.
@@ -576,7 +571,7 @@ But once the PR is confirmed merged into remote `main` — typically observed on
 "$CRUCIBLE" challenge move --label=<LABEL> merged
 ```
 
-Re-scan the merged diff against remaining todo/blocked siblings **and** `docs/` design/spec files for stale references the Step 15 pass missed. Fix challenge text in place with `crucible challenge update`, and comment (Step 15, item 5) on any challenge whose ground the merged diff moved. For stale docs, file a tracked docs-reconcile challenge (`/phoe:plan`) so the edit flows through the normal implement + CI-watch path rather than an untracked side PR — this challenge's branch is gone post-merge. Flag genuinely scope-broken siblings as blocked rather than rewriting them. Report this pass's outcome when it runs.
+Re-scan the merged diff against remaining todo/blocked siblings **and** `docs/` design/spec files for stale references the Step 15 pass missed. Fix challenge text in place with `crucible challenge update`, and comment (Step 15, item 5) on any challenge whose ground the merged diff moved. For stale docs, file a tracked docs-reconcile challenge (`/phoe:plan`) so the edit flows through the normal implement path rather than an untracked side PR — this challenge's branch is gone post-merge. Flag genuinely scope-broken siblings as blocked rather than rewriting them. Report this pass's outcome when it runs.
 
 ### On merge — clean up and surface the next challenge
 

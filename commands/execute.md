@@ -784,7 +784,7 @@ done
 The `--replace-review-link` step after each `gh pr create` is source-neutral by design — the
 flag accepts any URL string, so a non-GitHub review system fits without rewording this step.
 
-Refer to each PR as **PR #<N>** (the trailing `/pull/<N>` segment) in narration, the Report table, and the Watch CI step — never URL alone. Record each `PR #<N>` + URL for the final report.
+Refer to each PR as **PR #<N>** (the trailing `/pull/<N>` segment) in narration and the Report table — never URL alone. Record each `PR #<N>` + URL for the final report.
 
 After the wave's PRs are open, clean up worktrees (the branches and commits stay until the
 user removes them). If the orchestrator's cwd is currently *inside* the worktree being removed
@@ -858,7 +858,6 @@ Include:
 - Reference to checkpoint files and how to resume
 - Total stats (completed, blocked, skipped)
 - Branch strategy per challenge (branch-per-challenge or combined-branch) and resulting **PR #<N>** + URL. Lead with `PR #<N>`.
-- CI watch outcome per PR: READY / FAILED / expired / skipped (reason)
 - Reference to the feedback log
 
 After each PR lands on remote main, mark the corresponding challenge merged, then run the **end-of-cycle reconciliation** (the authoritative pass) against its merged diff. This fires whenever the merge is observed -- e.g. the next `/phoe:execute` Step 2, or interactively -- not inside the run that opened the PR:
@@ -867,8 +866,4 @@ After each PR lands on remote main, mark the corresponding challenge merged, the
 "$CRUCIBLE" challenge move --label=<LABEL> merged
 ```
 
-Re-scan the merged diff against every remaining todo/blocked challenge (saga sibling or orphan) **and** `docs/` design/spec files for stale references the pre-merge pass (Step 4g.2) missed or that only the landed diff made certain. Fix challenge text in place with `crucible challenge update`, and comment (Step 4g.2, item 4) on any challenge whose ground the merged diff moved. For stale docs, file a tracked docs-reconcile challenge (`/phoe:plan`) so the edit flows through the normal implement + CI-watch path rather than an untracked side PR -- the original challenge branch is gone post-merge. Flag genuinely scope-broken siblings as blocked for re-plan rather than rewriting them. Report this pass's outcome when it runs.
-
-## 7. Watch CI — Required
-
-Run the collective watch loop in `references/ci-watch.md` against every `PR #<N>` opened in Step 4h. Mandatory; skip only on the conditions listed in `ci-watch.md`. It babysits each PR's CI to a terminal green or red, making **one** automated fix-and-retry per PR on its first failure before leaving it red for the user. Fold each PR's outcome (READY / FAILED / expired / skipped) into the Step 6 report.
+Re-scan the merged diff against every remaining todo/blocked challenge (saga sibling or orphan) **and** `docs/` design/spec files for stale references the pre-merge pass (Step 4g.2) missed or that only the landed diff made certain. Fix challenge text in place with `crucible challenge update`, and comment (Step 4g.2, item 4) on any challenge whose ground the merged diff moved. For stale docs, file a tracked docs-reconcile challenge (`/phoe:plan`) so the edit flows through the normal implement path rather than an untracked side PR -- the original challenge branch is gone post-merge. Flag genuinely scope-broken siblings as blocked for re-plan rather than rewriting them. Report this pass's outcome when it runs.
