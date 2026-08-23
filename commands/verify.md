@@ -45,10 +45,14 @@ verify-gate failure should surface the failing phase's output inline — the def
 bounded head+tail excerpt and the format/lint/audit diffs — rather than reduce a failure to an
 `error_count` with no error text.
 
-**Stage new files first.** `forge` scopes format-check to the branch diff and lint to the staged
-surface — neither sees an untracked new file. A `.cpp`/`.cppm` you have not `git add`-ed is invisible
-to this gate, so its formatting/lint violations sail through locally and fail CI. `git add` new files
-before running verify so they are in scope.
+**New files no longer need staging.** `forge` scopes both format-check and lint to the branch
+surface (`--files=branch`), and that selection deliberately folds in untracked, non-ignored files
+on top of the diff — see the comment in `Tools/git_utils.py:get_branch_files`. A brand-new
+`.cpp`/`.cppm` is therefore in scope before you `git add` it. Staging is still harmless, and
+remains the only way to use the opt-in `--staged` scope.
+
+**An empty selection is not a pass.** If the gate reports zero files while you changed C++, that is
+a failed run, not a clean one — find out why before believing it.
 
 **Run `forge format` before you build, never after.** This is about the *manual* rewrite command, not
 verify's internal `format-check` phase, which only inspects and cannot invalidate anything. A

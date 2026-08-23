@@ -22,8 +22,18 @@ FORGE=$(forge_bin) || { python3 Applications/Forge/Scripts/bootstrap.py && FORGE
 "$FORGE" lint
 ```
 
-This lints the staged surface (the files you've `git add`-ed). Pass `--all` to lint the whole repo.
-If nothing is staged, it reports no files to process — treat that as a clean pass.
+This lints the **branch** surface — every C++ file differing from `main`, staged or not. That is
+the default (`--files=branch`); `--all` lints the whole repo and `--staged` narrows to the index.
+
+**An empty run is not a pass.** A `--files=branch` selection holding no C++ reports `SKIPPED`, and
+`--staged` over an empty index now *fails* outright ("the index is empty, so no file was
+analyzed"). Neither means clean — nothing was examined. Read the file count in the output and
+check it against how many files you touched; if it is zero and you changed C++, find out why
+before reporting a clean run.
+
+Files the profile does not compile are reported as `skipped N files absent from the compilation
+database`. Treat that line as a coverage report, not noise — a module excluded by manifest is
+silently linted by nothing.
 
 ## 3. Report
 
