@@ -27,7 +27,7 @@ Specialized subagents for different aspects of engine development.
 |-------|-------------|
 | `invoke-systems-designer` | Module architecture, interface design |
 | `invoke-rendering-designer` | Render graph, material system architecture |
-| `invoke-build-engineer` | CMake, CI/CD, cross-platform builds |
+| `invoke-build-engineer` | Forge profiles, CI/CD, cross-platform builds |
 
 ### Graphics & Rendering
 | Agent | Description |
@@ -93,17 +93,16 @@ Quick-reference documents for agents to consult.
 | Reference | Description |
 |-----------|-------------|
 | `modern-cpp.md` | C++20/23/26 features and migration patterns |
-| `modern-cmake.md` | Target-based builds, presets, generator expressions |
 | `modern-python.md` | Python 3.12+ features for build tooling |
 | `modern-vulkan.md` | Dynamic rendering, descriptor buffers, sync2 |
 | `cpp-portability.md` | Cross-platform pitfalls and portable solutions |
-| `style-guide.md` | Authoritative code style and design guide |
+| `style-guide.md` | Coding rules an agent needs at the keyboard, supplementing `Docs/StyleGuide.md` |
 | `tooling.md` | Formatter/linter configuration and command reference |
 
 ## Project Conventions
 
 - **No exceptions** — `try`, `catch`, `throw`, `noexcept` are forbidden
-- **Tab indentation** — C++, Python, CMake all use tabs
+- **Tab indentation** — C++ and Python use tabs
 - **PascalCase** — types, functions, and variables
 - **`m_` prefix** — private members
 - **`#pragma once`** — all headers

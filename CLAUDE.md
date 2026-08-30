@@ -1,10 +1,32 @@
-# Phoenix Engine — Architecture Notes
+# Phoenix — agent operating guide
 
 ## Hard Requirements
 
 - **NEVER mention Claude Code in commit messages.** No "Generated with Claude Code", no Co-Authored-By Claude, nothing. Commit messages should look like they were written by a human developer.
+- **Never push or open a pull request without explicit confirmation.** See [Push & Pull Request Workflow](#push--pull-request-workflow).
 - **NEVER manufacture machine load without explicit, per-instance user permission.** No CPU spin loops, fork bombs, memory balloons, disk fillers, or parallel-job storms sized beyond the host. This machine is shared with the user and with other agent sessions, and orphaned load is misattributed to whoever runs next. See [Never manufacture machine load](#never-manufacture-machine-load).
-- **Never combine `cd` and `git` in a compound command** (e.g. `cd /some/dir && git status`). Changing into an untrusted directory before running git exposes you to bare repository attacks where a malicious `.git` config can execute arbitrary code. Always run git commands using absolute paths or from the known working directory.
+- **Never combine `cd` and `git` in a compound command** (e.g. `cd /some/dir && git status`). Changing into an untrusted directory before running git exposes you to bare repository attacks where a malicious `.git` config can execute arbitrary code. Use `git -C <path>` or run from the known working directory.
+- The repository's own `CLAUDE.md` is binding where it speaks; this file adds what an agent needs and the codebase has no reason to carry.
+
+## Where the rules live
+
+Agent material lives here, not in the codebase — that separation is the whole point of the
+plugin. This file and `references/` carry how to work: conduct, workflow, and the coding rules
+an agent needs at the keyboard. The repository carries what the codebase is.
+
+| Subject | Authority |
+|---|---|
+| Agent conduct, workflow, verification, pushing | this file |
+| Coding rules an agent needs while writing C++ | `${CLAUDE_PLUGIN_ROOT}/references/style-guide.md` |
+| Formatter and linter mechanics | `${CLAUDE_PLUGIN_ROOT}/references/tooling.md` |
+| Architecture, module layout, ownership tiers | the repository's `CLAUDE.md` |
+| Build, test, verify | `Applications/Forge/`, `Docs/Forge_DD.md`, `/phoe:verify` |
+| Blessed and banned terms | `Docs/Lexicon.md` |
+
+The repository's `CLAUDE.md` and `Docs/StyleGuide.md` still bind — they are written for
+contributors, and a rule there applies whether or not an agent typed the code. Where this
+plugin speaks on the same subject it adds to them; it never contradicts them. If it does, this
+file is the stale one and the fix is here.
 
 ## Agent Conduct
 
@@ -57,11 +79,11 @@ Every Bash invocation starts a fresh shell at the user's primary working directo
 Use one of the two safe patterns on every invocation:
 
 - **Absolute paths for every argument.** `ls /absolute/path/to/worktree/build-editor-debug`.
-- **Explicit `cd` prefix in the same invocation.** `cd /absolute/path/to/worktree && cmake --build build-dispatch-verify --target Dispatch`.
+- **Explicit `cd` prefix in the same invocation.** `cd /absolute/path/to/worktree && forge build editor-debug`.
 
-Failure modes this rule prevents include running cmake or ninja in the wrong tree, sourcing the wrong `.env`, editing the wrong file, and grepping a stale copy that does not reflect pending edits.
+Failure modes this rule prevents include building the wrong tree, sourcing the wrong `.env`, editing the wrong file, and grepping a stale copy that does not reflect pending edits.
 
-Worktrees are the highest-risk setting: the main repo and `.claude/worktrees/<branch>` are two independent checkouts. A cmake build invoked in the wrong tree can report success against code that does not include the current changes, masking a compile failure that only surfaces in CI. Whenever a session has an active worktree, every Bash call that touches the checkout must name the worktree path explicitly.
+Worktrees are the highest-risk setting: the main repo and `.claude/worktrees/<branch>` are two independent checkouts. Forge resolves its project root from where it runs, so a build launched from the wrong tree reports success against code that does not contain your changes, masking a failure that only surfaces in CI. Whenever a session has an active worktree, every Bash call that touches the checkout must name the worktree path explicitly.
 
 The `cd`-and-`git` prohibition in **Hard Requirements** is a stricter variant of this rule: git in particular must never be paired with a `cd` into an untrusted directory. For non-git commands the `cd` prefix is fine and is the preferred form when arguments are relative.
 
@@ -151,148 +173,16 @@ Remove a worktree when done (the branch stays until the user deletes it):
 
 The build-touching `agents/invoke-*.md` definitions (`build-engineer`, `test-engineer`, `lint-agent`, `memory-agent`, `perf-agent`, `debugger-agent`, `concurrency-agent`, `vulkan-agent`, `shader-expert`, `platform-agent`) set `isolation: worktree` so concurrent `Agent()` calls never collide on `build-*/`. The four design/review agents (`code-reviewer`, `spec-reviewer`, `systems-designer`, `rendering-designer`) do not — they read but don't build, and Claude Code auto-cleans an isolated worktree when the agent makes no changes.
 
-## Modules vs Subsystems
-
-These are distinct concepts. Do NOT conflate them.
-
-- **Modules** are self-contained components that register with `ModuleRegistry` via `IModule`.
-  Engine manages module lifecycle (create, initialize, tick, shutdown) through `ModuleRegistry`/`IModuleBase`.
-  Modules live as peers under `Engine/Modules/{Domain}/` — no nested submodules.
-
-- **Subsystems** are abstract service interfaces (`ISubsystem`) for cross-module communication.
-  Modules access each other's services through subsystem interfaces (e.g., `ITerminalService`, `IInputService`).
-  A module registers its subsystem during `RegisterSubsystem()` and unregisters during `UnregisterSubsystem()`.
-
-Engine interacts with modules ONLY through `ModuleRegistry` and `IModuleBase`. It accesses module
-services through non-template subsystem interfaces (`ITerminalService`, `IInputService`), not
-concrete module types.
-
-### When to create a subsystem
-
-A subsystem is a **projection** of a module's public API — it selects and names the subset of
-operations a specific consumer should see. Subsystems do not expand a module's API surface,
-introduce new types of their own, or wrap a module reference for handoff. Multiple subsystems
-may front the same module (e.g. `Sonic` exposing `ISFX` for gameplay and `IMusic` for score).
-If a proposed subsystem adds new types or methods the module does not expose, it is a module,
-not a subsystem.
-
-## Subsystem Interface Design
-
-Subsystem interfaces must be **intent-based**, not lazy accessors. Every method on an
-`ISubsystem` should describe an action a consumer performs (`PostEntry`, `SubmitTask`,
-`RegisterAccount`), not hand out a reference to the underlying system (`GetLedger`,
-`GetInstance`).
-
-The app owns its systems directly (e.g. Editor owns its `Ledger`). Other modules participate
-through the subsystem protocol, not by grabbing a reference to the internals.
-
-Follow `IArbiterSubsystem` as the canonical example: it exposes `SubmitTask` /
-`WaitForCompletion` rather than `GetArbiter`. Interfaces that degenerate into a single
-`GetX()` accessor are a code smell — replace them with the operations the consumer actually
-needs to perform.
-
-**No object handoff across modules.** Module A must not receive a reference or pointer to a
-concrete type owned by Module B. Cross-module communication goes through subsystem interfaces
-only — never by threading `FooModule&`/`FooModule*` across the boundary.
-
-**Internals-returning accessors are a smell everywhere, not just in subsystems.** A `GetFoo()`
-that hands back a reference to an owned member bypasses the owner's invariants. Expose
-operations (`ApplyFoo`, `PostFoo`) instead.
-
-## Engine Independence
-
-Engine depends only on Core. All module dependencies are opt-in via Application description JSON
-(`requires_module` in `*Description.json`). The `Minimal` application builds Engine with zero
-module dependencies for CI validation.
-
-## Module Structure
-
-All engine modules live under `Engine/Modules/{Domain}/`:
-- `Engine/Modules/Core/` — Engine, Arbiter, Archive, Soulforge, Terminal
-- `Engine/Modules/Rendering/` — Aurora, Prism, Glyph, Montage, VulkanBackend, HeadlessBackend, HeadlessPane
-- `Engine/Modules/Input/` — Impulse, Signal, Conduit, UserConduit, SyntheticConduit, XInput
-- `Engine/Modules/Platform/` — PlatformLiaison, LinuxLiaison, LinuxAudio, LinuxInput, LinuxPane, LinuxFileManager, WindowsLiaison, WindowsAudio, WindowsInput, WindowsPane, WindowsFileManager, HeadlessLiaison
-- `Engine/Modules/Audio/` — Sonic
-- `Engine/Plugins/` — optional plugins (Deadline, ExamplePlugin, InputDebug, Pulse)
-- `Engine/Trials/` — the test runner itself (its own ModuleCategory::Trial)
-- `Engine/Core/` — the Core library shared by every app
-- `Engine/Content/` — engine-shared runtime assets (fonts, audio)
-- `Applications/<App>/{Modules,Plugins}/` — app-private modules and plugins
-
-## No Preprocessor Guards for Modularity
-
-The project does not use `#ifdef` for feature/module gating. Modularity is driven by:
-- JSON metadata (`*Description.json`) declaring module dependencies
-- CMake (`SetupModule.cmake`) resolving and building only required modules
-- Runtime checks via `Subsystem::Get<>()` for optional service availability
-
-## No Platform Coupling
-
-Platform specifics live behind the `Platform` module's liaison abstraction
-(`PlatformLiaison`, `LinuxLiaison`, `WindowsLiaison`, `HeadlessLiaison`, and the `Linux*` /
-`Windows*` implementations under `Engine/Modules/Platform/`). Code outside that boundary is
-platform-agnostic and must stay that way.
-
-- A platform name — `Wayland`, `X11`, `Windows`, `Win32`, `macOS`, `Cocoa`, `POSIX`, etc. —
-  appearing in an identifier, type, branch, or include **outside `Engine/Modules/Platform/`**
-  is a coupling smell. Route the need through `PlatformLiaison` (or the relevant subsystem
-  interface) instead of naming the platform in shared code.
-- This holds for headers, source, and comments-that-imply-behavior alike: shared modules
-  describe *what* they need (a window surface, a clipboard, a file dialog), never *which OS*
-  provides it.
-- Mentioning a platform in prose where it's genuinely platform-liaison documentation, or in
-  build/CI config that legitimately selects a backend, is fine. The rule targets shared
-  *runtime* code reaching for a specific platform.
-
-## Build System
-
-- Applications declare their module needs in `*Description.json` `requires_module` arrays
-- `SetupModule.cmake` recursively resolves dependencies from domain directories
-- Missing dependencies cause graceful skip, not fatal errors
-- `APPLICATION` cache variable selects which app to build: `Editor`, `Game`, `Vigil`, `Crucible`, `Forge`, or `Minimal`
-
-## CI
-
-The Linux CI workflow (`.github/workflows/ci.yml`) runs three sequential jobs on PR:
-
-1. **Linux: Modularity** — Validates Engine builds with only Core (Minimal application)
-2. **Linux: Build & Test (Incremental)** — Builds all 5 apps (Editor, Vigil, Game, Crucible, Forge) with ccache. Runs `CORE_TRIAL|PLUGIN_TRIAL|APP_TRIAL` from Editor (most module coverage), then `APP_TRIAL` only from Vigil, Crucible, and Forge (app-specific tests). Game is build-only (all its tests are covered by Editor).
-3. **Linux: Format & Lint** — Checks formatting and runs clang-tidy
-
-Jobs run in order; failure in any job skips subsequent jobs.
-
-Test labels are derived from `MODULE_CATEGORY`, a target property set automatically from the module's directory: `Applications/` → APP_TRIAL, `Engine/Plugins/` → PLUGIN_TRIAL, `Engine/Modules/` and `Engine/Trials/` → CORE_TRIAL. Benchmarks are skipped at runtime by default — they use `BENCHMARK_TRIAL` in the Trials framework and run only when `--type benchmark` is passed to the test executable.
-
 ## Code Guidelines
 
-For all code style and design practices — formatting, naming, language features, comments,
-TODOs, error handling, design practices — follow `${CLAUDE_PLUGIN_ROOT}/references/style-guide.md`. For tooling
-mechanics (formatter/linter configuration, commands, troubleshooting), see
+**Before writing any C++**, read `${CLAUDE_PLUGIN_ROOT}/references/style-guide.md` — the rules
+an agent gets wrong often enough to be worth carrying here — and the repository's
+`Docs/StyleGuide.md`, which binds and which the supplement does not restate. For tooling
+mechanics — formatter and linter configuration, invocation, troubleshooting — see
 `${CLAUDE_PLUGIN_ROOT}/references/tooling.md`.
 
-After changing C/C++ code, run `python3 Tools/format.py --files=staged` to apply
-`clang-format`, then `python3 Tools/format.py --files=staged -error` to verify formatting.
-Run `python3 Tools/tidy.py` to check for clang-tidy warnings. If the script reports a missing
-compilation database, regenerate it once per build directory with `python3 Tools/tidy.py
---compdb` (optionally keeping your `--filter` arguments); this leaves
-`build/compile_commands.json` in place for subsequent tidy runs. Test sources matching
-`*Trials.cpp` may be skipped by passing `--filter *Trials.cpp`. Note: the `build/` directory
-that `Tools/tidy.py --compdb` creates is a tooling-scratch dir for the compilation database
-only — it is *not* the project's Forge-managed build dir (which is always profile-suffixed,
-e.g. `build-editor-debug/`). Don't run cmake/ctest against `build/`; only `Tools/tidy.py`
-reads from it.
-
-## Comment Discipline
-
-Verbose comments are the dominant agent drift here. Full rules: `${CLAUDE_PLUGIN_ROOT}/references/style-guide.md`
-§Comments / §TODO Comments. The digest, always in force:
-
-- Default to no comment. Explain *why*, never *what*.
-- One line, never a paragraph. Don't stack 4+ `//` lines — long explanations go in the commit message, not the source.
-- No decorative banners. No `// =====`, no `// ----- Section -----`, no section-header comments like `// Typography`, `// Dimensions`, `// Window and panel backgrounds`. Use scope and naming.
-- No temporal narration. Forbidden words in comments: *previously*, *now*, *new*, *legacy*, *refactored*, *was*, *used to*.
-- TODOs are plain: `// TODO: <work>`. `TODO(label):` is forbidden — `grep "TODO("` in source must return zero hits. No file paths, line numbers, labels, PR numbers, branch names, or dates inside.
-- Public API declarations in a module's public header get one short purpose line.
+Formatting and linting run through Forge: `/phoe:format` and `/phoe:lint`, or the whole
+CI-mirror sequence with `/phoe:verify`.
 
 ## Crucible Lifecycle Reference
 
@@ -316,124 +206,16 @@ type early and use the type-correct verbs throughout; do not paper over the diff
 Branch naming follows the same split: `challenge/<label>` for challenges, `bug/<label>` for bugs.
 Worktrees follow at `.claude/worktrees/<type>-<label>` (slashes converted to dashes).
 
-## Labels and Identifiers
-
-- Use `Label` (not `string`/`string_view`) for keys, registry lookups, dispatch tokens,
-  event/action names — anything used as identity. Raw strings stay for textual data
-  (logs, UI text, file contents, parsed tokens).
-- Pass `Label` by value; never `const Label&`. Convert at API boundaries with
-  `ToCString()` / `ToString()`.
-- When registering into a module's registries, use that module's wrapper (e.g.
-  `Input::Label`) so the hash carries the module signature.
-
-## Color Values
-
-- All floating-point color types (`Color::Red`, `Colors::RGBA`, `Colors::RGB`, etc.) use
-  the **0.0–1.0** normalized range, NOT 0.0–255.0. A pure red is `Color::Red` = `{1.0f, 0.0f, 0.0f, 1.0f}`,
-  not `{255.0f, 0.0f, 0.0f, 255.0f}`.
-- When constructing colors from 8-bit inputs (e.g., hex codes, UI pickers), divide each
-  channel by 255.0f before storing.
-- **Be skeptical of any new hardcoded RGBA literal.** Before writing `RGBA{r, g, b, a}` with
-  raw channel values, look for an existing named constant first:
-  - The `Color::` namespace (`Engine/Core/Public/Color/Color.cppm`) holds the standard named
-    colors (`Color::Red`, `Color::Crimson`, `Color::Orange`, …). The UI `Palette::` namespace
-    holds the editor palette (`Palette::Accent`, `Palette::AccentDeep`, …). If the value you
-    need already exists there, use the named constant — don't re-spell the channels.
-  - If no constant matches and the color is reused or semantically meaningful, add a named
-    constant (to `Color::` or `Palette::` as appropriate) rather than scattering a literal.
-  - **If the color is for a UI element that should respect the active theme, it must come
-    from the theme, not a literal.** Read the theme stand-in (`m_ActiveTheme->Accent` and
-    siblings, falling back to `Palette::Accent`) so user-themable surfaces recolor correctly.
-    A hardcoded literal on a themable element is a bug — it ignores the theme.
-
-## Module Imports
-
-Phoenix consumes the standard library through `import Phoenix;`, which re-exports `Std`.
-The rules below are surface conventions for that module — habits carried over from
-header-only C++ get them wrong.
-
-- **`Move` / `Forward`, not `std::move` / `std::forward`.** `Engine/Core/Public/Std.cppm` exports
-  Phoenix's own `Move` and `Forward` templates. Use them unqualified. Unqualified
-  `std::move` / `std::forward` resolve unreliably across module boundaries.
-- **Drop `std::` on common types.** `string`, `string_view`, `vector`, `unordered_map`,
-  `unordered_set`, `shared_ptr`, `unique_ptr`, `optional`, `expected`, `function`, etc. are
-  exported unqualified through `Std`. Writing `std::vector` compiles but is project-style
-  noise; unqualified is the convention.
-- **Use `Label` for identifiers.** Names, keys, tags, dispatch tokens, and event/action
-  identifiers use `Label`. `string`/`string_view` is for free-form textual content only.
-  See "Labels and Identifiers" above for the full rule.
-- **Range algorithms still need an explicit include.** `Std.cppm` exposes the `ranges`
-  namespace alias and `<ranges>` itself but does not pull in `<algorithm>` or `<numeric>`.
-  `ranges::sort`, `ranges::find`, `ranges::iota`, and similar algorithms require an
-  explicit `#include <algorithm>` (or `<numeric>` for `iota`) in the consuming TU even
-  with `import Phoenix;`.
-
-## Code Style
-
-### C++
-- Use traditional return type syntax (`T Foo()`), not trailing return types (`auto Foo() -> T`).
-- When a variable is declared only to be immediately null/validity-checked, prefer combining
-  the declaration and check into a single `if`-init-statement:
-  ```cpp
-  // Prefer:
-  if (auto* Subscriber = Registry.Find(id); !Subscriber)
-  {
-      return;
-  }
-
-  // Instead of:
-  auto* Subscriber = Registry.Find(id);
-  if (!Subscriber) { return; }
-  ```
-  If the initializer expression is long or complex enough that the combined line becomes hard
-  to read, break it into a separate declaration and `if` instead. Readability wins over brevity.
-
-### Python
-- Use single tabs for indentation.
-
-### CMake
-- Use single tabs for indentation.
-
-### YAML
-- Use two spaces for indentation.
-
-## pImpl Decision Gate
-
-Never introduce pImpl (`std::unique_ptr<Impl>` + forward-declared `Impl` struct) in new Phoenix types unless at least one of the following holds:
-
-1. **ABI stability across a dynamic linker boundary** where consumers do not rebuild when the type's representation changes. This is what pImpl is actually for in library codebases.
-2. **A private type that is genuinely forbidden in the public TU set** — a vendored third-party SDK header that drags in incompatible macros, or an OS header whose leakage would poison callers.
-3. **Runtime strategy or state polymorphism** where `Impl` will have multiple concrete subclasses selected at construction time.
-
-"Header weight" — avoiding transitive includes like `Json/JsonValue.h` — is **NOT** a sufficient justification in this codebase. `import Phoenix;` already re-exports the standard surface, the engine rebuilds everything on every change, and every peer shared-lib class (Engine, Ledger, LedgerModule, Archive, Vigil, Soulforge, WorkQueue, GameCycleGraph) uses direct value members. Matching habits from ABI-stable library projects pattern-matches on the wrong codebase shape.
-
-If none of the three justifications applies, pick one of:
-
-- **(a) Flatten to direct value members.** Default choice. The type goes straight on the class like every peer.
-- **(b) Forward-declare + `std::unique_ptr<T>` for one specific heavy field.** Use when exactly one member is genuinely heavy; do not upgrade this into a full pImpl.
-- **(c) Request a bypass on the PR.** If the work genuinely needs pImpl and does not match (1)–(3), say so in the PR description with the justification so the reviewer can evaluate.
-
-## clang-tidy NOLINT Policy
-
-NOLINT is rare. Every use must carry a one-line justification naming the specific reason neither a code change nor a `.clang-tidy` tuning was viable.
-
-Decision order, strictly:
-
-1. **Fix the code.** Restructure so the check does not fire. This is the default answer.
-2. **Tune `.clang-tidy`.** If a whole category of false positives is firing across the codebase, disable or narrow the check in configuration. A check that fires on every file is the wrong check for the project; its noise belongs in configuration, not in comments sprinkled through source.
-3. **Narrow NOLINT, last resort only.** A single inline `// NOLINT(check-name): <one-line reason>` on the specific line, nowhere wider.
-
-Hard forbiddings:
-
-- **No file-wide `NOLINTBEGIN`/`NOLINTEND` blocks for style-level checks.** If `readability-convert-member-functions-to-static` (or any similar style check) is firing on every file, the check is wrong for the project and belongs in `.clang-tidy` configuration, not wrapped around whole translation units.
-- **No multi-line comment rationale.** One short line or the NOLINT does not ship. If the justification needs a paragraph, the code needs to be restructured instead.
-
-Canonical legitimate case: the `std::byte*` ↔ `char*` I/O boundary. Bridging `std::byte` buffers to string or stream APIs requires `reinterpret_cast`, and `cppcoreguidelines-pro-type-reinterpret-cast` is correctly disabled at the repository level; any remaining narrow casts go through one of the project's byte/char helpers with a single-line NOLINT at the helper site.
-
 ## Build Commands
 
-- **NEVER** use `-j$(nproc)` or `-j` with cmake. Always use `cmake --build <dir> --parallel`. The `$()` subshell triggers permission prompts and `-j` is generator-specific.
-- **Worktrees do not share build directories with the main workspace.** CMake caches absolute paths to the source tree, so each git worktree needs its own `/phoe:build` run (which configures + builds via Forge's profile system into the worktree's own `build-editor-debug/` etc.). Do not symlink or reuse the main workspace's build dirs inside a worktree — the cached source paths will point at the wrong tree and produce subtly broken artifacts.
+Builds go through Forge, never through an external generator — see the repo's forbidden-token
+lockdown before reaching for one.
+
+**Worktrees do not share build directories with the main workspace.** Each worktree needs its
+own `/phoe:build` run, which configures and builds into that worktree's own profile-suffixed
+tree. Do not symlink or reuse the main workspace's build directory from inside a worktree: the
+build resolves its project root from where it runs, so a reused tree quietly builds the other
+checkout and reports success for code you did not change.
 
 ## Build & Test Verification
 
@@ -462,10 +244,10 @@ Before running `git push` or `gh pr create`:
    forward to later pushes.
 - To verify compilation and run all tests locally, mirror the CI pipeline.
 - It is mandatory to execute the full verification suite before committing. Run
-  `/phoe:verify` — it drives Forge through build + format + lint + test using the
-  active profile, producing the same pass/fail signal as the `Linux: Build &
-  Test (Incremental)` CI job. Do not invoke cmake/ctest directly; a bare
-  `build/` directory does not exist in this project.
+  `/phoe:verify` — it drives Forge through audits + build + format + lint + test using the
+  active profile, producing the same pass/fail signal as CI. Forge is the only
+  way in; the repository's forbidden-token lockdown reds any reach for the
+  external generator it replaced.
 - When presenting solutions, always ensure the project builds cleanly in Release
   and Headless configurations, and run all appropriate tests beforehand.
 
@@ -498,6 +280,14 @@ echo "aurora.screenshot" > /tmp/phoenix-console.fifo
 
 The pipe accepts one command per line. Commands are queued and executed on the main thread each tick.
 
+### Display Requirements
+
+Screenshots require a display server (X11 or Wayland). On headless CI, use `xvfb-run`:
+
+```bash
+xvfb-run build-<profile>/bin/editor --aurora.screenshot.exit
+```
+
 ## Subagent Definitions
 
 The following agents are available for specialized tasks. Each is defined in `agents/`.
@@ -509,7 +299,7 @@ The following agents are available for specialized tasks. Each is defined in `ag
 ### Architecture & Design
 - `invoke-systems-designer` — Cross-platform module architecture and interface design
 - `invoke-rendering-designer` — Render graph, material system, and GPU resource architecture
-- `invoke-build-engineer` — CMake, CI/CD, cross-platform builds, and toolchain configuration
+- `invoke-build-engineer` — Forge profiles and manifests, CI/CD, cross-platform builds, toolchains
 
 ### Graphics & Rendering
 - `invoke-vulkan-agent` — Vulkan API implementation, synchronization, descriptors, and pipelines
@@ -527,25 +317,20 @@ The following agents are available for specialized tasks. Each is defined in `ag
 - `invoke-perf-agent` — CPU profiling, cache analysis, benchmarking, optimization
 - `invoke-concurrency-agent` — Thread safety, lock-free algorithms, synchronization
 
-### Display Requirements
-
-Screenshots require a display server (X11 or Wayland). On headless CI, use `xvfb-run`:
-
-```bash
-xvfb-run build-<profile>/bin/editor --aurora.screenshot.exit
-```
-
 ## Reference Documents
 
-The `references/` directory contains quick-reference guides that agents can consult:
+The `references/` directory holds the guides an agent consults while working:
 
+- `style-guide.md` — coding rules an agent needs at the keyboard, supplementing `Docs/StyleGuide.md`
 - `modern-cpp.md` — C++20/23/26 features, idioms, and migration patterns
-- `modern-cmake.md` — Target-based builds, presets, FetchContent, generator expressions
 - `modern-python.md` — Python 3.12+ features, pathlib, type hints, CLI patterns
 - `modern-vulkan.md` — Dynamic rendering, descriptor buffers, synchronization2, timeline semaphores
 - `cpp-portability.md` — Cross-platform pitfalls, fixed-width types, alignment, char signedness
-- `style-guide.md` — Authoritative code style and design guide (formatting, naming, comments, design practices)
 - `tooling.md` — Formatter/linter configuration and command reference
+- `dispatch-briefs.md` — Dispatch brief format
+
+The repository's `Docs/StyleGuide.md` remains the contributor style guide; the supplement above
+adds to it rather than copying it.
 
 ## Permissions
 

@@ -1,476 +1,188 @@
-# Style Guide
+# Style Guide — agent supplement
 
-Phoenix follows a consistent formatting, naming, and design strategy to keep the codebase
-readable and tooling-friendly. This document is the authoritative source for code style and
-design practice; agents and commands reference it before writing or reviewing code.
+The repository's `Docs/StyleGuide.md` is the contributor style guide and it binds. This file
+does not restate it. What follows are the rules an agent gets wrong often enough to be worth
+carrying in the plugin: habits imported from header-only C++, from ABI-stable library projects,
+or from codebases whose conventions Phoenix does not share.
 
-## General Rules
-
-- Only make cosmetic changes to code you explicitly modify or add.
-- Never reformat code unless you're already modifying it. When reformatting, apply the rules
-  below.
-- Follow the style of surrounding code.
-- Phoenix is unreleased software. When file formats, schemas, or APIs change, refactor every
-  call site in one commit — no back-compat shims, deprecation aliases, legacy-format readers,
-  version gates, migrators, or `// removed` comments. Bump magics or versions if convenient,
-  but do not write code to read the old version. This applies equally to Crucible challenge
-  plans: no "legacy buffer loads as empty" acceptance criteria, no "backwards-compat trial"
-  test cases.
-
-## Formatting
-
-| Rule | Description |
-| --- | --- |
-| Column width | Limit lines to 150 characters (matches `.clang-format` `ColumnLimit`). |
-| Indentation | Use tabs configured to a width of four spaces. |
-| Brace style | Follow Allman braces (opening brace on its own line). |
-| Alignment | Align consecutive assignments and trailing comments when practical. |
-| Includes | Sort case-insensitively and group related headers together. |
-
-Blank line after every `}` that closes a scope (function, class, struct, namespace, enum,
-control-flow block, lambda body) before the next non-`}` token. Exceptions — no blank line
-is required when the next token is:
-
-- Another closing brace of an enclosing scope
-- An `else` / `else if` continuation of the just-closed `if`
-- A trailing `;` (e.g. closing a struct or lambda definition)
-
-```cpp
-// Required:
-void DoThing()
-{
-    if (Condition)
-    {
-        HandleIt();
-    }
-
-    NextStep();
-}
-
-// Forbidden (missing blank line between scopes):
-void DoThing()
-{
-    if (Condition)
-    {
-        HandleIt();
-    }
-    NextStep();
-}
-```
-
-## Naming
-
-Naming is documentation. Choose names that make intent obvious without comments. Spell it
-out: `DeltaTime` not `dt`, `FieldOfView` not `FOV`. Well-established acronyms that are
-longer than their expansion are acceptable (`AABB`, `ID`). If you need a comment to explain
-what a variable holds, rename the variable instead. Single-letter names only for loop
-counters (`i`, `j`, `k`).
-
-Use `Previous` not `Old` in field and variable names (`previous_label`, `PreviousState`).
-
-Use `Type` not `Kind` for discriminator names — both the bare word and as a suffix
-(`NodeType`, not `NodeKind`; `Type`, not `Kind`). C++ has no `kind` keyword; the older
-"avoid `type` because it's reserved-ish" reflex doesn't apply here.
-
-Never end a function name on a dangling preposition. A trailing preposition is fine — good,
-even — when the argument after it is its object: `NodeAt(Index)`, `ConfigFor(ChannelCount)`,
-`LoadFrom(Path)`, `ScrollBy(Delta)` each read as one phrase that the call completes. It
-dangles when nothing in the signature supplies that object, so the name asks a question it
-never answers: `IsValidIn(Thing, bIsRoot)` leaves "valid in *what*?" hanging, because a
-boolean describing the place is not the place. Either drop the preposition
-(`IsValid(Thing, bIsRoot)`) or promote its object to the parameter that follows it
-(`IsValidIn(Thing, Scope)`). The test is mechanical: read the name and the argument list as
-a sentence, and check the preposition has something to point at.
-
-Acronyms in **module, directory, manifest, and file-format names are written all-caps**:
-`GLTF` (not `Gltf`), `KTX`, `HTTP`, `PBR`, `BRDF`. This extends to the manifest filename
-(`GLTFManifest.json`), the API export macro (`GLTF_API`), and the on-disk format constants.
-The existing `Json` module is the outlier, not the precedent — going forward, acronym
-modules are all-caps.
-
-No `k` prefix on constants. Use PascalCase for `inline constexpr` and `static constexpr`
-names at namespace or class scope (`ReflectionChecksumSeed`, `MinPort`, `MaxPort`,
-`MaxSubdivisionDepth`). Phoenix is not a Google-style codebase.
-
-| Entity | Style | Notes |
-| --- | --- | --- |
-| Types and functions | CamelCase | Applies to both public and private members. |
-| Member variables | Prefix with `m_`, optionally followed by a type hint, then CamelCase. |
-| Global variables | Prefix with `g_`, optionally followed by a type hint, then CamelCase. |
-| Static variables (non-member) | Prefix with `s_`, optionally followed by a type hint, then CamelCase. |
-| Locals & parameters | Optional type prefix followed by CamelCase; traditional loop counters may remain single-letter. |
-
-### Type prefixes
-
-- `b` – Boolean
-- `a` – Atomic
-- `p` – Pointer or smart pointer
-- `s` – Static variable (when combined with other prefixes)
-
-Prefixes can compose; for instance, a static member pointer would combine the
-member (`m_`) and pointer (`p`) prefixes before the descriptive name.
-
-### Pattern references
-
-- Member variables: `^m_(?:[baps]*)[A-Z][A-Za-z0-9]*$`
-- Global variables: `^g_(?:[baps]*)[A-Z][A-Za-z0-9]*$`
-- Static variables: `^s_[bap]*[A-Z][A-Za-z0-9]*$`
-- Locals/parameters: `^(?:[baps]+)?[A-Z][A-Za-z0-9]*$`
+Read `Docs/StyleGuide.md` for formatting, naming, `auto`, namespaces, comments, TODOs, error
+handling, and design practices. Read this for the rest.
 
 ## Language Features
 
-### Exceptions
-
-Forbidden. The keywords `try`, `catch`, and `throw` do not appear in Phoenix source — use
-`std::expected`, `std::optional`, or result types instead. `noexcept` is likewise banned as a
-specifier, with two narrow exceptions required to compile: a coroutine's `final_suspend()` and
-`std::hash` specializations must be `noexcept`. A few `noexcept`-on-defaulted move operations
-remain as committed debt — remove those when you touch them; do not treat them as precedent.
-
-### RTTI
-
-Disabled. Do not use `dynamic_cast`, `typeid`, or `reinterpret_cast`. For type-discriminated
-queries, use virtual query methods and `From<T>().ID()`.
-
 ### `static_cast` proliferation
 
-Three or more `static_cast`s in one function or file is a type-design smell — one side
-of the conversion is the wrong type. Fix the types (tighten the source, add a wrapper or
-`enum class`, move the conversion to a single boundary), not the casts.
-
-Heuristic, not a ban. One cast at an API boundary is fine; the signal is *proliferation*.
-
-### `[[deprecated]]`
-
-Forbidden. Do not use deprecated attributes or mark code as deprecated — remove the code
-instead.
-
-### `auto`
-
-Do not use `auto` for variable declarations. Spell out the actual type so reviewers see the
-contract at a glance.
-
-The only acceptable exceptions are types a human cannot reasonably write out:
-
-- Iterator types (`Container::const_iterator` is fine if you prefer it, but `auto` is allowed)
-- Lambda types
-- Deeply nested template instantiations where the spelled-out type harms readability
-
-This rule is **especially strict for error-bearing types**. The following must always be
-declared with the full type, never `auto`, so the obligation to check the result is visible
-at the declaration site:
-
-- `std::expected<T, E>`
-- `std::optional<T>`
-- Status / result enums and any other type whose unhappy path the caller must handle
-
-```cpp
-// Required:
-std::expected<Texture, LoadError> Result = LoadTexture(Path);
-std::optional<Entity> Found = Registry.Find(Id);
-
-// Forbidden:
-auto Result = LoadTexture(Path);
-auto Found = Registry.Find(Id);
-```
-
-### `const` correctness
-
-Apply by default: `const` local variables, `const` reference parameters, `const` member
-functions for accessors.
+Three or more `static_cast`s in one function or file is a type-design smell — one side of the
+conversion is the wrong type. Fix the types: tighten the source, add a wrapper or `enum class`,
+or move the conversion to a single boundary. This is a heuristic, not a ban. One cast at an API
+boundary is fine; the signal is the *proliferation*.
 
 ### `Move` / `Forward`
 
-Use the project's `Move()` and `Forward()` helpers (exported from the `Phoenix` C++20
-module) instead of `std::move` and `std::forward`. The wrappers add a `[[nodiscard]]`
-return and a `const`-rejection `static_assert` that catches miscasts the standard helpers
-allow through. A grep for `std::move` or `std::forward` in Phoenix source should return
-zero hits.
-
-### `std::memory_order`
-
-For every use of `std::memory_order`, add a nearby comment explaining why that ordering is
-required. This is the canonical example of a non-obvious *why* that belongs in a comment.
+Use the project's `Move()` and `Forward()` (exported from `Std`, `Engine/Core/Public/Std.cppm`)
+rather than `std::move` and `std::forward`. They add a `[[nodiscard]]` return and a
+`const`-rejecting `static_assert` that catches miscasts the standard helpers let through, and
+the unqualified `std::` spellings resolve unreliably across module boundaries. The `std::` forms
+should not appear in new code.
 
 ### Filesystem
 
-Use `IO::File` / `IO::Directory` / `IO::Path` from the `Phoenix:IO` module
-(`Engine/Core/Public/IO/`). Direct `std::filesystem` use outside that module is forbidden.
+Use `IO::File` / `IO::Directory` / `IO::Path` (`Engine/Core/Public/IO/`). `std::filesystem`
+elsewhere is a hole in the single filesystem seam, and `Tools/audit_io_seam.py` fails over it —
+including the bare `filesystem::` spelling and an `fs::` alias. If the wrapper lacks an
+operation, extend it rather than bypassing it at the call site.
 
-If the wrapper is missing an operation, **extend it** — do not bypass it at the call site.
+Exempt: the wrapper's own implementation under `Engine/Core/{Public,Private}/IO/`, and platform
+code where an OS API demands a `std::filesystem::path` shape. The ban targets the *operations*,
+not the path type at an unavoidable boundary.
 
-Exemptions:
+### Return type syntax
 
-- The wrapper implementation under `Engine/Core/{Public,Private}/IO/`.
-- Platform code where an OS API requires a `std::filesystem::path` shape. The ban targets
-  the `std::filesystem::*` *operations*, not the path type at unavoidable boundaries.
+Write the return type first (`Texture LoadTexture(...)`), not trailing (`auto LoadTexture(...)
+-> Texture`). Trailing syntax is reserved for the cases that require it — a return type that
+depends on the parameters, such as one deduced through `decltype`.
 
-## Code Organization
+### Init-statements in conditions
 
-### Namespaces
+When a variable exists only to be checked immediately, declare it in the condition so its scope
+matches its purpose:
 
-Namespaces name domains or capabilities — never generic buckets. Before
-introducing a new namespace, grep the codebase to confirm the name does not
-collide with an existing class, struct, or namespace at the same scope.
+```cpp
+// Prefer:
+if (Subscriber* Found = Registry.Find(Id); !Found)
+{
+	return;
+}
 
-Anonymous namespaces are forbidden — they break our unity builds. Always name every
-namespace.
+// Instead of:
+Subscriber* Found = Registry.Find(Id);
+if (!Found) { return; }
+```
 
-Modules sit at the root namespace. A module's namespace is its own module name,
-without any parent-directory prefix — `Engine/Modules/Rendering/Mosaic/Source/Public/Tile.h`
-lives in `namespace Mosaic`, not `Rendering::Mosaic`. The directory grouping
-(`Rendering/`, `Input/`, `Audio/`, `Platform/`) is filesystem-only and does not
-contribute a namespace segment. Directory layout is a soft convention; the module
-rule wins when the two conflict.
+Spell the type — `Docs/StyleGuide.md` §`auto` applies inside the init-statement too. If the
+initializer is long enough that the combined line becomes hard to read, split it back apart.
+Readability wins over compactness.
 
-| Location | Namespace |
-| --- | --- |
-| `Engine/Modules/Rendering/Mosaic/Source/Public/Tile.h` | `Mosaic` |
-| `Engine/Modules/Audio/Sonic/Source/Public/Voice.h` | `Sonic` |
-| `Engine/Modules/Platform/LinuxAudio/Source/Public/AlsaBridge.h` | `LinuxAudio` |
-| `Engine/Modules/Json/Source/Public/Parser.h` | `Json` |
-| `Engine/Core/Image/PNG/Deflate.h` | `Core::Image::PNG::Deflate` |
-| `Applications/Crucible/Source/Server.h` | `Crucible` |
+### Module imports
 
-Inside a module namespace, no class or struct may share the module's name —
-`class Mosaic` inside `namespace Mosaic` is forbidden. Pick a name that
-describes the type's role.
+Import the specific `Phoenix.<Module>` partitions a translation unit uses. There is no
+`import Phoenix;` umbrella to lean on, and a few surviving mentions in older comments and design
+docs do not make one.
 
-The IModule integration class is named `<Module>Module` and lives at global
-scope, *not* inside the module namespace — `VigilModule`, `SoulforgeModule`,
-`ArbiterModule`, `EngineModule`, `LinuxAudioModule`, `PlatformLiaisonModule`.
-Module classes are never wrapped in any namespace. The module namespace holds
-support types only.
+## Types and Values
 
-Cross-cutting helpers that don't belong to any single module may sit in a
-shared root namespace named for the domain. The canonical example is
-`namespace Platform`, which holds the inter-module factory used by the
-platform liaison modules (`Platform::CreatePlatformLiaisonBackend`,
-`Platform::LiaisonFactory::Create`). A shared namespace is appropriate when
-multiple modules collaborate around a single concept; do not create one just
-to bucket a module's internal types.
+### Color
 
-Applications use their brand name as a flat top-level namespace: `namespace
-Crucible`, `namespace Vigil`, `namespace Editor`, `namespace Forge`, `namespace
-Game`, `namespace Minimal`. Do not wrap apps in an `Application::` parent and do
-not use a generic `namespace Application` — it carries no information and is
-indistinguishable across binaries in logs and stack traces.
+Color is normalized 0.0–1.0, never 0–255: `Color::Red` is `{1.0F, 0.0F, 0.0F, 1.0F}`. Divide
+each channel by 255 when building from 8-bit input such as a hex code or a picker.
 
-Log channels are migrating from flat top-level `<Module>Log` namespaces
-(`EngineLog`, `RealmLog`, `DispatchLog`, `ArbiterLog`) into nested
-`<Module>::Log` namespaces. The Platform-tier modules have flipped
-(`PlatformLiaison::Log`, `LinuxInput::Log`, `LinuxPane::Log`, `WindowsAudio::Log`,
-`WindowsInput::Log`, `WindowsLiaison::Log`); the rest remain in the flat
-`<Module>Log` form pending follow-on migration. Each channel lives in
-`<Module>Log.h` (filename unchanged) and pulls in `Logging/Log.inl` for the
-`Trace` / `Log` / `Warn` / `Error` / `Fatal` API. Source files pull in their
-channel with a file-scope `using namespace <channel>;` after the includes.
-Modules do not flip individually outside a planned migration step — staggered
-renames produce a half-and-half codebase.
+Be skeptical of a new hardcoded `RGBA{...}`. Look first for a constant that already says it —
+the `Color::` namespace (`Engine/Core/Public/Color/Color.cppm`) holds the standard named colors,
+and the editor's `Palette::` holds the UI palette. If nothing matches and the value is reused or
+semantically meaningful, add a named constant rather than scattering the literal.
 
-The following namespace segment names are forbidden — they describe nothing about
-what the code does:
+A themable UI element must read the active theme (`m_ActiveTheme->Accent` and siblings, falling
+back to `Palette::Accent`), never a literal. A literal on a themable surface silently ignores
+the user's theme, which is a bug rather than a style lapse.
 
-- `Detail`
-- `Internal`
-- `Helpers`
-- `Utils`
-- `Misc`
-- `Common`
+### `Label` parameters
 
-Replace them with a name that describes the contents. `UI::Helpers` might split
-into `UI::HitTest` and `UI::ClipRect`. `Trials::Helpers` becomes
-`Trials::Assertions`. `Dispatch::Tools` stays (it names a real domain). When in
-doubt, ask: *what do these symbols do?* — that's the namespace name.
+Pass `Label` by value — it is a hash, and `const Label&` buys nothing. Iterating or comparing a
+container of them (`for (const Label& Name : ...)`) is unaffected; the rule is about parameters.
 
-### `using namespace`
+Convert at API boundaries with `ToCString()` / `ToString()`. When registering into a module's
+registries, use that module's wrapper (e.g. `Input::Label`) so the hash carries the module
+signature.
 
-Scoped `using namespace` directives shorten call sites without hiding the
-underlying type names. They are forbidden in headers (`.h`, `.hpp`, `.ixx`, and
-any header-like file), because the directive leaks into every translation unit
-that includes the header.
+### File-format identifiers
 
-At file scope in a `.cpp` file they are allowed, and this is the idiomatic way
-to pull in a log channel for the whole translation unit (e.g. `using namespace
-Ledger::Log;` at the top of `Ledger.cpp`, placed after the includes and before
-any definitions).
-
-Inside a function body, use `using namespace` only when the namespace is
-referenced twice or more. For a single reference, fully-qualify — the `using`
-buys nothing.
-
-### Platform Isolation
-
-Keep platform-specific logic (for example, Linux-only behavior) confined to the corresponding
-platform liaison sources so code for other platforms remains encapsulated and unaffected.
-Files under `Engine/Modules/Platform/` are exempt from the platform-API ban.
-
-## Error Handling
-
-Do not silence return values that callers are expected to consume. Forbidden patterns include
-`(void) Foo();`, `[[maybe_unused]] auto _ = Foo();`, and `std::ignore = Foo();` when `Foo`
-returns an error-bearing type (`std::expected`, `std::optional`, status enums, etc.). Inspect
-the result and, on the unexpected branch, log via `Scribe` at the appropriate severity
-(`Warning` for recoverable conditions, `Error` for ones that compromise correctness).
-
-`expected<T, E>` functions must use the error channel on bad input; never return a
-default-constructed `T` as a silent failure.
-
-## Comments
-
-Code should read as self-documenting. Reach for a comment only when the *why* is not obvious
-from the code itself, or when a reader needs a nudge past something complex. A comment is a
-small aid, not a technical write-up.
-
-- **Default to no comment.** Add one only when it tells a future reader something the code
-  cannot.
-- **Short.** Most comments are a single line. Two or three lines is the ceiling — if it needs
-  more, the explanation belongs in the commit message, PR description, or a design note, not
-  the source.
-- **Explain *why*, not *what*.** Never restate what the code does. `// increment counter`
-  above `++counter;` is noise.
-- **Nothing that can go stale.** No file paths, no line numbers, no symbol names from
-  elsewhere, no Crucible labels, no PR numbers, no branch names, no commit hashes, no dates,
-  no author tags. If a reader should "see also" something, the reader can grep.
-- **No temporal narration.** Forbidden words in comments include "previously", "now", "new",
-  "legacy", "refactored", "was", "used to". Future readers see only the current code;
-  commentary about what *used* to be there is noise. Decisions about why code changed belong
-  in the commit message and PR description.
-- **No decorative banners.** Section headers like `// ===== Helpers =====` or ASCII rules
-  are forbidden. Use scope and naming instead.
-- **No author, date, or ticket tags inside comments.** `git blame` is authoritative.
-- **Form.** Use `//` for single-line comments. For multi-line comments, use `/* ... */`.
-  Do not stack multiple `//` lines to form a paragraph.
-- **Placement.** Prefer a comment on its own line directly above the code it explains.
-  Trailing end-of-line comments are reserved for brief annotations (labeling an `else` whose
-  `if` is far above, tagging a `switch` case, etc.) and must stay short.
-- **Public API declarations require a comment.** Every exported class, struct, free function,
-  and public member function declared in a module's public header gets at least a single-line
-  comment describing its purpose. Prefer one line; use the multi-line `/* ... */` form only
-  when a single line genuinely cannot convey the contract.
-
-The `std::memory_order` comment rule is a canonical example of a non-obvious *why* that
-belongs in a comment.
-
-## TODO Comments
-
-TODOs in code are notes to a future programmer who has none of today's context. Write them
-so they stay useful as the codebase moves around them.
-
-- **Keep them short.** One line, one sentence. If a TODO needs a paragraph, the work needs a
-  Crucible challenge or bug, not a comment.
-- **Describe the work, not the origin.** State what needs to happen, not where the note came
-  from.
-- **No parenthesized prefix.** Write `// TODO: ...`, never `// TODO(anything): ...`. The
-  `TODO(label):` form is forbidden regardless of what the label is — Crucible labels, saga
-  names, PR numbers, owner handles, ticket IDs, dates, and file-path shorthand all belong
-  somewhere else (commit message, PR description, tracker). A grep for `TODO(` in source
-  files should return zero hits.
-- **Never reference anything that can go stale.** No file paths, no line numbers, no Crucible
-  labels, no PR numbers, no branch names, no commit hashes, no agent names, no date. All of
-  those drift the moment something is renamed, rebased, squashed, archived, or merged. The
-  TODO should still make sense a year later when none of that context exists.
-- **Do not annotate work you just did.** TODOs that explain a refactor, justify a recent
-  rename, or narrate a decision belong in the commit message and PR description — not the
-  source. Future readers see only the current code; commentary about what *used* to be there
-  is noise.
-- **Do not annotate trivially obvious follow-ups.** "TODO: also update the header" is
-  something you do now, not later.
-
-Good:
-
-    // TODO: handle UTF-8 surrogate pairs in token splitter
-
-Bad:
-
-    // TODO(execute-saga-canvas-overhaul): per code review on PR #312, see Engine/Modules/Rendering/Mosaic/Canvas.cpp:142
-    // TODO: previously this used a raw pointer, switched to CanvasLease in this commit
-    // TODO: address feedback from challenge `add-viewport-resize`
-
-## Design Practices
-
-### 1. Ownership & Pointers
-
-`new`/`delete` are banned. Use `std::unique_ptr` for exclusive ownership, `std::shared_ptr`
-for shared ownership, or engine handle types. Non-owning raw pointers are acceptable when
-nullability or reseatability is required and the lifetime is guaranteed by the caller. Prefer
-references (`T&`) when the relationship is always-valid and never-changes.
-
-### 2. Singletons
-
-Avoid. Prefer the subsystem pattern: a module registers an abstract interface
-(`Subsystem::RegisterInterface<IFoo>(...)`) that exposes only what consumers need. Consumers
-access it via `Subsystem::Get<IFoo>()`, which returns a validated reference that must be
-checked before use. This provides decoupling, controlled lifecycle, and testability. If a
-singleton is unavoidable, it must be thread-safe, its lifetime must be explicit, and the
-justification must be documented.
-
-### 3. Macros
-
-Prohibited except where no C++23 alternative exists (e.g., test registration, third-party C
-API interop). Use `constexpr`, `consteval`, concepts, or templates instead. Any new macro
-must document why a compile-time construct is insufficient.
-
-### 4. Preprocessor Guards
-
-`#ifdef`/`#if` are prohibited in shared code. Build configuration is provided as `constexpr`
-values generated by CMake (see `Build::IsDebugBuild`, `Build::IsProfilingEnabled`). Use
-`if constexpr` for configuration branching — the dead branch is eliminated at compile time
-but still type-checked, catching refactoring errors. Platform-specific behavior lives in
-platform modules. Rendering API interop (Vulkan) may use `#ifdef` in its own module with
-justification.
-
-### 5. Lint Bypass
-
-`// NOLINT`, `// clang-format off`, and similar directives are prohibited unless the
-alternative is worse (e.g., C API callbacks with fixed signatures). Must include an
-explanatory comment. Fix the code, don't suppress the warning.
-
-### 6. Labels Over Strings
-
-For identity comparisons (actions, signals, categories), use `Label` types with compile-time
-FNV-1a hashing instead of raw string comparisons. Integer comparisons are constant-time and
-cache-friendly. Define constants as `inline constexpr Label`. See `Impulse/Signal/Label.h`.
-
-### 7. Helper Placement
-
-Before placing a generic-looking helper (text sink, byte buffer, formatter, indent tracker,
-string-splitter, scope tracker — anything that has nothing module-specific about it) inside
-the first consuming module, **ask the user where it belongs**. The default is `Core` or
-another lower-level shared library, not module-local. Module-local placement is only correct
-when the type only makes sense in that module's vocabulary.
-
-If you would not, looking at the name in isolation, guess it was specific to the module —
-ask before committing. Do not unilaterally place it module-local just because that's where
-the first consumer lives.
-
-### 8. Reuse Before Reimplementation
-
-Don't hand-roll common algorithms or boilerplate at call sites — string split/trim/case
-mapping, hashing, byte packing, alignment/clamp/lerp math, ad-hoc linear searches, scratch
-buffers, path manipulation. Check for a proven implementation first: the standard library
-(via `Std`), `Core` (Structures, IO, Identity, …), or the owning module's existing helpers.
-If none exists and the need recurs (or plausibly will), extract a named helper into the
-appropriate shared library (placement per §7) instead of inlining another copy — one proven
-implementation, many call sites. Implementation sites for proprietary structures should read
-as domain logic, not algorithm plumbing.
-
-### 9. File-Format Identifiers
-
-On-disk file-format magic numbers are 8 ASCII characters packed little-endian into a
-`uint64_t`, structured as a **3-letter system prefix + 5-letter structure name**:
+An on-disk format's magic number is 8 ASCII characters packed little-endian into a `uint64_t`,
+as a 3-letter system prefix plus a 5-letter structure name:
 
 | Identifier | System | Structure |
 | --- | --- | --- |
 | `CTXSTRAT` | Cortex (`CTX`) | Stratum |
 | `MSCLYOUT` | Mosaic (`MSC`) | Layout |
 
-Choose the hex literal so the bytes on little-endian disk spell the tag left-to-right.
+Every one is registered in `IO::File::Identifiers` (`Engine/Core/Public/IO/File.cppm`) through
+`ConvertToHex`, which carries a compile-time uniqueness `static_assert`: two modules cannot mint
+the same tag, because the second collides at compile time. Never define a module-local magic
+constant — an unregistered tag is exactly the collision the table exists to prevent.
 
-All identifiers live in the central namespace `IO::File::Identifiers` with a compile-time
-uniqueness `static_assert` over the registered values — two modules cannot independently
-mint the same tag because the new entry collides at compile time. Do not define module-local
-magic constants; register every new format in the central table.
+## Placement and Reuse
 
-For tooling mechanics — formatter configuration, linter layers, command invocations, and
-troubleshooting — see `references/tooling.md`.
+### Helper placement
+
+Before putting a generic-looking helper — a byte buffer, a formatter, an indent tracker, a
+string splitter, a scope guard, anything with nothing module-specific about it — inside the
+first module that consumes it, ask where it belongs. The default home is `Core` or another
+lower-level shared library; module-local placement is right only when the type makes sense
+solely in that module's vocabulary.
+
+If you would not guess from the name alone that it was specific to the module, ask before
+committing rather than letting the first consumer decide placement by accident.
+
+### Reuse before reimplementation
+
+Don't hand-roll common work at the call site — splitting or trimming text, hashing, byte
+packing, clamp/lerp math, ad-hoc linear searches, scratch buffers, path manipulation. Look for a
+proven implementation first: `Std`, `Core` (Structures, IO, Identity, …), or the owning module's
+existing helpers. If none exists and the need recurs, extract a named helper into the right
+shared library (placement per the section above) instead of inlining another copy — one proven
+implementation, many call sites. Implementation sites for our own structures should read as
+domain logic, not as algorithm plumbing.
+
+### Platform names outside the platform modules
+
+`Docs/StyleGuide.md` §Platform Isolation keeps platform *logic* behind the liaison. The boundary
+holds at the level of names as well. A platform name — `Wayland`, `X11`, `Windows`, `Win32`,
+`macOS`, `Cocoa`, `POSIX` — in an identifier, type, branch, or include outside
+`Engine/Modules/Platform/` is a coupling smell even when the code around it is portable. Shared
+modules say *what* they need (a window surface, a clipboard, a file dialog), never *which* OS
+provides it.
+
+Prose in genuine platform-liaison documentation, and build or CI configuration that legitimately
+selects a backend, are outside the rule.
+
+## Escape Hatches
+
+### pImpl decision gate
+
+Never introduce pImpl (`unique_ptr<Impl>` behind a forward-declared `Impl`) in a new Phoenix
+type unless one of these holds:
+
+1. **ABI stability across a dynamic linker boundary**, where consumers do not rebuild when the
+   representation changes. This is what pImpl is actually for.
+2. **A private type genuinely forbidden in the public TU set** — a header whose macros or OS
+   declarations would poison callers.
+3. **Runtime strategy or state polymorphism**, where `Impl` will have several concrete
+   subclasses chosen at construction.
+
+Header weight is **not** a justification here. The engine rebuilds everything on every change,
+and every peer class holds its members by value. Reaching for pImpl to avoid a transitive
+include is pattern-matching on an ABI-stable library project, which this is not.
+
+If none of the three applies, either flatten to direct value members (the default), or
+forward-declare and `unique_ptr` the one genuinely heavy field without growing it into a full
+pImpl. If the work really needs pImpl anyway, say so in the PR description with the
+justification so a reviewer can weigh it.
+
+### clang-tidy NOLINT
+
+NOLINT is rare, and every use carries a one-line reason naming why neither a code change nor a
+`.clang-tidy` tuning was viable. Work the options in order and stop at the first that applies:
+
+1. **Restructure so the check does not fire.** The default answer.
+2. **Tune `.clang-tidy`.** A check firing across the whole codebase is the wrong check for the
+   project; its noise belongs in configuration, not in comments scattered through source.
+3. **A narrow `// NOLINT(check-name): <one-line reason>`** on the one line, nowhere wider.
+
+Two hard limits on the third. A file-wide `NOLINTBEGIN`/`NOLINTEND` pair is never the answer for
+a style-level check — if `readability-convert-member-functions-to-static` or a similar check
+fires on every file, that is step 2, not a wrapper around a translation unit. And the
+justification is one short line: if it needs a paragraph, the code needs restructuring.
+
+The canonical legitimate case is the `std::byte*` ↔ `char*` I/O boundary, where bridging byte
+buffers to string or stream APIs requires `reinterpret_cast`. That check is disabled repo-wide;
+any remaining narrow casts go through one of the project's byte/char helpers with a single-line
+NOLINT at the helper site.

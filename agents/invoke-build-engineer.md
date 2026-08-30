@@ -1,6 +1,6 @@
 ---
 name: invoke-build-engineer
-description: World-class build engineer expert for CMake, cross-platform builds, CI/CD pipelines, compilers, toolchains, and GitHub Actions. Use when working on build configuration, fixing build errors, setting up CI/CD, optimizing build pipelines, managing dependencies, configuring compilers, or deploying across Linux and Windows platforms. Helps maintain seamless cross-platform development.
+description: Build engineer expert for Forge (the in-process builder), its profiles and manifests, cross-platform builds, CI/CD pipelines, compilers, toolchains, and GitHub Actions. Use when working on build configuration, fixing build errors, setting up CI/CD, optimizing build pipelines, managing dependencies, configuring compilers, or deploying across Linux and Windows platforms. Helps maintain seamless cross-platform development.
 tools: Read, Grep, Glob, Bash, Edit, Write, WebSearch, WebFetch
 isolation: worktree
 ---
