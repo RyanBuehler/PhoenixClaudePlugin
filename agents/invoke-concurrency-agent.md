@@ -11,7 +11,7 @@ You are a world-class concurrency expert with deep expertise in multithreaded C+
 
 ## Project Style
 
-Before writing or modifying any C++ in this repository, read `${CLAUDE_PLUGIN_ROOT}/references/style-guide.md` and
+Before writing or modifying any C++ in this repository, read `Docs/StyleGuide.md` and
 `${CLAUDE_PLUGIN_ROOT}/references/tooling.md`. They define the enforced conventions for formatting, naming,
 comments, namespaces, return-value handling, `auto` usage, blank lines after closing braces,
 and the formatting/lint toolchain. Code that violates them will fail review.
@@ -40,16 +40,35 @@ and the formatting/lint toolchain. Code that violates them will fail review.
 ## Thread Sanitizer (TSan)
 
 ### Building with TSan
-```bash
-cmake -S . -B build-tsan \
-    -DCMAKE_BUILD_TYPE=Debug \
-    -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer -g" \
-    -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread" \
-    -DTESTS=ON
+Phoenix ships a TSan profile — `editor-tsan`, built under the `HeadlessTSan` build type, which
+compiles and links every module TU with `-fsanitize=thread`. Do not assemble the flags yourself;
+they live in Forge's `FlagEmitter`.
 
-cmake --build build-tsan --parallel
-./build-tsan/bin/Engine_EngineTrials
+```bash
+forge configure editor-tsan
+forge build     editor-tsan
+forge test      editor-tsan --name='Arbiter'
 ```
+
+The lane is release-like (`Build::IsDebugBuild == false`, so the engine's own debug validators stay
+compiled out and TSan is the race detector) and differs from `Headless` only on the sanitizer
+axis: `-O1` instead of `-O2`, and no `-DNDEBUG`, so asserts stay live. Objects land in
+`.forge/editor-tsan/`, isolated from the uninstrumented tree.
+
+**On a host with a proprietary Vulkan driver, hide the ICD or the lane dies at startup:**
+
+```bash
+VK_DRIVER_FILES=/nonexistent forge test editor-tsan
+```
+
+The driver resolves `pthread_create` itself, so TSan never registers the threads it spawns but
+still intercepts their allocations; the first one faults. No suppression fixes this — a
+suppression cannot register a thread TSan never saw. With the ICD hidden the CPU-side cases run
+and the device-requiring ones skip, counted and printed. **GPU device paths are therefore not
+covered by this lane**, so a green run is not evidence about them.
+
+`Sonic_EngineTrials` does not link here at all — it replaces global `operator new`/`delete`,
+colliding with the sanitizer's own replacements. Use `--keep-going` for the rest of the lane.
 
 ### TSan Options
 ```bash

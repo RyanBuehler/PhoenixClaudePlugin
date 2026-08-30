@@ -11,7 +11,7 @@ You are a world-class C++ debugging expert with deep knowledge of GDB, LLDB, cor
 
 ## Project Style
 
-Before writing or modifying any C++ in this repository, read `${CLAUDE_PLUGIN_ROOT}/references/style-guide.md` and
+Before writing or modifying any C++ in this repository, read `Docs/StyleGuide.md` and
 `${CLAUDE_PLUGIN_ROOT}/references/tooling.md`. They define the enforced conventions for formatting, naming,
 comments, namespaces, return-value handling, `auto` usage, blank lines after closing braces,
 and the formatting/lint toolchain. Code that violates them will fail review.
@@ -26,7 +26,7 @@ and the formatting/lint toolchain. Code that violates them will fail review.
 
 ## Phoenix Build Paths
 
-Throughout this agent, substitute `<profile>` for whichever Forge profile is built — typically `editor-debug` (best for debugging: symbols + assertions + no optimization) or `editor-release`. If neither `build-editor-debug/` nor `build-editor-release/` exists, run `/phoe:build` first. Do not invoke `cmake --build` or reference a bare `build/` directory — Phoenix does not use one; Forge owns profile-suffixed build dirs.
+Throughout this agent, substitute `<profile>` for whichever Forge profile is built — typically `editor-debug` (best for debugging: symbols + assertions + no optimization) or `editor-release`. If neither `Applications/Forge/.forge/editor-debug/` nor `Applications/Forge/.forge/editor-release/` exists, run `/phoe:build` first. Forge owns its trees under `Applications/Forge/.forge/`; do not hand-build one beside them.
 
 ## GDB Quick Reference
 
@@ -34,19 +34,19 @@ Throughout this agent, substitute `<profile>` for whichever Forge profile is bui
 
 ```bash
 # Debug a program
-gdb build-<profile>/bin/editor
+gdb Applications/Forge/.forge/<profile>/bin/editor
 
 # Debug with arguments
-gdb --args build-<profile>/bin/editor --console-pipe=/tmp/phoenix-console.fifo
+gdb --args Applications/Forge/.forge/<profile>/bin/editor --console-pipe=/tmp/phoenix-console.fifo
 
 # Attach to a running process
 gdb -p $(pgrep editor)
 
 # Load a core dump
-gdb build-<profile>/bin/editor core.12345
+gdb Applications/Forge/.forge/<profile>/bin/editor core.12345
 
 # Debug with TUI (text UI)
-gdb -tui build-<profile>/bin/editor
+gdb -tui Applications/Forge/.forge/<profile>/bin/editor
 ```
 
 ### Essential Commands
@@ -225,7 +225,7 @@ coredumpctl gdb  # Debug most recent crash
 
 ```bash
 # Load core dump in GDB
-gdb build-<profile>/bin/editor core.12345
+gdb Applications/Forge/.forge/<profile>/bin/editor core.12345
 
 # Get the crash backtrace
 (gdb) bt
@@ -279,7 +279,7 @@ Record execution and replay backwards:
 
 ```bash
 # Record execution
-rr record build-<profile>/bin/editor
+rr record Applications/Forge/.forge/<profile>/bin/editor
 
 # Replay
 rr replay
@@ -322,10 +322,10 @@ git bisect reset         # Return to original state
 
 ```bash
 # On target machine
-gdbserver :1234 build-<profile>/bin/editor
+gdbserver :1234 Applications/Forge/.forge/<profile>/bin/editor
 
 # On development machine
-gdb build-<profile>/bin/editor
+gdb Applications/Forge/.forge/<profile>/bin/editor
 (gdb) target remote targethost:1234
 (gdb) continue
 ```
@@ -367,10 +367,10 @@ end
 
 Use Forge profiles through `/phoe:build`:
 
-- **`editor-debug`** — full symbols, no optimization, all assertions. The default for interactive GDB sessions; produces `build-editor-debug/bin/editor`.
-- **`editor-release`** — optimized, usually what CI/production ship with. Useful when reproducing release-only bugs; produces `build-editor-release/bin/editor`.
+- **`editor-debug`** — full symbols, no optimization, all assertions. The default for interactive GDB sessions; produces `Applications/Forge/.forge/editor-debug/bin/editor`.
+- **`editor-release`** — optimized, usually what CI/production ship with. Useful when reproducing release-only bugs; produces `Applications/Forge/.forge/editor-release/bin/editor`.
 
-Run `/phoe:build` after switching profiles or on a fresh worktree. If you need a RelWithDebInfo-style profile for post-mortem analysis on production crash dumps, add it as a new Forge profile under `BuildProfiles/` rather than running raw `cmake -S . -B <dir>` — that would create a sibling build dir outside Forge's management and diverge from the rest of the project's build system.
+Run `/phoe:build` after switching profiles or on a fresh worktree. If you need a RelWithDebInfo-style profile for post-mortem analysis on production crash dumps, add it as a new Forge profile under `Applications/Forge/Profiles/` — a tree built beside Forge's own is outside its management and diverges from the rest of the project.
 
 ## Related Agents
 

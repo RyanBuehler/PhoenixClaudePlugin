@@ -19,7 +19,7 @@ These are the sites where bugs most often hide. When picking a midpoint or addin
 4. **State-mutating assignments to the variables the bug cares about.** Trace immediately before and after any assignment to a member variable, flag, or container entry involved in your hypothesis. The "before" trace tells you the input; the "after" trace tells you whether the write happened.
 
 5. **Interface boundaries — trace on both sides.**
-   - Subsystem calls: `Subsystem::Get<IFoo>()->Bar(x)` — trace before (with `x`) and immediately inside `Bar` (confirm arrival and value agreement).
+   - Subsystem calls: `Subsystem::FindRealm(Name)->Bar(x)` — trace before (with `x`) and immediately inside `Bar` (confirm arrival and value agreement).
    - Virtual dispatch: trace at the call site and inside the concrete override.
    - Callback invocations: trace at the invoke site and inside the callback.
 
@@ -53,7 +53,7 @@ Prefer information density over cleverness:
 
 ## Phoenix-specific placement tips
 
-- **`Subsystem::Get<>()` call sites** are high-value midpoints. The lookup can return `nullptr` if the module isn't registered in this application's `*Description.json`, and the bug may be "the module isn't loaded at all." Trace the return value and branch on it.
+- **Subsystem lookups** (`Subsystem::FindRealm` and siblings) are high-value midpoints. The lookup returns null when the owning module never resolved into this application's closure — check the app's `*Manifest.json` and the `requires_module` chain, because the bug may be "the module isn't in the build at all." Trace the returned pointer and branch on it.
 - **`Arbiter` event bus.** Publish sites and subscriber registration are the two highest-prior spots. A missing subscriber registration is silent — there is no warning when you publish to nothing — and only a trace will reveal it.
 - **`Engine::Tick` phases.** The tick is divided into ordered phases (PreTick, Tick, PostTick, Render). If your bug crosses phases, trace at each phase boundary with the state you care about. Bugs here usually turn out to be "I mutated X in PostTick but read it in PreTick of the next frame."
 - **Platform liaisons** (`LinuxPane`, `LinuxInput`, `WindowsPane`, etc.). Platform-specific bugs almost always live at the liaison boundary — trace on the inbound call from the platform layer and on the outbound call to the module that consumes the event.

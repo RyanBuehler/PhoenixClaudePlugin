@@ -11,22 +11,25 @@
 ## Where the rules live
 
 Agent material lives here, not in the codebase — that separation is the whole point of the
-plugin. This file and `references/` carry how to work: conduct, workflow, and the coding rules
-an agent needs at the keyboard. The repository carries what the codebase is.
+plugin. This file and `references/` carry how to work: conduct, workflow, and the domain
+references an agent consults. The repository carries what the codebase is.
+
+The style guide is the deliberate exception. It is agent-agnostic — a contributor who never runs
+an agent needs it just as much — so it lives in the repository and the plugin does not keep a
+copy.
 
 | Subject | Authority |
 |---|---|
 | Agent conduct, workflow, verification, pushing | this file |
-| Coding rules an agent needs while writing C++ | `${CLAUDE_PLUGIN_ROOT}/references/style-guide.md` |
+| Code style, naming, comments, design practices | `Docs/StyleGuide.md` (in the repository) |
 | Formatter and linter mechanics | `${CLAUDE_PLUGIN_ROOT}/references/tooling.md` |
+| C++, Python, Vulkan, portability references | `${CLAUDE_PLUGIN_ROOT}/references/` |
 | Architecture, module layout, ownership tiers | the repository's `CLAUDE.md` |
 | Build, test, verify | `Applications/Forge/`, `Docs/Forge_DD.md`, `/phoe:verify` |
 | Blessed and banned terms | `Docs/Lexicon.md` |
 
-The repository's `CLAUDE.md` and `Docs/StyleGuide.md` still bind — they are written for
-contributors, and a rule there applies whether or not an agent typed the code. Where this
-plugin speaks on the same subject it adds to them; it never contradicts them. If it does, this
-file is the stale one and the fix is here.
+The repository's `CLAUDE.md` and `Docs/StyleGuide.md` bind. If this file ever contradicts one of
+them, this file is the stale one and the fix belongs here.
 
 ## Agent Conduct
 
@@ -78,7 +81,7 @@ Every Bash invocation starts a fresh shell at the user's primary working directo
 
 Use one of the two safe patterns on every invocation:
 
-- **Absolute paths for every argument.** `ls /absolute/path/to/worktree/build-editor-debug`.
+- **Absolute paths for every argument.** `ls /absolute/path/to/worktree/Applications/Forge/.forge/editor-debug`.
 - **Explicit `cd` prefix in the same invocation.** `cd /absolute/path/to/worktree && forge build editor-debug`.
 
 Failure modes this rule prevents include building the wrong tree, sourcing the wrong `.env`, editing the wrong file, and grepping a stale copy that does not reflect pending edits.
@@ -175,10 +178,10 @@ The build-touching `agents/invoke-*.md` definitions (`build-engineer`, `test-eng
 
 ## Code Guidelines
 
-**Before writing any C++**, read `${CLAUDE_PLUGIN_ROOT}/references/style-guide.md` — the rules
-an agent gets wrong often enough to be worth carrying here — and the repository's
-`Docs/StyleGuide.md`, which binds and which the supplement does not restate. For tooling
-mechanics — formatter and linter configuration, invocation, troubleshooting — see
+**Before writing any C++**, read the repository's `Docs/StyleGuide.md` — formatting, naming,
+language features, comments, TODOs, and design practices, all of it binding — and the
+conventions in the repository's `CLAUDE.md` that override it. For tooling mechanics — formatter
+and linter configuration, invocation, troubleshooting — see
 `${CLAUDE_PLUGIN_ROOT}/references/tooling.md`.
 
 Formatting and linting run through Forge: `/phoe:format` and `/phoe:lint`, or the whole
@@ -272,7 +275,7 @@ Launch the engine with `--console-pipe=PATH` to enable external command injectio
 
 ```bash
 # Launch with pipe
-build-<profile>/bin/editor --console-pipe=/tmp/phoenix-console.fifo
+Applications/Forge/.forge/<profile>/bin/editor --console-pipe=/tmp/phoenix-console.fifo
 
 # Send commands from another process
 echo "aurora.screenshot" > /tmp/phoenix-console.fifo
@@ -285,7 +288,7 @@ The pipe accepts one command per line. Commands are queued and executed on the m
 Screenshots require a display server (X11 or Wayland). On headless CI, use `xvfb-run`:
 
 ```bash
-xvfb-run build-<profile>/bin/editor --aurora.screenshot.exit
+xvfb-run Applications/Forge/.forge/<profile>/bin/editor --aurora.screenshot.exit
 ```
 
 ## Subagent Definitions
@@ -321,7 +324,6 @@ The following agents are available for specialized tasks. Each is defined in `ag
 
 The `references/` directory holds the guides an agent consults while working:
 
-- `style-guide.md` — coding rules an agent needs at the keyboard, supplementing `Docs/StyleGuide.md`
 - `modern-cpp.md` — C++20/23/26 features, idioms, and migration patterns
 - `modern-python.md` — Python 3.12+ features, pathlib, type hints, CLI patterns
 - `modern-vulkan.md` — Dynamic rendering, descriptor buffers, synchronization2, timeline semaphores
@@ -329,8 +331,8 @@ The `references/` directory holds the guides an agent consults while working:
 - `tooling.md` — Formatter/linter configuration and command reference
 - `dispatch-briefs.md` — Dispatch brief format
 
-The repository's `Docs/StyleGuide.md` remains the contributor style guide; the supplement above
-adds to it rather than copying it.
+Phoenix code style is `Docs/StyleGuide.md` in the repository — agent-agnostic, and deliberately
+not copied here.
 
 ## Permissions
 

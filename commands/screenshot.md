@@ -18,7 +18,7 @@ fi
 
 **If the engine is not running** (one-shot capture):
 
-Detect the active Forge profile from existing build directories and launch the editor via its profile-suffixed path (`build-editor-debug/`, `build-editor-release/`):
+Detect the active Forge profile from existing build directories and launch the editor via its profile-suffixed path (`Applications/Forge/.forge/editor-debug/`, `Applications/Forge/.forge/editor-release/`):
 
 ```bash
 for PROFILE in editor-release editor-debug; do

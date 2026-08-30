@@ -62,7 +62,7 @@ Slash commands for common workflows.
 | `/plan` | Brainstorm, design, and decompose a feature into a Crucible Saga with ordered, commit-sized Challenges |
 | `/implement` | Pick up a Crucible Challenge by label and implement it end-to-end with verification |
 | `/build` | Build the project in Release configuration |
-| `/test` | Run the test suite via CTest |
+| `/test` | Run the trial suite through Forge |
 | `/format` | Format staged C++ files and verify |
 | `/lint` | Run clang-tidy on changed files |
 | `/screenshot` | Capture a screenshot from the engine |
@@ -96,8 +96,10 @@ Quick-reference documents for agents to consult.
 | `modern-python.md` | Python 3.12+ features for build tooling |
 | `modern-vulkan.md` | Dynamic rendering, descriptor buffers, sync2 |
 | `cpp-portability.md` | Cross-platform pitfalls and portable solutions |
-| `style-guide.md` | Coding rules an agent needs at the keyboard, supplementing `Docs/StyleGuide.md` |
 | `tooling.md` | Formatter/linter configuration and command reference |
+| `dispatch-briefs.md` | Dispatch brief format |
+
+Code style is **not** here: `Docs/StyleGuide.md` lives in the repository, since it is agent-agnostic.
 
 ## Project Conventions
 

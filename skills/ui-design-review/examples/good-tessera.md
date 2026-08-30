@@ -16,7 +16,8 @@ zero findings when the ui-design-review skill runs against it.
 
 #include "Tessera.h"
 
-import Phoenix;
+import Phoenix.Core;
+import Phoenix.Math;
 
 class MOSAIC_API DragFloat : public Tessera
 {

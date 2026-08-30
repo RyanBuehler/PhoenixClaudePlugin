@@ -14,7 +14,7 @@ sections diverge only where the underlying OS does.
 
 ## Project Style
 
-Before writing or modifying any C++ in this repository, read `${CLAUDE_PLUGIN_ROOT}/references/style-guide.md` and
+Before writing or modifying any C++ in this repository, read `Docs/StyleGuide.md` and
 `${CLAUDE_PLUGIN_ROOT}/references/tooling.md`. They define the enforced conventions for formatting, naming,
 comments, namespaces, return-value handling, `auto` usage, blank lines after closing braces,
 and the formatting/lint toolchain. Code that violates them will fail review.
@@ -219,20 +219,29 @@ void LogSystemError(const char* operation)
 }
 ```
 
-## Linux Build (CMake)
+## Linux Build
 
-- `-fPIC` for shared libraries
-- `-pthread` for threading
-- Link with `-lrt`, `-ldl`, `-lpthread` as needed
+Platform selection is declarative. A module names the platforms it builds on in its manifest, and
+Forge resolves it into the closure only there — **there are no build-file conditionals to write**,
+because a module that is wrong for the platform simply is not in the closure.
 
-```cmake
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    target_sources(MyLib PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/LinuxLiaison/Implementation.cpp
-    )
-    target_link_libraries(MyLib PRIVATE pthread dl rt)
-endif()
+```json
+{
+	"name": "LinuxLiaison",
+	"library_type": "STATIC",
+	"requires_module": ["LinuxPane", "LinuxAudio", "LinuxInput"],
+	"exclusive_modules": ["WindowsLiaison"],
+	"platforms": ["linux"]
+}
 ```
+
+`exclusive_modules` states what must never co-link, so a Linux and a Windows liaison cannot both
+resolve into one binary. To support another platform, write a sibling module that lists its own
+platform — never a conditional inside a shared one.
+
+Toolchain flags (`-fPIC`, `-pthread`, and the `rt`/`dl`/`pthread` links) belong to Forge's
+`FlagEmitter`, not to a module. If a module genuinely needs a new system library, that is a change
+to the emitter with a reviewer, not a per-module escape hatch.
 
 ## Linux Pitfalls
 
@@ -627,21 +636,23 @@ void DebugLog(const wchar_t* format, ...)
 }
 ```
 
-## Windows Build (CMake)
+## Windows Build
 
-- `/DUNICODE /D_UNICODE` - Unicode support
-- `/EHs-c-` - Disable exceptions
-- Link libraries: `kernel32.lib`, `user32.lib`, `advapi32.lib`, etc.
+Same shape as Linux — the manifest names the platform and Forge does the rest:
 
-```cmake
-if(WIN32)
-    target_sources(MyLib PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/WindowsLiaison/Implementation.cpp
-    )
-    target_link_libraries(MyLib PRIVATE kernel32 user32 advapi32)
-    target_compile_definitions(MyLib PRIVATE UNICODE _UNICODE)
-endif()
+```json
+{
+	"name": "WindowsLiaison",
+	"library_type": "STATIC",
+	"exclusive_modules": ["LinuxLiaison"],
+	"platforms": ["windows"]
+}
 ```
+
+Unicode defines, exception settings, and the `kernel32`/`user32`/`advapi32` links are the
+toolchain's business and live in `FlagEmitter`, applied uniformly. Build configuration reaches
+code as `Build::` constants, never as `-D` macros a module sets for itself. Build the Windows
+lane with the `editor-windows` profile.
 
 ## Windows Pitfalls
 

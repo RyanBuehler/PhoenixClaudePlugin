@@ -269,7 +269,7 @@ import subprocess
 
 # Simple command
 result = subprocess.run(
-	["cmake", "--build", "build", "--config", "Release"],
+	["forge", "build", "editor-release"],
 	capture_output=True,
 	text=True,
 )

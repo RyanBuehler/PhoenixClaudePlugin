@@ -11,7 +11,7 @@ You are a world-class memory debugging expert with deep expertise in detecting, 
 
 ## Project Style
 
-Before writing or modifying any C++ in this repository, read `${CLAUDE_PLUGIN_ROOT}/references/style-guide.md` and
+Before writing or modifying any C++ in this repository, read `Docs/StyleGuide.md` and
 `${CLAUDE_PLUGIN_ROOT}/references/tooling.md`. They define the enforced conventions for formatting, naming,
 comments, namespaces, return-value handling, `auto` usage, blank lines after closing braces,
 and the formatting/lint toolchain. Code that violates them will fail review.
@@ -41,20 +41,32 @@ and the formatting/lint toolchain. Code that violates them will fail review.
 ## Address Sanitizer (ASan)
 
 ### Building with ASan
-```bash
-# CMake configuration
-cmake -S . -B build-asan \
-    -DCMAKE_BUILD_TYPE=Debug \
-    -DCMAKE_CXX_FLAGS="-fsanitize=address -fno-omit-frame-pointer -g" \
-    -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address" \
-    -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address" \
-    -DTESTS=ON
+Sanitizers are a **build type**, selected by a Forge profile — never a hand-assembled flag set.
+`FlagEmitter` owns the flags for `DebugASan`, `DebugTSan`, and `HeadlessTSan`; a profile names one
+and Forge applies it to every module TU and to the link.
 
-cmake --build build-asan --parallel
+Add a profile under `Applications/Forge/Profiles/` (this is `editor-asan.json`):
 
-# Run with ASan
-./build-asan/bin/Engine_EngineTrials
+```json
+{
+	"application": "Editor",
+	"build_type": "DebugASan",
+	"platform": "linux",
+	"build_directory": ".forge/editor-asan",
+	"modules": ["X11Input"],
+	"plugins": [],
+	"tests_enabled": true
+}
 ```
+
+```bash
+forge configure editor-asan
+forge build     editor-asan
+forge test      editor-asan
+```
+
+Objects land in `.forge/editor-asan/`, isolated from the uninstrumented tree, so an instrumented
+run never contaminates the ordinary one.
 
 ### ASan Environment Variables
 ```bash
@@ -132,14 +144,9 @@ void Buggy()
 ## Leak Sanitizer (LSan)
 
 ### Standalone LSan
-```bash
-# LSan is included with ASan by default
-# For standalone use:
-cmake -S . -B build-lsan \
-    -DCMAKE_BUILD_TYPE=Debug \
-    -DCMAKE_CXX_FLAGS="-fsanitize=leak -g" \
-    -DTESTS=ON
-```
+LSan ships inside ASan and needs no separate build — use the `DebugASan` profile above and read
+the leak report at exit. Phoenix has no standalone leak build type, and adding one means adding
+the flags to `FlagEmitter` rather than assembling them at a call site.
 
 ### LSan Options
 ```bash
@@ -181,17 +188,11 @@ SUMMARY: LeakSanitizer: 64 byte(s) leaked in 1 allocation(s).
 Detects reads of uninitialized memory.
 
 ### Building with MSan
-```bash
-# MSan requires all code (including libc++) to be built with MSan
-# This is complex - typically requires custom toolchain
-
-cmake -S . -B build-msan \
-    -DCMAKE_BUILD_TYPE=Debug \
-    -DCMAKE_C_COMPILER=clang \
-    -DCMAKE_CXX_COMPILER=clang++ \
-    -DCMAKE_CXX_FLAGS="-fsanitize=memory -fno-omit-frame-pointer -g" \
-    -DTESTS=ON
-```
+**Phoenix has no MSan build type.** MSan requires every dependency including the standard library
+to be instrumented, which means a custom toolchain, so the cost is real and the decision is not
+yours to make alone. If a use-of-uninitialized hunt genuinely needs it, propose adding an `MSan`
+entry to `FlagEmitter` and a matching profile, and say what the instrumented-libc++ story is.
+Reach for ASan and UBSan first — between them they catch most of what sends people to MSan.
 
 ### MSan Output
 ```
@@ -207,12 +208,10 @@ cmake -S . -B build-msan \
 ## Undefined Behavior Sanitizer (UBSan)
 
 ### Building with UBSan
-```bash
-cmake -S . -B build-ubsan \
-    -DCMAKE_BUILD_TYPE=Debug \
-    -DCMAKE_CXX_FLAGS="-fsanitize=undefined -fno-omit-frame-pointer -g" \
-    -DTESTS=ON
-```
+**Phoenix has no UBSan build type today.** Adding one is a `FlagEmitter` entry
+(`-fsanitize=undefined -fno-omit-frame-pointer`) plus a profile that names it, following the ASan
+shape above — not a flag pushed in from the command line, which the build would not carry to
+every module TU anyway.
 
 ### UBSan Checks
 ```bash
@@ -234,12 +233,11 @@ cmake -S . -B build-ubsan \
 
 ### Basic Usage
 ```bash
-# Build with debug symbols (no special flags needed)
-cmake -S . -B build-debug -DCMAKE_BUILD_TYPE=Debug -DTESTS=ON
-cmake --build build-debug
+# A debug profile already carries symbols; no special build is needed
+forge build editor-debug
 
-# Run under Valgrind
-valgrind ./build-debug/bin/Engine_EngineTrials
+# Run a trial binary under Valgrind, from the profile's own tree
+valgrind Applications/Forge/.forge/editor-debug/bin/Engine_EngineTrials
 
 # More detailed output
 valgrind --leak-check=full --show-leak-kinds=all \
@@ -477,18 +475,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Bootstrap Forge
+        run: python3 Applications/Forge/Scripts/bootstrap.py -j$(nproc)
       - name: Build with ASan
         run: |
-          cmake -S . -B build-asan \
-            -DCMAKE_BUILD_TYPE=Debug \
-            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
-            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
-            -DTESTS=ON
-          cmake --build build-asan --parallel
-      - name: Run tests with ASan
+          forge configure editor-asan
+          forge build     editor-asan
+      - name: Run trials with ASan
         env:
           ASAN_OPTIONS: "halt_on_error=1:detect_leaks=1"
-        run: ctest --test-dir build-asan --output-on-failure
+        run: forge test editor-asan
 ```
 
 ### Valgrind in CI
@@ -500,14 +496,16 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install Valgrind
         run: sudo apt-get install -y valgrind
+      - name: Bootstrap Forge
+        run: python3 Applications/Forge/Scripts/bootstrap.py -j$(nproc)
       - name: Build
         run: |
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DTESTS=ON
-          cmake --build build --parallel
+          forge configure editor-debug
+          forge build     editor-debug
       - name: Run under Valgrind
         run: |
           valgrind --leak-check=full --error-exitcode=1 \
-            ./build/bin/Engine_EngineTrials
+            Applications/Forge/.forge/editor-debug/bin/Engine_EngineTrials
 ```
 
 ## Quick Reference

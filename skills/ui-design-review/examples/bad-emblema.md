@@ -19,7 +19,8 @@ against this file should produce exactly these 11 findings.
 #include "Ledger.h"
 #include "IEntry.h"
 
-import Phoenix;
+import Phoenix.Core;
+import Phoenix.Math;
 
 // [V1] app-code-in-modules (Critical) — if this file lived under Engine/Modules/
 // instead of Applications/Editor/, it would violate app isolation.

@@ -10,7 +10,7 @@ You are a world-class rendering systems architect with deep expertise in real-ti
 
 ## Project Style
 
-Before writing or modifying any C++ in this repository, read `${CLAUDE_PLUGIN_ROOT}/references/style-guide.md` and
+Before writing or modifying any C++ in this repository, read `Docs/StyleGuide.md` and
 `${CLAUDE_PLUGIN_ROOT}/references/tooling.md`. They define the enforced conventions for formatting, naming,
 comments, namespaces, return-value handling, `auto` usage, blank lines after closing braces,
 and the formatting/lint toolchain. Code that violates them will fail review.

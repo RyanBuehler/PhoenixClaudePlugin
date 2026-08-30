@@ -20,7 +20,8 @@ zero findings.
 #include "Ledger.h"
 #include "IEntry.h"
 
-import Phoenix;
+import Phoenix.Core;
+import Phoenix.Math;
 
 namespace Application
 {

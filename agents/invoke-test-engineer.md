@@ -11,7 +11,7 @@ You are a world-class SDET with deep expertise in C++ testing, test architecture
 
 ## Project Style
 
-Before writing or modifying any C++ in this repository, read `${CLAUDE_PLUGIN_ROOT}/references/style-guide.md` and
+Before writing or modifying any C++ in this repository, read `Docs/StyleGuide.md` and
 `${CLAUDE_PLUGIN_ROOT}/references/tooling.md`. They define the enforced conventions for formatting, naming,
 comments, namespaces, return-value handling, `auto` usage, blank lines after closing braces,
 and the formatting/lint toolchain. Code that violates them will fail review.
@@ -43,7 +43,8 @@ Applications/<App>/Trials/     # App-specific tests (*Trials.cpp, auto-discovere
 
 ### Running Tests
 
-**Phoenix runs tests through Forge, not raw cmake/ctest.** Always go through the plugin commands so you pick up the active profile (editor-debug / editor-release) and the environment-suffixed build dir.
+**Phoenix runs its trials through Forge's own in-process runner.** There is no external test
+runner to fall back to. Go through the plugin commands so you pick up the active profile.
 
 ```bash
 # Full build + all checks (build + format + lint + test)
@@ -53,35 +54,40 @@ Applications/<App>/Trials/     # App-specific tests (*Trials.cpp, auto-discovere
 /phoe:test
 ```
 
-Forge drives cmake/ctest under the hood. Do not invoke cmake or ctest directly — a bare `build/` dir will not exist in this project, and any you create will bypass the Forge profile system.
+Forge runs the trials itself — there is no external runner underneath it, and the repository's
+lockdown audit reds any attempt to reintroduce one.
 
-When you need finer-grained control (e.g., during local debugging of a flaky test), ctest flags still apply to the Forge-managed build dir. Substitute `<profile>` for `editor-debug` or `editor-release` and `<bin>` for `build-<profile>/bin`:
+For finer-grained control while debugging a flake, `forge test` takes filters directly.
+Substitute `<profile>` for the active one (`editor-debug`, `editor-release`, …):
 
 ```bash
-# Run tests matching a pattern against the already-built profile
-ctest --test-dir build-<profile> --output-on-failure -R "Engine"
+# Run only the trials whose name matches
+forge test <profile> --name='Arbiter'
 
-# Verbose output
-ctest --test-dir build-<profile> --output-on-failure -V
+# Per-node lines, commands, and engine log output
+forge test <profile> --verbose
 
-# List available tests
-ctest --test-dir build-<profile> -N
+# Read a failure: one tally line per phase, diagnostics at the top
+forge test <profile> --summary
 
-# Run a specific test executable directly
-build-<profile>/bin/Engine_EngineTrials
+# Keep going past a failing binary instead of stopping at the first
+forge test <profile> --keep-going
+
+# Benchmarks are skipped by default; opt in by type
+forge test <profile> --type=benchmark
 ```
 
 ## Creating a New Test File
 
 ### Step 1: Create the Test Source File
 
-Test files are named `<Component>Trials.cpp` and placed in the module's `Trials/` directory. They are discovered automatically via glob — no CMake registration needed.
+Test files are named `<Component>Trials.cpp` and placed in the module's `Trials/` directory. They are discovered automatically via glob — no registration step, and no manifest edit.
 
 ```cpp
 // Engine/Modules/Core/Engine/Trials/MyComponentTrials.cpp
 
 #include "Trials.h"
-import Phoenix;
+import Phoenix.Identity;
 
 using namespace Trials;
 
@@ -134,7 +140,7 @@ For performance benchmarks, use `BENCHMARK_TRIAL` instead of `UNIT_TRIAL`. Bench
 // Engine/Modules/Core/Engine/Trials/MyComponentBenchmarkTrials.cpp
 
 #include "Trials.h"
-import Phoenix;
+import Phoenix.Identity;
 
 BENCHMARK_TRIAL("MyComponent", "ProcessThroughput")
 {
@@ -154,13 +160,13 @@ Benchmarks use a separate `BenchmarkRegistry` — they don't mix with unit tests
 
 ```bash
 # Run benchmarks for a specific executable
-build-<profile>/bin/Engine_MyComponentBenchmarkTrials --type benchmark
+Applications/Forge/.forge/<profile>/bin/Engine_MyComponentBenchmarkTrials --type benchmark
 
 # List all registered trials and benchmarks
-build-<profile>/bin/Engine_MyComponentBenchmarkTrials --list
+Applications/Forge/.forge/<profile>/bin/Engine_MyComponentBenchmarkTrials --list
 
 # Run both unit tests and benchmarks
-build-<profile>/bin/Engine_MyComponentBenchmarkTrials --type unit --type benchmark
+Applications/Forge/.forge/<profile>/bin/Engine_MyComponentBenchmarkTrials --type unit --type benchmark
 ```
 
 Benchmarks are skipped by default (no `--type` flag = unit trials only). CI never runs benchmarks — they're for local performance analysis.
@@ -177,14 +183,17 @@ Test files are globbed automatically — no manual registration needed. To pick 
 /phoe:test
 ```
 
-For iterating on a single test while the rest of the suite stays green, run ctest directly against the already-built Forge profile (substitute `<profile>` for the active one — `editor-debug` or `editor-release`):
+For iterating on a single trial while the rest of the suite stays green, filter the run against
+the already-built profile (substitute `<profile>` for the active one — `editor-debug`,
+`editor-release`, …):
 
 ```bash
-# Run tests for a specific module
-ctest --test-dir build-<profile> --output-on-failure -R "Engine"
+# Run only one module's trials
+forge test <profile> --name='Engine'
 ```
 
-Do not invoke `cmake --build build` — Phoenix does not use a bare `build/` directory; Forge owns the profile-suffixed build dirs.
+Forge owns its build trees under `Applications/Forge/.forge/`; do not hand-build a tree beside
+them, and do not reach for an external runner — the lockdown audit reds it.
 
 ### Assertion API
 
@@ -570,14 +579,14 @@ void TestCollection_Good()
 
 ### Reproduce Locally
 ```bash
-# Run the specific failing test (substitute <profile> for editor-debug or editor-release)
-ctest --test-dir build-<profile> -R "TestName" --output-on-failure
+# Run the specific failing trial (substitute <profile> for the active one)
+forge test <profile> --name='TrialName'
 
-# Run with verbose output
-ctest --test-dir build-<profile> -R "TestName" -V
+# Run with per-node lines and engine log output
+forge test <profile> --name='TrialName' --verbose
 
 # Run test executable directly for more control
-build-<profile>/bin/Module_ModuleTrials --run "TestName"
+Applications/Forge/.forge/<profile>/bin/Module_ModuleTrials --run "TestName"
 ```
 
 ### Add Diagnostic Output

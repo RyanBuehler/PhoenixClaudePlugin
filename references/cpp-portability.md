@@ -262,7 +262,7 @@ void Serialize(const Header& h, std::span<uint8_t> buffer)
 | Platform | `__linux__` | `__linux__` / `__APPLE__` | `_WIN32` |
 | Architecture | `__x86_64__` | `__x86_64__` | `_M_X64` |
 
-**Project rule:** Don't use these in shared code. Platform detection belongs in CMake and liaison modules.
+**Project rule:** Don't use these in shared code. Platform selection belongs in a module manifest's `platforms` field and in the liaison modules.
 
 ## Threading Portability
 

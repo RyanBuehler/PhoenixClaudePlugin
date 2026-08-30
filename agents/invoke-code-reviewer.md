@@ -133,7 +133,7 @@ new_code();
 
 ## Project-Specific Considerations
 
-Before reviewing, read `${CLAUDE_PLUGIN_ROOT}/references/style-guide.md` and `${CLAUDE_PLUGIN_ROOT}/references/tooling.md`
+Before reviewing, read `Docs/StyleGuide.md` and `${CLAUDE_PLUGIN_ROOT}/references/tooling.md`
 (the plugin install path; fall back to `~/phoenixclaudeplugin/references/` if `${CLAUDE_PLUGIN_ROOT}`
 is unset). Flag any change that violates them. Specifically check for:
 - Anonymous, "Detail"-named, or generically-named namespaces (must be purpose-named, no
@@ -145,7 +145,7 @@ is unset). Flag any change that violates them. Specifically check for:
   `std::expected` and `std::optional`
 - Missing blank line after a `}` that closes a scope (function, class, namespace,
   control-flow block, lambda, etc.) before the next non-`}`/`else`/`;` token
-- Comment-discipline violations per `${CLAUDE_PLUGIN_ROOT}/references/style-guide.md` §Comments. Flag aggressively — verbose comments are the dominant drift in this codebase:
+- Comment-discipline violations per `Docs/StyleGuide.md` §Comments. Flag aggressively — verbose comments are the dominant drift in this codebase:
   - Verbose paragraphs / stacked-`//` blocks — prefer one line; two or three only for the genuinely complex. Otherwise compress or delete.
   - What-comments that restate the code (`// increment counter`).
   - Comments that don't tell the reader something the code can't — delete.

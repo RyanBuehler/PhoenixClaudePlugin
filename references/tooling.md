@@ -1,7 +1,7 @@
 # C++ Tooling Reference
 
 Tool locations, formatter/linter configuration, and command reference for the Phoenix Engine.
-For code style and design rules, see `references/style-guide.md`.
+For code style and design rules, see `Docs/StyleGuide.md`.
 
 ## Tool Locations
 
@@ -150,7 +150,7 @@ indent_size = 2
 ### Layer 5: CLion IDE Configuration
 
 **Code Style (`.idea/codeStyles/Project.xml`):**
-- Tab-based indentation across C++, CMake, JSON, Python
+- Tab-based indentation across C++, JSON, Python
 - Wrap limit: 160 (looser than clang-format's 150 for IDE comfort)
 - Aligns multiline arguments, parameters, extends lists
 - Namespace indentation: All
@@ -214,10 +214,11 @@ ensure_tool(exe, package)  # Auto-install via pip if missing
 - Ensure files have proper extensions (.cpp, .h, etc.)
 
 ### "Compilation database not found"
+Forge emits `compile_commands.json` into the profile's tree during configure, and `tidy.py`
+searches the `.forge/` trees for it. If it is missing, configure the profile:
+
 ```bash
-python3 Tools/tidy.py --compdb
-# Or manually:
-cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DTESTS=ON
+forge configure editor-debug
 ```
 
 ### Formatting differs between CLI and IDE
@@ -235,4 +236,4 @@ cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DTESTS=ON
 - **clang-format**: 20.x (installed via `pip install clang-format`)
 - **clang-tidy**: 20.x (installed via `pip install clang-tidy`)
 - **Python**: 3.x with pathlib support
-- **CMake**: Required for compilation database generation
+- **Forge**: Emits the compilation database during `forge configure`

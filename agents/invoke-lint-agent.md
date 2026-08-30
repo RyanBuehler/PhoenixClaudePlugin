@@ -25,9 +25,9 @@ do them in order: lint first, then includes.
 
 1. **Verify the file exists** and is a C++ source file (`.cpp`, `.cc`, `.cxx`, `.c`)
 2. **Ensure a compilation database exists** — reuse the Forge profile's at
-   `build-<profile>/compile_commands.json` (e.g. `build-editor-debug/`), never bare `build/`. A
+   `Applications/Forge/.forge/<profile>/compile_commands.json` (e.g. `Applications/Forge/.forge/editor-debug/`), never bare `build/`. A
    bare `Tools/tidy.py --compdb` configures `build/` with the system default compiler (GCC on
-   Linux) and hard-fails Phoenix's Clang-only CMake gate, leaving a broken `build/` behind.
+   Linux) and hard-fails Phoenix's Clang-only toolchain gate, leaving a broken tree behind.
 3. **Run clang-tidy** on the specified file(s)
 4. **Parse and explain** any warnings or errors found
 5. **Provide fix suggestions** with before/after code examples
@@ -146,7 +146,7 @@ Detect missing or unused `import` declarations and review export surface.
 **Missing imports (CRITICAL):**
 ```cpp
 // foo.cpp uses Phoenix::Hash but only imports Phoenix
-import Phoenix;
+import Phoenix.Core;
 auto h = Phoenix::Hash::Of(x); // Should: import Phoenix.Hash;
 ```
 

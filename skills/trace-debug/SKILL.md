@@ -43,7 +43,7 @@ Complete every step before placing a single trace.
 
 Run the repro steps twice unchanged. The bug must fire both times. If it fires once and passes once, **STOP** — a non-deterministic bug will poison every bisection round because a missing trace cannot be distinguished from "didn't trigger this run."
 
-Stabilize by narrowing the environment: pin random seeds (`std::mt19937`), force a single tick rate, disable subsystems that introduce asynchrony, or isolate the failing test via `ctest --test-dir build-<profile> -R "<name>" --repeat until-pass:10` (substitute `<profile>` for `editor-debug` or `editor-release`) to confirm it fails 10/10 times. If you cannot stabilize it, hand off to `invoke-concurrency-agent`.
+Stabilize by narrowing the environment: pin random seeds (`std::mt19937`), force a single tick rate, disable subsystems that introduce asynchrony, or isolate the failing trial with `forge test <profile> --name='<name>'` (substitute `<profile>` for `editor-debug` or `editor-release`) and re-run it until you have confirmed it fails every time. If you cannot stabilize it, hand off to `invoke-concurrency-agent`.
 
 ### 1.2 State the hypothesis in one sentence
 
@@ -93,7 +93,7 @@ Hard rules — do not deviate:
 
 ### 2.2 Choosing the midpoint — structural, not arithmetic
 
-**Do not divide by line number.** Pick a natural structural boundary roughly midway between `start` and `end` in the control flow: the return from a significant function call, the top of a `for` loop, the `true` branch of an `if`, a call into a different subsystem, an `Arbiter` event publication, a `Subsystem::Get<>()` lookup, the release of a lock.
+**Do not divide by line number.** Pick a natural structural boundary roughly midway between `start` and `end` in the control flow: the return from a significant function call, the top of a `for` loop, the `true` branch of an `if`, a call into a different subsystem, an `Arbiter` event publication, a subsystem lookup, the release of a lock.
 
 Structural boundaries are where bugs hide (data crosses an interface, invariants break, a branch is taken wrong) and they are where your eye naturally rests. If two candidates are equally "midway," pick the one that crosses a module boundary or a state mutation — bugs cluster at those seams. See `references/placement-heuristics.md` for the full priority list when the choice isn't obvious.
 
@@ -105,13 +105,13 @@ Rebuild through Forge (which handles profile selection and env-suffixed tool pat
 /phoe:build
 ```
 
-Never invoke `cmake --build` directly, and never use `-j` or `-j$(nproc)` — that's a hard project rule. For test-case repros (substitute `<profile>` for `editor-debug` or `editor-release`):
+Always build through `/phoe:build`, and never oversubscribe the host with a hand-picked job count — that's a hard project rule. For test-case repros (substitute `<profile>` for `editor-debug` or `editor-release`):
 
 ```bash
-ctest --test-dir build-<profile> -R "<TestName>" --output-on-failure
+forge test <profile> --name='<TrialName>' --summary
 ```
 
-For engine repros: `build-<profile>/bin/editor`. If the repro requires interactive steps, ask the user for them once; after that, rebuild-reproduce autonomously each round.
+For engine repros: `Applications/Forge/.forge/<profile>/bin/editor`. If the repro requires interactive steps, ask the user for them once; after that, rebuild-reproduce autonomously each round.
 
 **Fix compile errors in the instrumentation before re-reading code.** A trace that does not compile teaches you nothing.
 

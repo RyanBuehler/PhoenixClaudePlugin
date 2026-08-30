@@ -25,7 +25,7 @@ drift notes, not blockers.
 Before applying a single check, load the current state of these files (do **not** cache
 across invocations — they change):
 
-1. `references/style-guide.md` — formatting, naming, language features, comments, TODOs,
+1. `Docs/StyleGuide.md` — formatting, naming, language features, comments, TODOs,
    design practices, error handling. **The authoritative rulebook.**
 2. `CLAUDE.md` (plugin root) — Phoenix architecture: modules vs subsystems, subsystem
    interface design, object-handoff rules, subsystem-creation guidance, build/test workflow,
@@ -67,7 +67,7 @@ In-scope extensions: `.h`, `.hpp`, `.cpp`, `.cppm`, `.ixx`.
 - Generated code: `build*/generated/**`, anything under a `build-*` directory.
 - Third-party vendored code: `**/third_party/**`, `**/ThirdParty/**`, `**/external/**`.
 
-Skip any file whose path resolves under `build-*`, `cmake-build-*`, or another CMake output
+Skip any file whose path resolves under `.forge/`, `.bootstrap-out/`, or another build output
 directory — those caches contain generated `.cppm` files that are not source of truth.
 
 ## Workflow
@@ -101,7 +101,7 @@ For each file, walk it once and collect findings. Findings cluster into the foll
 categories. **The specific rules come from the docs** — this is only the category list so
 you know where to look.
 
-- **Style-guide compliance** (`references/style-guide.md`)
+- **Style-guide compliance** (`Docs/StyleGuide.md`)
   - Formatting rules clang-format does not enforce (blank line after `}`, `if`-init
     refactor opportunity).
   - Naming: member/global/static/local prefix patterns, atomic-bool prefix, abbreviations,
@@ -123,7 +123,7 @@ you know where to look.
     (string split/trim, hashing, byte packing, clamp/lerp math, scratch buffers, path
     manipulation) where a `Std`/`Core`/module helper exists or should. Challenge it: cite
     the existing helper, or recommend extracting one so proprietary-structure implementation
-    sites stay domain logic. See style-guide.md §Reuse Before Reimplementation.
+    sites stay domain logic. See `Docs/StyleGuide.md` §Reuse Before Reimplementation.
   - Comments: decorative banners, temporal narration, stale references (file paths, line
     numbers, commit hashes, PR #, Crucible labels), stacked `//` paragraphs, what-comments
     over self-documenting code, public-API header declarations without a purpose comment,
@@ -227,7 +227,7 @@ Surface the status and ask before touching a dirty working tree.
 
 ### Critical (N)
 - `file:line` — **title**
-  <explanation citing the rule and the doc it comes from, e.g. style-guide.md §Comments>
+  <explanation citing the rule and the doc it comes from, e.g. `Docs/StyleGuide.md` §Comments>
   **Fix**: <action taken, prompt asked, or "report-only — manual refactor required">
 
 ### Warning (M)
@@ -287,7 +287,7 @@ For interactive one-off audits, drop the flags and run `/phoe:audit <target>`.
 - **UI / Mosaic / Ledger architecture review** — use `ui-design-review`. Audit covers
   engine-wide conventions; UI has its own rulebook.
 - **Gating commits** — use `/phoe:verify`. Audit findings are drift notes, not blockers.
-- **Inventing rules** — if a rule isn't in `style-guide.md` or `CLAUDE.md`, audit does not
+- **Inventing rules** — if a rule isn't in `Docs/StyleGuide.md` or `CLAUDE.md`, audit does not
   enforce it. Strengthen the docs first.
 - **Running the build or tests** — audit is read-first, edit-light, never validates.
 
@@ -295,12 +295,12 @@ For interactive one-off audits, drop the flags and run `/phoe:audit <target>`.
 
 | Anti-pattern | Why it fails | Do instead |
 |---|---|---|
-| Encoding rules inside this SKILL file | Drift between skill and docs — two SSOTs is zero SSOTs | Rules go in `style-guide.md` / `CLAUDE.md`; audit reads them |
+| Encoding rules inside this SKILL file | Drift between skill and docs — two SSOTs is zero SSOTs | Rules go in `Docs/StyleGuide.md` / `CLAUDE.md`; audit reads them |
 | Reporting findings without citing the source doc | User can't tell if audit is hallucinating a rule | Every finding cites the doc section it came from |
 | Auto-fixing judgment-required findings | User loses control over naming/architecture calls | Ask, one question per turn, tightest framing |
 | Editing files with uncommitted changes without asking | Conflates user's WIP with audit's fixes | Detect dirty tree, ask before touching |
 | Running `/phoe:verify` at the end | Audit becomes a gate, loop takes minutes per iteration | Stop after format; validation is the user's call |
-| Auditing a generated `.cppm` under `build-*/` | The file is an artifact, not source | Skip `build-*`, `cmake-build-*`, `**/generated/**` |
+| Auditing a generated `.cppm` under `.forge/` | The file is an artifact, not source | Skip `.forge/`, `.bootstrap-out/`, `**/generated/**` |
 | Using `/phoe:audit` as a commit gate | Duplicates `/phoe:verify`, slows every commit | Audit is rotational, not change-driven |
 
 ## Related skills and agents

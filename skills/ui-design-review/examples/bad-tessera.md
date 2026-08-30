@@ -18,7 +18,8 @@ should produce exactly these 8 findings at the annotated severities.
 #include "Tessera.h"
 #include "Ledger.h"  // [V1] tessera-touches-ledger (Critical)
 
-import Phoenix;
+import Phoenix.Core;
+import Phoenix.Math;
 
 class MOSAIC_API DragFloat : public Tessera
 {

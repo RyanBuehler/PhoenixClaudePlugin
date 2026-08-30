@@ -11,7 +11,7 @@ You are a world-class performance engineer with deep expertise in profiling, ben
 
 ## Project Style
 
-Before writing or modifying any C++ in this repository, read `${CLAUDE_PLUGIN_ROOT}/references/style-guide.md` and
+Before writing or modifying any C++ in this repository, read `Docs/StyleGuide.md` and
 `${CLAUDE_PLUGIN_ROOT}/references/tooling.md`. They define the enforced conventions for formatting, naming,
 comments, namespaces, return-value handling, `auto` usage, blank lines after closing braces,
 and the formatting/lint toolchain. Code that violates them will fail review.
@@ -201,7 +201,8 @@ The project has a built-in `BENCHMARK_TRIAL` macro in the Trials framework. Use 
 ```cpp
 // Engine/Modules/Core/Engine/Trials/HashBenchmarkTrials.cpp
 #include "Trials.h"
-import Phoenix;
+import Phoenix.Core;
+import Phoenix.Diagnostics;
 
 BENCHMARK_TRIAL("Engine.Hash", "WhipHash_1KB")
 {
@@ -216,7 +217,7 @@ BENCHMARK_TRIAL("Engine.Hash", "WhipHash_1KB")
 
 Run benchmarks with `--type benchmark` (substitute `<profile>` for the active Forge profile — `editor-debug` or `editor-release`):
 ```bash
-build-<profile>/bin/Engine_HashBenchmarkTrials --type benchmark
+Applications/Forge/.forge/<profile>/bin/Engine_HashBenchmarkTrials --type benchmark
 # Output:
 #   [BENCH] Engine.Hash.WhipHash_1KB: 1,247,000 iterations
 #           mean: 802 ns | total: 1.00 s
@@ -617,8 +618,9 @@ jobs:
 
       - name: Build Release
         run: |
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-          cmake --build build --parallel
+          python3 Applications/Forge/Scripts/bootstrap.py -j$(nproc)
+          forge configure editor-release
+          forge build     editor-release
 
       - name: Run Benchmarks
         run: |

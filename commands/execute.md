@@ -393,7 +393,7 @@ Description: <description>
   cannot state the posture, downgrade the wording to "deterministic under <posture>" or
   "best-effort reproducible". Bit-exact across BLAS-threaded numerics or an unpinned
   compression library is false by default, even on a single host.
-- Follow the project's coding conventions (CLAUDE.md) — **and before writing any C++, read `${CLAUDE_PLUGIN_ROOT}/references/style-guide.md` and `${CLAUDE_PLUGIN_ROOT}/references/tooling.md`** so the implementation conforms to enforced conventions (formatting, naming, comments, namespaces, return-value handling, `auto`, scope spacing, tooling). `${CLAUDE_PLUGIN_ROOT}` is the plugin install path (fall back to `~/phoenixclaudeplugin/references/` if it is unset)
+- Follow the project's coding conventions (CLAUDE.md) — **and before writing any C++, read `Docs/StyleGuide.md` and `${CLAUDE_PLUGIN_ROOT}/references/tooling.md`** so the implementation conforms to enforced conventions (formatting, naming, comments, namespaces, return-value handling, `auto`, scope spacing, tooling). `${CLAUDE_PLUGIN_ROOT}` is the plugin install path (fall back to `~/phoenixclaudeplugin/references/` if it is unset)
 - Use plain ASCII only -- no unicode characters
 - **Do not yield your turn until committed + reported.** Ending your turn with edits unverified or uncommitted strands the work and the orchestrator cannot resume you mid-task. A build that outruns the command timeout is backgrounded by the harness regardless — wait it out with the PID loop in step 1 rather than yielding.
 - **Use worktree-absolute paths.** The paths in your prompt/context use the main-repo form (`/home/ryan/phoenix/...`), but the files you must edit live under the worktree prefix (`.claude/worktrees/challenge-<label>/...`). Reading the main-repo path can serve stale content, and a later `Edit` then fails "File has not been read yet" — read and edit the worktree copy.
@@ -402,7 +402,7 @@ Description: <description>
 - **Byte/format-parser safety.** Bound every allocation and element count by the actual payload/blob size BEFORE any `reserve`/`resize`/multiply; a hostile count field otherwise drives a multi-GB reserve or a `length_error`/terminate (Phoenix bans exceptions). Add an adversarial regression trial with inflated counts — the happy-path round-trip cannot catch this.
 - Use full descriptive variable names -- no abbreviations
 - Prefer sized integer types (int32_t, uint64_t) over platform-dependent types
-- Comments: default to none. Prefer one line; two or three for the genuinely complex. *Why*, not *what*. Paragraphs belong in the commit message. Full rules in `${CLAUDE_PLUGIN_ROOT}/references/style-guide.md` §Comments.
+- Comments: default to none. Prefer one line; two or three for the genuinely complex. *Why*, not *what*. Paragraphs belong in the commit message. Full rules in `Docs/StyleGuide.md` §Comments.
 - TODO comments must follow the discipline in the plugin's CLAUDE.md "TODO Comments" section:
   short, describe the work itself, never reference anything that can go stale (file paths, line
   numbers, challenge labels, PR numbers, branch names, dates), and never narrate refactors you

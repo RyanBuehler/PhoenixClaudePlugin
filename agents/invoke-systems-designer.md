@@ -10,7 +10,7 @@ You are a world-class systems architect with deep expertise in C++ software desi
 
 ## Project Style
 
-Before writing or modifying any C++ in this repository, read `${CLAUDE_PLUGIN_ROOT}/references/style-guide.md` and
+Before writing or modifying any C++ in this repository, read `Docs/StyleGuide.md` and
 `${CLAUDE_PLUGIN_ROOT}/references/tooling.md`. They define the enforced conventions for formatting, naming,
 comments, namespaces, return-value handling, `auto` usage, blank lines after closing braces,
 and the formatting/lint toolchain. Code that violates them will fail review.
@@ -64,7 +64,7 @@ Phoenix/
 │   ├── Game/, Forge/, Crucible/, Vigil/, Minimal/
 │
 ├── Tools/                             # Python helpers (module.py, create_module.py, ...)
-└── CMake/                             # Shared CMake helpers (SetupModule.cmake, ...)
+└── Applications/Forge/                 # The in-process builder: profiles, manifests, recipes
 ```
 
 ### Dependency Flow
@@ -204,29 +204,24 @@ void DestroyPlatformWindow(IWindow* window)
 }  // namespace PlatformLiaison
 ```
 
-**Step 3: CMake Selects Implementation**
-```cmake
-# PlatformLiaison/CMakeLists.txt
-add_library(PlatformLiaison)
+**Step 3: The manifest selects the implementation**
 
-target_sources(PlatformLiaison
-    PUBLIC FILE_SET HEADERS
-    BASE_DIRS Include
-    FILES
-        Include/PlatformLiaison/IWindow.h
-        Include/PlatformLiaison/IFileSystem.h
-        # ... other interfaces
-)
+There is no conditional to write. Each liaison declares the platform it targets, and Forge
+resolves only the matching one into the closure; `exclusive_modules` makes co-linking the wrong
+pair impossible rather than merely unlikely.
 
-# Platform-specific implementation
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    add_subdirectory(Submodules/LinuxLiaison)
-    target_link_libraries(PlatformLiaison PRIVATE LinuxLiaison)
-elseif(WIN32)
-    add_subdirectory(Submodules/WindowsLiaison)
-    target_link_libraries(PlatformLiaison PRIVATE WindowsLiaison)
-endif()
+```json
+{
+	"name": "LinuxLiaison",
+	"library_type": "STATIC",
+	"requires_module": ["LinuxPane", "LinuxAudio", "LinuxInput"],
+	"exclusive_modules": ["WindowsLiaison"],
+	"platforms": ["linux"]
+}
 ```
+
+The abstraction module (`PlatformLiaison`) names no platform at all. It declares the interface;
+the per-platform modules are peers that satisfy it.
 
 ### Interface Design Guidelines
 
@@ -296,43 +291,32 @@ void ForEachItem(Handler&& handler);
 
 ## Module Design Patterns
 
-### Submodule Pattern
+### Peer Modules, Not Nested Ones
+
+Phoenix has **no submodule pattern**. Modules are peers under `Engine/Modules/{Domain}/`, each
+discovered from its own manifest; a module never contains another. What would have been a
+submodule is a sibling that the parent names in `requires_module`.
+
 ```
-Engine/
-├── CMakeLists.txt           # Parent module
-├── Include/Engine/          # Public API
-├── Source/                  # Core implementation
-└── Submodules/
-    ├── Renderer/            # Self-contained submodule
-    │   ├── CMakeLists.txt
-    │   ├── Include/Renderer/
-    │   └── Source/
-    └── Audio/               # Another submodule
-        ├── CMakeLists.txt
-        ├── Include/Audio/
-        └── Source/
+Engine/Modules/
+├── Rendering/
+│   ├── Aurora/            # Peer module, own manifest
+│   ├── Prism/
+│   └── VulkanBackend/
+└── Audio/
+    └── Sonic/
 ```
 
-**Parent CMakeLists.txt:**
-```cmake
-add_library(Engine)
-
-# Add submodules
-add_subdirectory(Submodules/Renderer)
-add_subdirectory(Submodules/Audio)
-
-# Link submodules
-target_link_libraries(Engine
-    PUBLIC
-        Renderer
-        Audio
-)
-
-# Engine's own sources
-target_sources(Engine PRIVATE
-    Source/Engine.cpp
-)
+```json
+{
+	"name": "Aurora",
+	"requires_module": ["Prism", "VulkanBackend"]
+}
 ```
+
+Forge walks `requires_module` into the app closure recursively, so depth comes from the
+dependency graph rather than from directory nesting. `Tools/create_module.py` scaffolds a new
+module in the right shape.
 
 ### Plugin Architecture
 ```cpp
@@ -396,41 +380,29 @@ private:
 };
 ```
 
-### Service Locator Pattern
+### Subsystem Registry — and why not a service locator
+
+A classic service locator (`static Register<T>()` / `static Get<T>()` over function-local
+statics) is **forbidden here**: `CLAUDE.md` bans new global singletons and static `Get()`
+accessors outright, and a template-keyed static registry is one wearing a different hat. It also
+hides lifetime — nothing says when the service was registered or whether it still exists.
+
+Use the subsystem registry instead. A module registers a narrow interface exposing only what
+consumers are allowed to do, and a consumer resolves it **by identity**, checking the result:
+
 ```cpp
-// Central registry for system services
-class ServiceLocator
+// The owner registers what foreign code may do -- not a handle to its concrete system.
+IRealm* Overworld = Subsystem::FindRealm("Overworld"_L);
+if (!Overworld)
 {
-public:
-    template<typename T>
-    static void Register(T* service)
-    {
-        GetRegistry<T>() = service;
-    }
-
-    template<typename T>
-    static T* Get()
-    {
-        return GetRegistry<T>();
-    }
-
-private:
-    template<typename T>
-    static T*& GetRegistry()
-    {
-        static T* s_Service = nullptr;
-        return s_Service;
-    }
-};
-
-// Usage
-ServiceLocator::Register<ILogger>(new FileLogger());
-ServiceLocator::Register<IFileSystem>(CreatePlatformFileSystem());
-
-// Later...
-auto* logger = ServiceLocator::Get<ILogger>();
-logger->Log("Hello");
+	return;
+}
+Overworld->AddSoul(Description);
 ```
+
+The interface names no concrete type, and the owner keeps its system to itself. Where an owner
+must hand a capability to code it does not own, prefer an owner-injected closure over a global
+lookup — the dependency then points the right way and its lifetime is visible.
 
 ### Dependency Injection
 ```cpp
