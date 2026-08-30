@@ -8,6 +8,18 @@
 
 ## Agent Conduct
 
+### Keep responses short and plain
+
+Answer the question that was asked, at the length that answer needs. Cut the restatement of the request, the options you are not taking, and the recap of work the user just watched you do.
+
+Write plainly. No jargon where a common word works, no extended metaphors, no pseudo-academic register (*fundamentally*, *it is worth noting that*, *this exemplifies a broader pattern*). Technical precision is not verbosity — name the type, the file, the failure. It is the padding around them that gets cut.
+
+### Bracket the work: one sentence before, the outcome first after
+
+Before the first tool call of a turn, say in one sentence what you are about to do. One sentence, not a plan: the user needs enough to stop you, not a design to read.
+
+When you finish, lead with the raw outcome — what happened, what state the tree or the PR is in, what failed. Caveats, rationale, and next steps come after it. A report that opens with process and buries the result makes the user read to the end to learn whether it worked.
+
 ### Search before claiming the codebase lacks something
 
 Before asserting the codebase does not contain a feature, type, pattern, or convention, search the codebase first using Grep, Glob, or an equivalent search tool. This rule is a hard directive, not a suggestion.
