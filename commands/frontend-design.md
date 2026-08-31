@@ -19,9 +19,9 @@ Create `.claude/frontend-design.html` — a self-contained HTML/CSS/JS page:
 
 **Layout requirements:**
 - Approximate the target UI with positioned HTML elements (panels, buttons, text, dividers)
-- Element IDs must map to actual widget/component names in engine code (e.g., `id="sidebar"`, `id="viewport-panel"`)
+- Element IDs must map to actual tessera names in engine code (e.g., `id="sidebar"`, `id="viewport-panel"`)
 - Match the engine's current window size and aspect ratio as the initial canvas size
-- Include a labels/legend mapping playground element IDs to their engine component names
+- Include a labels/legend mapping playground element IDs to their engine tessera names
 
 **Interactive controls:**
 - Drag to reposition elements (mousedown + mousemove)
@@ -45,7 +45,7 @@ Tell the user to open `.claude/frontend-design.html` in their browser. Explain:
 
 Once the user has saved their design (or shares the JSON):
 - Read `.claude/design-state.json`
-- Map each element ID back to its corresponding widget/component in engine code
+- Map each element ID back to its corresponding tessera in engine code
 - Apply the layout, color, and sizing values to the engine source
 - Translate pixel values to engine units as needed (note any coordinate system differences)
 
@@ -57,4 +57,4 @@ Run `/phoe:build` to rebuild the engine through Forge, then `/phoe:screenshot` t
 
 ## 6. Report
 
-Tell the user what values were applied to which engine components, and whether the screenshot matches the playground design.
+Tell the user what values were applied to which engine tesserae, and whether the screenshot matches the playground design.

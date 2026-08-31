@@ -81,26 +81,26 @@ forge test <profile> --type=benchmark
 
 ### Step 1: Create the Test Source File
 
-Test files are named `<Component>Trials.cpp` and placed in the module's `Trials/` directory. They are discovered automatically via glob — no registration step, and no manifest edit.
+Test files are named `<Type>Trials.cpp` and placed in the module's `Trials/` directory. They are discovered automatically via glob — no registration step, and no manifest edit.
 
 ```cpp
-// Engine/Modules/Core/Engine/Trials/MyComponentTrials.cpp
+// Engine/Modules/Core/Engine/Trials/MyTypeTrials.cpp
 
 #include "Trials.h"
 import Phoenix.Identity;
 
 using namespace Trials;
 
-UNIT_TRIAL("MyComponent", "DefaultConstructionIsValid")
+UNIT_TRIAL("MyType", "DefaultConstructionIsValid")
 {
-	MyComponent Component;
-	REQUIRES(Component.IsValid(), "Default constructed component should be valid");
+	MyType Subject;
+	REQUIRES(Subject.IsValid(), "Default constructed value should be valid");
 }
 
-UNIT_TRIAL("MyComponent", "ProcessReturnsExpectedValue")
+UNIT_TRIAL("MyType", "ProcessReturnsExpectedValue")
 {
-	MyComponent Component;
-	const auto Result = Component.Process(42);
+	MyType Subject;
+	const auto Result = Subject.Process(42);
 
 	if (!Require(Result.has_value(), "Process should succeed"))
 		return;
@@ -111,13 +111,13 @@ UNIT_TRIAL("MyComponent", "ProcessReturnsExpectedValue")
 ### Step 2: Fixture-Based Tests (Optional)
 
 ```cpp
-struct MyComponentFixture
+struct MyTypeFixture
 {
-	MyComponent Component;
+	MyType Subject;
 
 	void SetUp()
 	{
-		Component = CreateTestComponent();
+		Subject = CreateTestSubject();
 	}
 
 	void TearDown()
@@ -126,9 +126,9 @@ struct MyComponentFixture
 	}
 };
 
-UNIT_TRIAL_F(MyComponentFixture, "MyComponent", "FixtureValueIsInitialized")
+UNIT_TRIAL_F(MyTypeFixture, "MyType", "FixtureValueIsInitialized")
 {
-	REQUIRES(Fixture.Component.IsValid(), "Fixture should provide valid component");
+	REQUIRES(Fixture.Subject.IsValid(), "Fixture should provide a valid value");
 }
 ```
 
@@ -137,18 +137,18 @@ UNIT_TRIAL_F(MyComponentFixture, "MyComponent", "FixtureValueIsInitialized")
 For performance benchmarks, use `BENCHMARK_TRIAL` instead of `UNIT_TRIAL`. Benchmarks live alongside unit trials in the same `Trials/` directory and are auto-discovered the same way.
 
 ```cpp
-// Engine/Modules/Core/Engine/Trials/MyComponentBenchmarkTrials.cpp
+// Engine/Modules/Core/Engine/Trials/MyTypeBenchmarkTrials.cpp
 
 #include "Trials.h"
 import Phoenix.Identity;
 
-BENCHMARK_TRIAL("MyComponent", "ProcessThroughput")
+BENCHMARK_TRIAL("MyType", "ProcessThroughput")
 {
-	MyComponent Component;           // setup — runs each pass, not per-iteration
+	MyType Subject;           // setup — runs each pass, not per-iteration
 
 	BENCHMARK_ITERATE                // measured — runs N times (auto-calibrated)
 	{
-		Component.Process(42);
+		Subject.Process(42);
 	}
 }
 ```
@@ -160,13 +160,13 @@ Benchmarks use a separate `BenchmarkRegistry` — they don't mix with unit tests
 
 ```bash
 # Run benchmarks for a specific executable
-Applications/Forge/.forge/<profile>/bin/Engine_MyComponentBenchmarkTrials --type benchmark
+Applications/Forge/.forge/<profile>/bin/Engine_MyTypeBenchmarkTrials --type benchmark
 
 # List all registered trials and benchmarks
-Applications/Forge/.forge/<profile>/bin/Engine_MyComponentBenchmarkTrials --list
+Applications/Forge/.forge/<profile>/bin/Engine_MyTypeBenchmarkTrials --list
 
 # Run both unit tests and benchmarks
-Applications/Forge/.forge/<profile>/bin/Engine_MyComponentBenchmarkTrials --type unit --type benchmark
+Applications/Forge/.forge/<profile>/bin/Engine_MyTypeBenchmarkTrials --type unit --type benchmark
 ```
 
 Benchmarks are skipped by default (no `--type` flag = unit trials only). CI never runs benchmarks — they're for local performance analysis.

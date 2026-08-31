@@ -71,7 +71,7 @@ drawing + serialization.
 **Detection**: file defines a class inheriting from Tessera/Canvas/Panel/Emblema
 AND the file exceeds 500 lines.
 
-**Fix**: split into focused components — separate layout, state management,
+**Fix**: split into focused tesserae — separate layout, state management,
 and rendering concerns.
 
 ---
