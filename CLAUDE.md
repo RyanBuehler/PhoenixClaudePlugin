@@ -18,10 +18,21 @@ The style guide is the deliberate exception. It is agent-agnostic — a contribu
 an agent needs it just as much — so it lives in the repository and the plugin does not keep a
 copy.
 
+A **check catalog** is the plugin-side counterpart, and is not an exception to the rule above. It
+holds no rules of its own: each check is a *smell* — how a violation looks in a diff — plus the
+repository section that owns the rule, the severity, and what an agent may do about it. That is
+agent material, so it lives here. Two exist, and they follow one shape:
+`skills/ui-design-review/CHECKS.md` and `skills/audit/CHECKS.md`. A new review skill gets a
+`CHECKS.md` in the same form rather than inlining its checks into its `SKILL.md`.
+
 | Subject | Authority |
 |---|---|
 | Agent conduct, workflow, verification, pushing | this file |
 | Code style, naming, comments, design practices | `Docs/StyleGuide.md` (in the repository) |
+| Naming a new symbol — the procedure, not the form | `Docs/StyleGuide.md` §Naming a new symbol |
+| The idioms, and the antipatterns each supersedes | `Docs/Patterns.md` (in the repository) |
+| Engine-wide smells, by ID, with severity and tier | `${CLAUDE_PLUGIN_ROOT}/skills/audit/CHECKS.md` |
+| UI/Mosaic smells, by ID, with severity | `${CLAUDE_PLUGIN_ROOT}/skills/ui-design-review/CHECKS.md` |
 | Formatter and linter mechanics | `${CLAUDE_PLUGIN_ROOT}/references/tooling.md` |
 | C++, Python, Vulkan, portability references | `${CLAUDE_PLUGIN_ROOT}/references/` |
 | Architecture, module layout, ownership tiers | the repository's `CLAUDE.md` |

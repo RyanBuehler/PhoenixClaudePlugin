@@ -1,6 +1,6 @@
 ---
 name: audit
-description: Use when auditing a cold Phoenix C++ file, a set of files, or a module for drift from project conventions — style-guide violations, naming inconsistencies, comment hygiene, Phoenix-specific antipatterns, and subsystem-design smells that slip past clang-tidy and per-change review. Auto-activates on phrases like "audit this file", "audit this module", "check for convention drift". Not for per-change review (use `invoke-code-reviewer`), not for UI-architecture review (use `ui-design-review`), not for include/module-import hygiene (use `invoke-lint-agent`).
+description: Use when auditing a cold Phoenix C++ file, a set of files, or a module for drift from project conventions — style-guide violations, naming inconsistencies, comment hygiene, Phoenix-specific antipatterns, and subsystem-design smells that slip past clang-tidy and per-change review. Also handles focused single-theme sweeps via `--checks=<group>` ("audit the naming antipatterns", "sweep for reference members"). Auto-activates on phrases like "audit this file", "audit this module", "check for convention drift". Not for per-change review (use `invoke-code-reviewer`), not for UI-architecture review (use `ui-design-review`), not for include/module-import hygiene (use `invoke-lint-agent`).
 ---
 
 # Audit — Phoenix Consistency Sweeper
@@ -27,13 +27,22 @@ across invocations — they change):
 
 1. `Docs/StyleGuide.md` — formatting, naming, language features, comments, TODOs,
    design practices, error handling. **The authoritative rulebook.**
-2. `CLAUDE.md` (plugin root) — Phoenix architecture: modules vs subsystems, subsystem
+2. `CHECKS.md` (beside this file) — **audit's working catalog.** Every check with a stable
+   greppable ID, a severity, a fix tier, the rulebook section that owns it, a detection
+   heuristic, and a fix direction. It holds no rules of its own; it is the rulebook indexed by
+   *smell*, organized the way findings are produced. Where a check and its **Rule** disagree,
+   the rule wins.
+3. `Docs/Patterns.md` — the idioms, and the antipatterns each supersedes. A suggested fix should
+   name the pattern that replaces the shape.
+4. `Docs/Lexicon.md` — the blessed word per concept and the banned ones (§Anti-terms). Consult
+   before proposing any rename.
+5. `CLAUDE.md` (plugin root) — Phoenix architecture: modules vs subsystems, subsystem
    interface design, object-handoff rules, subsystem-creation guidance, build/test workflow,
    color values, labels, code style supplements.
-3. `references/tooling.md` — formatter/linter configuration, command conventions.
-4. `references/modern-cpp.md` / `references/cpp-portability.md` — C++23 idioms, portability
+6. `references/tooling.md` — formatter/linter configuration, command conventions.
+7. `references/modern-cpp.md` / `references/cpp-portability.md` — C++23 idioms, portability
    hazards. Only consult when the file under audit touches relevant territory.
-5. Any `CLAUDE.md` at the engine repo root, or nested under the directory of the file being
+8. Any `CLAUDE.md` at the engine repo root, or nested under the directory of the file being
    audited. Nested CLAUDE.md files may strengthen or refine rules for their subtree.
 
 These documents are the SSOT. This skill is a driver.
@@ -57,6 +66,27 @@ Flags (combinable with any target form):
 - `--scope=<public|private|both>` — restrict to `Source/Public/**`, `Source/Private/**`, or
   both. Default: both.
 - `--include-tests` — include `*Trials.cpp` and files under `**/Tests/**`. Default: skip.
+- `--checks=<group>` — run **only** the named `CHECKS.md` group. Accepted by letter or by name:
+  `A`/`naming`, `B`/`ownership`, `C`/`errors`, `D`/`language`, `E`/`architecture`, `F`/`comments`,
+  `G`/`headers`. Comma-separate to combine. A single check ID works too
+  (`--checks=reference-member`). This is the focused form — a single-theme sweep whose report is
+  short enough to act on in one sitting.
+
+### Focused vs general
+
+A **focused** run (`--checks=…`) applies only the named group or check and reports only those
+findings. Everything outside the selection is out of scope — do not report it, even if you notice
+it. This is what makes a themed sweep worth sending out: a report of one thing, across many files,
+that a reader can work through in order.
+
+A **general** run (every other form) applies every check in `CHECKS.md`. The catalog living in its
+own file narrows nothing about a general audit; it only means the checks are addressable.
+
+```
+/phoe:audit --checks=naming --rotation=40         # one theme, forty coldest files
+/phoe:audit --checks=reference-member Engine      # one check, engine-wide
+/phoe:audit Engine/Modules/Ledger                 # general: every check
+```
 
 ## File scope — what counts as C++ source
 
@@ -97,67 +127,12 @@ rules are invalid** — always re-read.
 
 ### 3. Apply checks, per file
 
-For each file, walk it once and collect findings. Findings cluster into the following
-categories. **The specific rules come from the docs** — this is only the category list so
-you know where to look.
+Read `CHECKS.md` and apply every check in scope to each file, walking the file once and
+collecting findings. Under `--checks=<group>`, apply only that group.
 
-- **Style-guide compliance** (`Docs/StyleGuide.md`)
-  - Formatting rules clang-format does not enforce (blank line after `}`, `if`-init
-    refactor opportunity).
-  - Naming: member/global/static/local prefix patterns, atomic-bool prefix, abbreviations,
-    `Old*`→`Previous*`, `Maybe*`→`Tentative*`, `Kind*`→`Type*` (and `*Kind`→`*Type`),
-    single-letter non-loop names, overlong acronyms vs spelled-out names.
-  - Language features: forbidden keywords (`try`, `catch`, `throw`, `noexcept`,
-    `dynamic_cast`, `typeid`, `reinterpret_cast`, `[[deprecated]]`), `auto` on
-    error-bearing returns, trailing return types, `const` correctness.
-  - **`Move`/`Forward` vs `std::move`/`std::forward`** — grep should return zero hits on
-    the `std::` forms in shared source.
-  - **`std::filesystem` outside `Engine/Core/{Public,Private}/IO/`** — flag any `<filesystem>`
-    include or `std::filesystem::*` use; route through `IO::File` / `IO::Directory` /
-    `IO::Path`. If the wrapper lacks the needed operation, say so in the report — the fix
-    is to extend `IO::*`, not bypass it. Platform OS-callback path shapes may be downgraded
-    to Nit.
-  - **`static_cast` proliferation** — 3+ in one function/file is a type-design smell, not a
-    per-cast finding. Report it; the fix is reshaping the types, not deleting the casts.
-  - **Ad-hoc boilerplate** — a common algorithm or utility reimplemented at a call site
-    (string split/trim, hashing, byte packing, clamp/lerp math, scratch buffers, path
-    manipulation) where a `Std`/`Core`/module helper exists or should. Challenge it: cite
-    the existing helper, or recommend extracting one so proprietary-structure implementation
-    sites stay domain logic. See `Docs/StyleGuide.md` §Reuse Before Reimplementation.
-  - Comments: decorative banners, temporal narration, stale references (file paths, line
-    numbers, commit hashes, PR #, Crucible labels), stacked `//` paragraphs, what-comments
-    over self-documenting code, public-API header declarations without a purpose comment,
-    `TODO(…):` parenthesized prefixes.
-  - Error handling: silent discards of error-bearing returns (`(void)`, `std::ignore`,
-    `[[maybe_unused]] auto _ =`), default-constructed `T` returned from an
-    `expected<T, E>` function.
-  - Design practices: `new`/`delete`, singletons (private ctor + static Get/Instance),
-    macros without exemption, `#ifdef`/`#if` in shared code, `// NOLINT` /
-    `// clang-format off` without an adjacent justification comment, raw strings as
-    identity keys where `Label` is required.
-  - Namespaces: anonymous, `Detail`-named, empty/generic.
-  - `std::memory_order` without a nearby explaining comment.
-
-- **Phoenix architecture** (`CLAUDE.md`)
-  - Cross-module object handoff (`FooModule&`/`FooModule*`/`shared_ptr<FooModule>` as a
-    parameter outside `FooModule`'s own files).
-  - Subsystem interfaces with `GetX()` lazy accessors, new types declared inside a
-    subsystem header, subsystem methods that don't correspond to a method on the underlying
-    module.
-  - Public accessors returning references to owned internals.
-  - Color literals in 0–255 or hex form not normalized to 0–1.
-  - **Hardcoded `RGBA{…}` literals** that duplicate an existing `Color::` / `Palette::`
-    constant (use the constant), or that color a themable UI element instead of reading the
-    active theme stand-in (`m_ActiveTheme->Accent`, etc.). See `CLAUDE.md` §Color Values.
-  - **Platform coupling** — a platform name (`Wayland`, `X11`, `Windows`, `Win32`, `macOS`,
-    `POSIX`, …) in an identifier, type, branch, or include outside `Engine/Modules/Platform/`.
-    See `CLAUDE.md` §No Platform Coupling.
-  - Preprocessor guards outside platform/Vulkan modules.
-
-- **Header hygiene**
-  - `.h` / `.hpp` without `#pragma once`.
-  - Traditional `#ifndef`/`#define`/`#endif` guards.
-  - Include groups misordered or unsorted within their group (case-insensitive).
+Each check carries its own severity, fix tier, and the rulebook section that owns it — take all
+three from the catalog rather than re-deriving them. Cite the **Rule** in the finding, never the
+check ID alone: a reader has to be able to confirm the rule without trusting the catalog.
 
 Include-graph correctness (missing includes, forward-decl vs include choice, circular
 includes, module-import hygiene) is **out of scope for audit** — delegate to
@@ -165,21 +140,25 @@ includes, module-import hygiene) is **out of scope for audit** — delegate to
 
 ### 4. Classify severity
 
-Use the same three-tier rubric `ui-design-review` uses:
+Each check declares its own severity in `CHECKS.md` — use it. The rubric there is the same
+three-tier one `ui-design-review` uses, so a finding means the same thing whichever skill
+produced it.
 
-- **Critical** — runtime/correctness risk (use-after-free shape, swallowed error,
-  architecture contract violation with code reaching across a module boundary, forbidden
-  keyword that silently changes semantics).
-- **Warning** — tech-debt, convention violation without runtime risk, maintainability smell
-  (most naming/comment/formatting findings, `std::move` vs `Move`).
-- **Nit** — style consistency, documentation polish.
-
-If in doubt between Warning and Nit, choose Warning. Audit's value is catching drift; being
-permissive defeats the purpose.
+Deviate only when the specific site argues for it, and say so in the finding. If in doubt between
+Warning and Nit, choose Warning: audit's value is catching drift, and being permissive defeats the
+purpose.
 
 ### 5. Offer fixes — ask, or apply directly per mode
 
 Audit's contract: **offer to fix, ask when unclear, leave a report of everything else.**
+
+Every check in `CHECKS.md` names its own **fix tier** — `mechanical`, `judgment`, or `report`.
+Use it; do not re-derive it per run. The three buckets below are those tiers.
+
+Three checks carry **Requires approval** on top of their tier — `reference-member`,
+`global-singleton`, and `trailing-preposition`. Under `--fix-safe` these are never touched and
+never auto-asked: they go to the report with the approval requirement stated, so a rotation cannot
+quietly authorize one.
 
 Partition findings into three buckets:
 
@@ -226,9 +205,9 @@ Surface the status and ask before touching a dirty working tree.
 **Summary**: N Critical · M Warning · K Nit · F auto-fixed · Q asked · R report-only
 
 ### Critical (N)
-- `file:line` — **title**
-  <explanation citing the rule and the doc it comes from, e.g. `Docs/StyleGuide.md` §Comments>
-  **Fix**: <action taken, prompt asked, or "report-only — manual refactor required">
+- `file:line` — **title** (`check-id`)
+  <explanation citing the check's Rule, e.g. `Docs/StyleGuide.md` §Comments>
+  **Fix**: <action taken, prompt asked, or "report — manual refactor required">
 
 ### Warning (M)
 - ...
@@ -270,6 +249,7 @@ Audit was designed for automated rotation. The intended pattern is:
 
 ```
 /loop <interval> /phoe:audit --rotation=<N> --fix-safe
+/loop <interval> /phoe:audit --rotation=<N> --checks=naming --fix-safe
 ```
 
 With `--rotation=N`, audit sorts in-scope files by mtime ascending and takes the first N —
@@ -287,15 +267,22 @@ For interactive one-off audits, drop the flags and run `/phoe:audit <target>`.
 - **UI / Mosaic / Ledger architecture review** — use `ui-design-review`. Audit covers
   engine-wide conventions; UI has its own rulebook.
 - **Gating commits** — use `/phoe:verify`. Audit findings are drift notes, not blockers.
-- **Inventing rules** — if a rule isn't in `Docs/StyleGuide.md` or `CLAUDE.md`, audit does not
-  enforce it. Strengthen the docs first.
+- **Inventing rules** — if a rule isn't in `Docs/StyleGuide.md`, `Docs/Patterns.md`, or a
+  `CLAUDE.md`, audit does not enforce it, and `CHECKS.md` may not carry a check for it. A
+  recurring violation with no owning section means strengthening the repository doc first, then
+  adding the check.
 - **Running the build or tests** — audit is read-first, edit-light, never validates.
 
-## Anti-patterns
+## Pitfalls
 
-| Anti-pattern | Why it fails | Do instead |
+How this skill goes wrong.
+
+| Pitfall | Why it fails | Do instead |
 |---|---|---|
-| Encoding rules inside this SKILL file | Drift between skill and docs — two SSOTs is zero SSOTs | Rules go in `Docs/StyleGuide.md` / `CLAUDE.md`; audit reads them |
+| Encoding rules inside this SKILL file or `CHECKS.md` | Drift between skill and docs — two SSOTs is zero SSOTs | Rules go in `Docs/StyleGuide.md` / `Docs/Patterns.md` / `CLAUDE.md`; a check names the section and the smell, never the rule |
+| Auto-applying a **Requires approval** finding under `--fix-safe` | A rotation quietly authorizes a reference member or a singleton nobody signed off on | Report it with the approval requirement stated; never ask, never apply |
+| Reporting a focused run's out-of-group findings | The point of `--checks=<group>` is a report short enough to act on | Stay in the group; note nothing else |
+| Citing a check ID as the authority | The reader cannot confirm a rule they can't find | Cite the check's **Rule** — the doc section that owns it |
 | Reporting findings without citing the source doc | User can't tell if audit is hallucinating a rule | Every finding cites the doc section it came from |
 | Auto-fixing judgment-required findings | User loses control over naming/architecture calls | Ask, one question per turn, tightest framing |
 | Editing files with uncommitted changes without asking | Conflates user's WIP with audit's fixes | Detect dirty tree, ask before touching |
