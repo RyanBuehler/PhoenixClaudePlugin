@@ -8,11 +8,11 @@ Edit the PhoenixClaudePlugin (the "phoe" plugin for Claude Code).
 
 ## Arguments
 
-- **`<path>`** — *(optional)* path to the plugin source repository (default: `~/Agents/PhoenixClaudePlugin`)
+- **`<path>`** — *(optional)* path to the plugin source repository (default: `~/phoenixclaudeplugin`)
 
 ## 1. Locate the Plugin Repo
 
-If a path argument was provided, use it. Otherwise, ask the user. The default location is `~/Agents/PhoenixClaudePlugin`.
+If a path argument was provided, use it. Otherwise, ask the user. The default location is `~/phoenixclaudeplugin`.
 
 Verify the path exists and contains `.claude-plugin/plugin.json` with `"name": "phoe"`.
 
@@ -24,6 +24,10 @@ The user will describe what changes to make (new agents, commands, CLAUDE.md upd
 - **Agents**: Markdown files in `agents/` with YAML frontmatter (`name`, `description`, `tools` fields)
 - **Hooks**: Update `hooks/hooks.json` using `${CLAUDE_PLUGIN_ROOT}` for script paths
 - **References**: Markdown files in `references/`
+- **Scripts**: Python files in `scripts/`, invoked from a command as
+  `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/<name>.py`. Anything a command must do
+  deterministically — classification, destructive actions — belongs here rather than
+  in the command's prose, and gets a `tests/test_<name>.py` alongside it.
 - **CLAUDE.md**: The plugin's project-level instruction file at the repo root
 
 Review existing files for style and formatting conventions before writing new ones.

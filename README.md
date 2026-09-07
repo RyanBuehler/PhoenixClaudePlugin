@@ -69,7 +69,7 @@ Slash commands for common workflows.
 | `/verify` | Full CI-mirror: build + format + lint + test |
 | `/scaffold-module` | Create a new module using `Tools/create_module.py` |
 | `/frontend-design` | Generate interactive HTML playground for iterating on UI layout and styling |
-| `/reset-workspace` | Clean up the workspace — resolve unstaged files, switch to main, pull latest, prune branches |
+| `/gc-worktrees` | Remove worktrees whose branch has provably landed on origin/main — dry-run first, PR-confirmed |
 | `/edit-plugin` | Edit the PhoenixClaudePlugin source — add/modify commands, agents, hooks, skills, or references and bump the version |
 
 ## Skills (1)

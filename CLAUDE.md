@@ -34,6 +34,7 @@ agent material, so it lives here. Two exist, and they follow one shape:
 | Engine-wide smells, by ID, with severity and tier | `${CLAUDE_PLUGIN_ROOT}/skills/audit/CHECKS.md` |
 | UI/Mosaic smells, by ID, with severity | `${CLAUDE_PLUGIN_ROOT}/skills/ui-design-review/CHECKS.md` |
 | Formatter and linter mechanics | `${CLAUDE_PLUGIN_ROOT}/references/tooling.md` |
+| Standalone command scripts | `${CLAUDE_PLUGIN_ROOT}/scripts/` |
 | C++, Python, Vulkan, portability references | `${CLAUDE_PLUGIN_ROOT}/references/` |
 | Architecture, module layout, ownership tiers | the repository's `CLAUDE.md` |
 | Build, test, verify | `Applications/Forge/`, `Docs/Forge_DD.md`, `/phoe:verify` |
@@ -175,7 +176,10 @@ Remove a worktree when done (the branch stays until the user deletes it):
 
     git worktree remove .claude/worktrees/<type>-<label>
 
-`/phoe:reset-workspace` prunes worktrees whose branch is `[gone]`. Blocked branches and their worktrees are preserved for human resumption.
+`/phoe:gc-worktrees` removes worktrees whose branch has provably landed on `origin/main` —
+an ancestor of main, or a merged pull request for that head. A deleted remote branch alone
+is not proof and is kept for review. Locked, dirty, in-use, and mid-build worktrees are
+preserved for human resumption, each with a stated reason.
 
 `claude agents` background sessions and `isolation: worktree` sub-agents also live under `.claude/worktrees/` with Claude-generated names — `branch-worktree-check.py` still enforces branch rules inside each.
 
