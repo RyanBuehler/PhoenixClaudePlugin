@@ -140,8 +140,16 @@ Paste the block below **verbatim** into every reviewer prompt, substituting the 
 > read the same lines of a design document twice and got different text. If you genuinely need to
 > see uncommitted work, say so as a deliberate exception and name the reason in your report.
 >
-> Run `git status --porcelain` once before you report. If the tree carries modifications, say so,
-> and flag any finding that uncommitted work may already have addressed.
+> **Check that the range is still the tip, at both ends of your pass:**
+>
+> ```bash
+> git rev-parse HEAD        # must equal <SHA>
+> git status --porcelain    # must be empty
+> ```
+>
+> Run both at the start and again before you report. `git status` alone misses the common failure:
+> the author **commits** past the range mid-review, leaving a clean tree and a moved HEAD. If either
+> check fails, say so and mark which findings the newer work may already address.
 >
 > Do not pipe a whole diff. A whole-diff dump on a 30 KB+ change overflows the Bash output cap,
 > spills to a temp file, then overflows the Read cap.
@@ -162,8 +170,8 @@ Paste the block below **verbatim** into every reviewer prompt, substituting the 
 > `.bootstrap-out/` and `.claude/worktrees/` — a generated `compile_commands.json` alone can exceed
 > the output cap.
 >
-> **Empty output is not evidence.** Three different mechanisms produce empty output that looks
-> exactly like a genuine negative result:
+> **Empty output is not evidence.** Seven different mechanisms produce an empty result — or a
+> plausible `0` — that looks exactly like a genuine negative:
 >
 > 1. A pathspec that matches nothing makes `git diff`/`git show` **exit 0 and print nothing** —
 >    identical to an unchanged file. `git grep` exits 1 instead, but that does **not** disambiguate
@@ -171,6 +179,14 @@ Paste the block below **verbatim** into every reviewer prompt, substituting the 
 >    diagnostic. A `git grep` miss is never by itself evidence of absence.
 > 2. A shell trap (below) can abort the command before it runs.
 > 3. The background-session command guard can refuse the command outright.
+> 4. **A misspelled revision is swallowed.** `git grep <typo-sha> …` prints nothing and exits 0
+>    with no diagnostic.
+> 5. **A pipe replaces the exit status.** `git grep -n Foo <sha> | cat` reports `cat`'s exit 0,
+>    destroying the signal the check rests on. Run absence checks unpiped.
+> 6. **An `&&` chain drops its second command.** A no-match exits 1, so `git grep A && git grep B`
+>    never runs B, and B's silence reads as absence. Chain with `;`.
+> 7. **`git grep -r`** is not an option at all; piped into `grep -c` it prints a convincing `0`, and
+>    `-c` over several files prints per-file counts rather than one number.
 >
 > So: **before claiming anything is missing, absent, or unreferenced, confirm it with a second
 > command of a different shape**, and state which tree you searched.
@@ -180,15 +196,24 @@ Paste the block below **verbatim** into every reviewer prompt, substituting the 
 > refused: a bare diff limited to one module's code directory, and a bare search with one pathspec.
 > It also fires on text in a downstream filter that the `git` command never receives, which shows it
 > scans the line rather than the git arguments. A refusal prints an error and no results; read the
-> error, and never record a refused command's empty output as a negative. Working shapes when a
-> command is refused:
+> error, and never record a refused command's empty output as a negative.
 >
-> - quote the pathspec as a glob — `git grep -n Foo -- '*/Widget/*'`
-> - reduce to a single pathspec instead of several
-> - truncate the path above the offending segment and filter the results afterwards
+> It refuses two independent things, and its message names neither:
 >
-> Reading a prior revision of one file carries the same path and is refused the same way; prefer
-> `git show <SHA>:<path>` over a piped form.
+> - **A path segment**, which appears in every engine module path here — so it fires on the most
+>   common command shape in a review. Escapes, most reliable first: **truncate the path above the
+>   offending segment** and filter afterwards (`-- 'Engine/Modules/Rendering/Mirage'`); quote the
+>   pathspec as a glob (`-- '*/Mirage/*'`); reduce several pathspecs to one. Quoting alone does not
+>   always clear it, and `git show <SHA>:<path>` is refused *intermittently* — the same call can run
+>   in one batch and be refused in the next, so keep `sed -n` on an absolute path as a fallback.
+> - **A command shape**, regardless of path: `for`/`while` loops, heredocs (including ones whose body
+>   merely contains `git` or a brace), `;`- and `&&`-chains, process substitution in anything naming
+>   git, and `nohup … &`. Use one plain command per call, or run a script from outside the repository
+>   by absolute path.
+>
+> Every refusal blames git, a worktree escape, or a redirect that is not in the command, so it never
+> names the real trigger. A workaround that broadens a pathspec **changes what you searched** — say
+> which shape you ran when a finding rests on it.
 >
 > **Shell traps.** Bash here runs under **zsh**, and each of these has cost a reviewer a round trip:
 >
@@ -215,7 +240,24 @@ Paste the block below **verbatim** into every reviewer prompt, substituting the 
 >
 > **Lint already ran** as part of this branch's verify (`forge lint`, clang-tidy over the changed
 > surface, module-import graph included) and passed. Do not re-adjudicate include/import hygiene or
-> punt to `invoke-lint-agent` unless you see a concrete contradiction in the diff.
+> punt to `invoke-lint-agent` unless you see a concrete contradiction in the diff. Two caveats: a
+> header reached only transitively is reported `uncovered — no TU in compile_commands.json includes
+> it` **while the summary still says "N files clean"**, so header-only code may have had no analysis
+> at all; and the compile database is profile-scoped, so a diff spanning two profiles needs the union
+> of two lint runs.
+>
+> **Ask what a green suite would still allow.** Build and test have caught none of the blocking
+> findings here, so another reading of the diff is not this review's highest-value output. For each
+> invariant the change claims, name **the production mutation that would leave every trial green**,
+> concretely enough for the next agent to arm it. Trials that pass with the code they name deleted
+> have shipped twice. Where a case has no such mutation, say the case is unpinned.
+>
+> **Distinguish what you ran from what you deduced.** Being read-only, you often cannot run the
+> decisive experiment. Say so and label the conclusion deduced; CONFIRMED means you ran it.
+>
+> **The brief itself is a claim.** Its statements about what the code does are often written from
+> memory, and reviewers have disproved several. If your reading disagrees, trust your reading and
+> name the sentence you are contradicting.
 
 ## 4. Implementer dispatch — waiting on a build
 
@@ -224,38 +266,36 @@ here exceeds the ten-minute command timeout, so the harness backgrounds it regar
 instruction writes a contract the environment cannot honor, and it breaks silently: the agent
 believes it is waiting and is not.
 
-Give the implementer a wait mechanism instead:
+**Do not prescribe the `nohup` + PID-file recipe this section used to carry.** The command guard
+refuses all three of its parts — `nohup … > log 2>&1 &`, the `echo $! > …` capture, and the
+`for _ in $(seq 1 16)` poll — so agents handed it stranded turns mid-build with edits uncommitted.
+Never prescribe a shape that has not been run in an isolated agent.
 
-> Your build will outlive the command timeout, so start it in the background with a log inside
-> **this worktree** and wait on the process you started. Write both files under `.forge-build/`,
-> which the repository already ignores — a stray `.pid` in the working tree shows up as an
-> uncommitted change and a reviewer is instructed to flag it.
+Give the implementer a wait mechanism that survives the guard:
+
+> Your build will outlive the command timeout, so run it as a **single plain command with the
+> harness's background mode** (`run_in_background: true`) — not `nohup`, not `&`, not a compound
+> command. The harness notifies you when it exits; that is the only wait primitive both allowed here
+> and honest.
 >
 > ```bash
-> cd <worktree>
-> mkdir -p .forge-build
-> FORGE=Applications/Forge/.bootstrap-out/forge     # bootstrap first if absent
-> nohup "$FORGE" build <profile> > .forge-build/build.log 2>&1 &
-> echo $! > .forge-build/build.pid
+> Applications/Forge/.bootstrap-out/forge build <profile>    # run_in_background: true
 > ```
 >
-> Then poll in **bounded** batches. A single unbounded `while` loop is itself subject to the same
-> command timeout that forced the build into the background, and being killed mid-wait looks like a
-> failure rather than an unfinished build. Cap each call well under the timeout and re-run it until
-> the process is gone:
+> If you must poll instead, four things are true and each has cost an agent a run:
 >
-> ```bash
-> BUILD_PID=$(cat <worktree>/.forge-build/build.pid)
-> for _ in $(seq 1 16); do                                   # ~8 min, then return
->   kill -0 "$BUILD_PID" 2>/dev/null || break
->   sleep 30
-> done
-> kill -0 "$BUILD_PID" 2>/dev/null && echo "STILL BUILDING — run this block again" \
->   || tail -40 <worktree>/.forge-build/build.log
-> ```
->
-> If it prints `STILL BUILDING`, run the same block again. That is a normal cold build, not a
-> failure — do not proceed to edits or verification, and do not end your turn.
+> - **A foreground `sleep` is blocked, and a backgrounded one returns immediately.** An
+>   `until …; do sleep; done` loop launched in the background is reaped and reports success with
+>   empty output — indistinguishable from the condition being met.
+> - **A loop is refused by the guard** wherever it appears inline. If you need one, run it from a
+>   script *outside the repository* by absolute path.
+> - **Watch the log file, not a pipe.** Piping a backgrounded build through `tail` buffers and shows
+>   nothing for minutes. Redirect to a file and read it as `tr '\r' '\n' | tail` — Forge writes its
+>   progress heartbeat with carriage returns, so a plain `tail` shows one stale line forever on a
+>   healthy build, which looks exactly like a wedged one.
+> - **Anchor any `Monitor` pattern.** Verify's phase labels collide (`^(Format|Lint|Test) ` matches
+>   the earlier `Test tools` line; `violations` matches `no violations`), and an unanchored pattern
+>   exits the wait early on its own grep.
 >
 > Do not wait by matching process command lines. Two shapes of that loop are broken:
 >
@@ -267,13 +307,23 @@ Give the implementer a wait mechanism instead:
 >   instantly, which looks exactly like a completed build.
 >
 > A watcher pattern that matches its own command line never exits, for the mirror-image reason.
-> Waiting on a captured PID avoids all three: it cannot match a sibling, and it cannot match itself.
+> A `pkill -f` cleanup has the same two failure modes and a third: Forge's own command line is
+> relative, so an absolute-path pattern matches nothing while exiting 0.
 >
-> A build that is still running is never a finished build. Confirm from the log's final lines that
-> the build reported a result before you act on it.
+> A build that is still running is never a finished build. Confirm from the log's **terminal line**
+> that the build reported a result — a build that outran your poll leaves the previous binary in
+> place, so a trial run then reports the previous code's result.
 
-When the harness offers a native background mode that notifies on completion, prefer it — the PID
-file above is the fallback for a plain shell.
+**Two more things the implementer needs told, each of which has cost a full rebuild:**
+
+- **Do not edit while a bootstrap is running.** It bakes the on-disk tree into the binary it
+  produces, so an edit mid-bootstrap compiles a half-updated tree and can leave no `forge` binary
+  and no useful diagnostic. The same ordering binds the orchestrator: dispatching an implementer
+  whose first action is a build, before the bootstrap finishes, fails with `No such file or
+  directory` and reads as a broken tree. Block until the binary exists.
+- **Re-bootstrap when the change touches anything the bootstrap embeds** — the PhoenixPy cook and
+  `bootstrap.py`'s other shared modules. Otherwise `forge build` succeeds while still emitting
+  generated sources from the *old* emitter, and no clean fixes it.
 
 ## 5. Acting on review feedback
 
@@ -287,6 +337,39 @@ The agent receiving review findings verifies them before acting:
 - **Re-check a finding's factual claims.** One fix pass was built on a prior review's assertion that
   a function had no production consumer; a single search disproved it. The resulting rewording was
   harmless by luck — it could as easily have driven the fix the wrong way.
-- **Fix only the named findings.** If you notice an unrelated problem, report it under an
-  `## Also Noticed` heading rather than fixing it: the reviewers never vetted those changes, so an
-  over-reaching fix pass re-opens the gate instead of closing it.
+- **Fix only the named findings.** Report an unrelated problem under an `## Also Noticed` heading
+  instead of fixing it — reviewers never vetted that surface, so an over-reaching pass re-opens the
+  gate. Read that section **before** the fix report; it has carried a run's most valuable
+  observation.
+- **Keep a fix pass narrow.** One pass handed ten findings touched five files outside the original
+  diff and introduced three new defects there. Split a large finding set into two or three passes,
+  each re-reviewed: round-2 review repeatedly catches CRITICALs that the *fix* introduced.
+- **Prefer deleting or narrowing an overreaching claim over writing a replacement**, especially in
+  prose whose purpose is factual accuracy — two fix rounds each replaced a wrong statement with a
+  new wrong one. A deletion cannot introduce a false claim.
+- **Re-arm the negative control after your last edit.** A control run from before it proves nothing
+  about what ships.
+- **Test a reviewer's predicted consequence before writing it into a commit message.** A correctly
+  identified mechanism does not make the inferred failure real; twice it was not.
+
+## 6. When the review gate cannot run
+
+The paired review is a blocking gate, and it has been silently unmet: four consecutive rounds
+shipped on self-review alone because session instructions forbade the Agent tool. Never treat an
+unavailable dispatch as a pass. When review dispatch is unavailable:
+
+- Say so explicitly in the report and in the PR body: which gate did not run, and why.
+- Substitute the closest thing a single agent can do — mutation testing with armed and reverted
+  negative controls, one defect at a time — and report it as a substitute, not as the gate.
+- Leave the challenge in a state that says the gate is outstanding rather than closing it.
+
+**A partial reviewer output is a failed dispatch, never a clean pass.** Reviewers die mid-analysis
+on API overload (529) and rate limits (429), leaving a plausible fragment that reads like a reviewer
+which simply found little; re-dispatching after two such deaths is what found both BLOCKERs.
+Re-dispatch rather than downgrading the model, and do not start a deciding round near a usage limit.
+
+**Do not judge the convergence trend until every reviewer has returned.** Two of three round-2
+reviews once looked like convergence (8 blocking → 3) before the adversarial pass landed 2 CRITICAL
+and 6 WARNING. Judge on CRITICAL count plus total blocking count, and count findings against surface
+a previous round *demanded* as expected, not as thrashing — otherwise every round that adds code
+looks like a regression.

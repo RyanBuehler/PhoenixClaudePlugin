@@ -113,6 +113,20 @@ drifted twelve commits; a third turned a line-range read into a false finding wh
 disagreed with a symbol search of the same file. Symbol names do not go stale. Where a position
 genuinely matters, name what is *at* that position in terms a search can find.
 
+**Resolve every symbol and document path your plan names, before writing the plan against them.**
+A name that resolves to nothing is not a stale citation — it is a plan built on something that does
+not exist. One saga's description and all three of its design forks rested on a symbol found nowhere
+in the tree, and it surfaced three challenges into execution; another challenge cited a design
+document that was not in the repository at all. Two rules follow:
+
+- Before writing a challenge, `git grep` every symbol and `git ls-files` every document path it will
+  name. Anything that does not resolve is a bug in the plan, not a detail for the implementer.
+- **Check the starting premise against the tree, not against the design document.** Three of five
+  challenges in one saga carried a factually wrong premise, all caught cheaply by scouting against
+  `main` first. A design doc written before the type exists is a hypothesis, not authority — one
+  landed a commit before its saga and was wrong in six verifiable ways — so every implementing
+  challenge re-checks it, not just the first.
+
 **Co-specified header/compile pairs.** When a challenge both drops a declaration from a header
 (e.g. "remove the forward declaration of X", "stop exporting Y") *and* requires downstream
 consumers to compile unchanged, name the transitive-include implication in the spec. Consumers

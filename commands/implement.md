@@ -314,6 +314,22 @@ Before committing, systematically evaluate each acceptance criterion from the ch
    - **Unverifiable?** If the criterion cannot be verified mechanically (e.g., "feels responsive"), flag it for human review.
 3. If any criterion is clearly **unmet**, fix the implementation and re-run `/phoe:verify` before continuing.
 4. List any criteria flagged as **unverifiable** — these will be included in the report for the user.
+4a. **Ask a fourth question of each criterion: is this still the right thing to ask for, given what
+   the code actually looks like?** A challenge written before the code was read is a hypothesis, not
+   a contract — one passed every gate, reached `review`, and was then re-cut from scratch on the
+   owner's first question. The steps above turn skepticism on the implementation and none on the
+   criterion. Three shapes recur, each a signal to stop rather than design around:
+   - **Unimplementable as worded** — it names state a placeholder type cannot carry. Encoding the
+     absence is always the larger diff, and it is thrown away when the placeholder is filled in.
+   - **Names a consumer that does not exist yet** — a later challenge in the same saga. Say so
+     rather than quietly claiming the criterion met against a stand-in.
+   - **Satisfiable by something obviously wrong** — a criterion an implementation can meet while
+     freezing, hiding, or disabling the thing it is about.
+
+   When the answer is no, report it to the user as a re-cut candidate with the specific wording at
+   fault. Do not silently pick the stronger of two readings of an ambiguous design doc: a genuine
+   ambiguity is a question for the owner, especially when one branch justifies materially more code
+   than the other.
 
 5. **Test coverage check** — if the implementation introduced testable logic (per the criteria in Step 8), verify that corresponding tests exist and pass. If tests were expected but missing, go back and add them before continuing.
 
@@ -417,10 +433,24 @@ challenge worktree and the prompt:
 > - **Hidden coupling** — state shared across modules, ownership confusion, assumptions about call order or initialization sequence.
 > - **Performance pathologies under realistic load** — allocation in hot paths, O(n²) under expected n, lock contention, cache-hostile access patterns.
 > - **Spec gaps** — acceptance criteria that pass for the easy case but fail in plausible variations the spec did not enumerate. If the spec itself is the weak link, say so.
+> - **Trials that cannot fail.** For each invariant the change claims, name the production mutation
+>   that would leave every trial green — the highest-yield question in these reviews, and the source
+>   of six of eight CRITICALs in one saga. Where a case has no such mutation, call it unpinned; where
+>   two cases die to the same mutation, one is redundant. Ask too whether the fixtures share the
+>   shape of what the code actually runs on: six trials once agreed with each other while every
+>   shipped row would have been wrong.
 >
 > Report only findings that represent real failure modes, not stylistic concerns. Use CRITICAL/WARNING/SUGGESTION/NOTE severity. If you find nothing actionable, say so explicitly — a clean adversarial pass is a valid result.
 >
 > End your report with a `## Workflow Friction` section listing anything that made this review harder than it should have been — missing context, ambiguous spec, undocumented convention, tooling gaps — or the single word `none` if nothing applied.
+
+**If review dispatch is unavailable, the gate is unmet — not passed.** Session instructions
+sometimes forbid the Agent tool, and four consecutive rounds once shipped on self-review alone with
+nothing recording that the blocking gate had not run. When you cannot dispatch: say so in the report
+and the PR body, name the gate, substitute mutation testing with armed and reverted negative
+controls as a stated stand-in, and do not move the challenge to `review`. A dispatch that dies
+mid-analysis (529 overload, 429 rate limit) leaves a plausible fragment that reads like a reviewer
+which found little — that is a failed dispatch, so re-dispatch it.
 
 **Gate on zero CRITICAL and zero WARNING adversarial findings.** Treat them the same as Step 11: fix every CRITICAL and WARNING, commit the fix and re-freeze (`REVIEW_SHA=$(git rev-parse HEAD)`), re-run `/phoe:verify`, re-run acceptance criteria evaluation, then re-run **both** the standard and adversarial reviews against the new SHA until both pass. As in Step 11, a WARNING you judge a false positive or out of scope must be surfaced to the user for an explicit waive — never silently dropped — and any waived WARNING recorded in the final report.
 
@@ -541,6 +571,18 @@ EOF
 PR_NUM="${PR_URL##*/}"
 echo "Opened PR #${PR_NUM}: ${PR_URL}"
 ```
+
+**Trust the output, not the exit code, on both halves of this step.**
+
+- `gh pr create` has returned `HTTP 503` for minutes at a time, including at its own "checking for
+  existing pull request" stage — the dangerous one, since a retry after a partly-succeeded create
+  duplicates the PR. Grep the output for a PR URL rather than trusting the exit status, and check
+  `gh pr list --head <branch>` before a second attempt.
+- `git log origin/<branch>` reads a possibly stale tracking ref and has reported a successful push as
+  failed, inviting a pointless force-push. `git ls-remote origin <branch>` is authoritative.
+- **Never merge a stacked PR into its base branch.** Once the base merges, merging the follower into
+  the dead base reports `MERGED` and lands nothing on main — two PRs' fixes sat stranded and looked
+  shipped. Rebase followers onto main instead.
 
 After a successful `gh pr create`, record the review link on the challenge so future
 sessions and `crucible challenge show` surface the PR URL without grepping comments.

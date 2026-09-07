@@ -6,17 +6,20 @@ Run the full CI-mirror verification sequence. Stop on the first failure.
 
 Run this **before committing**. A commit made without passing verification is incomplete work.
 
-`forge verify <profile>` *is* the CI mirror: it runs configure → build → format-check → lint →
-**policy audits** → test in one in-process pass, exactly as CI does. The audits are five, run in a
-fixed order — forbidden-token, **toolchain**, trial-friend, IO-seam, heap-seam — and any one of them
-short-circuits the run before `test`. That single command is the gate; the sub-skills
+`forge verify <profile>` *is* the CI mirror. The phases run **audits → tool-tests → configure →
+build → format-check → lint → test**, and the audits lead deliberately: none of them reads build
+output, so a drifted environment aborts in seconds instead of after a build and a clang-tidy pass.
+Any non-zero phase short-circuits the rest. That single command is the gate; the sub-skills
 (`/phoe:build`, `/phoe:format`, `/phoe:lint`, `/phoe:test`) exist for debugging one phase in
 isolation, not for re-assembling the sequence by hand.
 
-Two things it is **not**, both of which have convinced agents they verified work they had not:
+**Read the phase lines, not the exit code, and never `$?` alone.** Each phase prints its own tally,
+and an abort prints `verify stopped at <phase>, so these phases did not run: …`. That line is the
+authoritative statement of what was and was not checked. A run whose output carries no `test` tally
+has tested nothing, however it exited.
 
-- **It verifies one profile, not the project.** See §2a.
-- **On this host it does not reach its test phase.** See §2b.
+**It verifies one profile, not the project** — the failure mode that has most often convinced an
+agent it verified work it had not. See §2a.
 
 ## 1. Locate the Builder
 
@@ -54,6 +57,13 @@ remains the only way to use the opt-in `--staged` scope.
 **An empty selection is not a pass.** If the gate reports zero files while you changed C++, that is
 a failed run, not a clean one — find out why before believing it.
 
+**Three shapes that read as a broken change and are not.** `forge build` failing in 0.2s with "the
+source set changed since `forge configure` ran" means you added or deleted a file: Forge globs at
+configure time, so `configure` first. A `FAILED` build line beside a passing test tally in the same
+run means the trials ran against stale binaries — read the build line first, and never push on the
+test line alone. And `forge format` takes no `--files` flag; the bare command is the whole
+interface.
+
 **Run `forge format` before you build, never after.** This is about the *manual* rewrite command, not
 verify's internal `format-check` phase, which only inspects and cannot invalidate anything. A
 `forge format` run after a build leaves sources newer than their trial binaries, which trips the test
@@ -66,27 +76,40 @@ Forge's own trials**: a change under `Applications/Forge/` can be green here and
 has happened twice, and a human caught it, not this workflow.
 
 - A change touching the builder needs `"$FORGE" verify forge` explicitly, in addition to `editor`.
+- **Adding a module manifest, or an application `requires_module` entry, invalidates Forge's
+  module-metadata fixtures** (`Applications/Forge/Trials/CodeGen/Fixtures/expected_modulemetadata_forge_*.cpp`).
+  Only `verify forge` builds those trials, so the editor profile reports green while CI reds. There
+  is no regeneration script: diff the generated `ModuleMetadata.generated.cpp` against the fixture
+  and splice in only the lines your change caused — the two renders differ in more than your change,
+  so a wholesale copy is wrong. Build-free pre-check: grep both fixtures for the new module name.
 - **A change that edits a build profile must verify that profile.** Do not report a set of profiles
   as verified unless each one was actually run — a dispatch brief once listed six verified profiles
   while the commit under review edited six *others*, none of which any listed run touched.
 - When reporting verification to a user, a reviewer, or a PR body, name the profiles you ran. "Verify
   passed" without a profile is not a claim anyone can check.
+- **`editor-debug` compiles no trials** (`tests_enabled: false`), as does `editor-release`, so a
+  green debug build says nothing about trial code — one run reached a `REQUIRES` compile error only
+  under `verify editor`. When a challenge says "the editor profile in debug", it still means
+  `editor` for anything a trial must prove.
 
-### 2b. Host reality — verify aborts before its test phase
+### 2b. Flags, and the failures that are not yours
 
-On this machine `forge verify` **does not complete**: it aborts at the **toolchain audit** — the
-second of the five policy audits, and a different phase from the forbidden-token audit — on a Vulkan
-pin drift, after having paid for the full lint, and yields no test result. The failure reads
-`error: vulkan: version <installed> but the pin is <pinned>`. This is a known ordering
-defect in Forge, tracked separately; until it lands, treat verify as a two-command sequence and do
-not read an abort at the audit as a failure of the change:
+`forge verify` takes the profile and `--build-dir`, plus the verbosity family (`--quiet`,
+`--summary`). **It rejects everything else, including `--jobs`** — the flag that would cap
+parallelism is exactly the one verify does not have. The rejection is instant (`error: unknown
+flag: --jobs`), so with output redirected it reads as an empty log rather than a failure. Serialize
+with other agents instead; there is no in-command throttle.
 
-```bash
-"$FORGE" verify editor     # expect: aborts at the toolchain audit, after lint
-"$FORGE" test editor       # the test result verify never produced
-```
+Two aborts that are the environment, not the change:
 
-A run that stopped at the audit has **not** tested anything. Do not report it as a passing verify.
+- **The toolchain audit** fails when the host's clang suite falls outside the window in
+  `Tools/toolchain.lock.json`. It is a real gate — a `.pcm` is readable only by the clang that wrote
+  it — but a drifted host is not a defect in your diff. The Vulkan entry is now a floor rather than
+  an exact pin and this host satisfies it, so a brief claiming verify cannot complete here is stale.
+- **A lint phase that fails naming one file with `timeout after 300s`** is usually load, not debt.
+  Under concurrent agents the victim rotates run to run. Exonerate it by linting the same path alone
+  — but not at the base revision if your branch changed the headers that TU includes, since the base
+  file may not compile at all and tells you nothing.
 
 **On failure**, re-run only the phase that broke to iterate faster (each maps to a sub-skill):
 

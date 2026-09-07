@@ -91,7 +91,18 @@ Use saga-aware priority logic to select N eligible challenges. The candidate poo
 7. Among the candidates that pass both explicit and implicit blocker checks, pick by: priority (critical > high > medium > low), then lowest ID.
 8. Repeat until N challenges are selected. Skip challenges that would be blocked by other challenges in the candidate list.
 
-Report skipped candidates (both the implicit-blocker reason and priority/wave-already-full reasons) in the final execute summary so the user can see the selection trail.
+9. **Screen out owner-gated candidates before any setup.** A challenge whose `description` or
+   `strategy` opens with a gate — "DESIGN FORK FOR RYAN", "Do not implement as written", "Ryan picks
+   before implementation" — is not autonomously executable. Scan the first sentence of each for
+   those markers and short-circuit to the report; otherwise a run bootstraps, fetches and selects
+   before discovering every candidate is un-runnable.
+10. **Audit each selected challenge against `main` before implementing it.** Challenges do get
+   delivered by unrelated PRs — one had five of six criteria already met. Where the work is done, say
+   so and move the challenge rather than producing an empty diff.
+
+Report skipped candidates (owner-gated, already-delivered, implicit-blocker, and
+priority/wave-already-full reasons alike) in the final execute summary so the user can see the
+selection trail.
 
 **If argument is a saga label:**
 
@@ -237,6 +248,19 @@ For each challenge in the wave:
    ```bash
    python3 .claude/worktrees/challenge-<label>/Applications/Forge/Scripts/bootstrap.py
    ```
+   **Wait for the binary to exist before dispatching the implementer.** 4b has the implementer build
+   first; against a bootstrap still in flight that build dies with `No such file or directory`, which
+   reads like a broken tree. Budget ~9 minutes for the bootstrap and ~25 for the cold build, and tell
+   the implementer not to edit during the bootstrap — it bakes the on-disk tree into the binary.
+
+**Two worktree-navigation traps, both of which silently point work at the wrong branch:**
+
+- `EnterWorktree(path=…)` resolves a **relative** path against the current directory, so every entry
+  after the first is made from inside the previous worktree and `.claude/worktrees/<name>` targets a
+  *nested* one. Pass an absolute path — the opposite of `git worktree add`, whose hook demands a
+  relative one.
+- **Nothing stops you editing the previous challenge's worktree.** Exiting the worktree is part of
+  finishing a challenge, not an afterthought (see 4h).
 
 For challenges using the **combined branch** strategy (per the rule above), do NOT create a
 new worktree — reuse the existing combined worktree. Skip the `git worktree add` step and
@@ -277,6 +301,22 @@ that entered only the first worktree left later implementers blocked. Two ways t
 Default to **serial-native** for small waves (≤3) where native tooling matters, and **parallel-Bash**
 for larger waves where concurrency is the point. Do not claim native tools for a parallel wave — they
 will silently fail for every worktree but one.
+
+**Losing `git` is the half that bites.** A subagent in a worktree the parent has not entered has
+*every* `git` form refused, not just the file tools — so an implementer can finish and verify a
+change and then be unable to commit it. Either commit on each agent's behalf from the entered
+worktree, or dispatch with `isolation: "worktree"`, which lifts both guards (stack such work by
+pushing the base branch and having the next agent `git fetch` + `git reset --hard` onto it). Never
+let a dispatched agent call `EnterWorktree` itself — under an isolated parent it reports success and
+then bricks Bash. The parent's own access proves nothing about the subagent's: the orchestrator can
+`Write` into the entered worktree while its subagents there are refused.
+
+**Serialize the builds even when you parallelize the edits.** Eight concurrent Forge builds on a
+16-core box drove load to 98–116 and stretched bootstraps to 12–26 minutes and builds to 50–75, with
+no `--jobs` on `forge verify` to cap anything. The same incremental build measured 2m13s and 20m45s
+in one session, so wall-clock estimates under contention are fiction and a rotating `timeout after
+300s` in lint is a load artifact, not a finding. Fan out the edits; hand out build turns one at a
+time.
 
 **Never pass `isolation: "worktree"` to implementer subagents.** The branch and worktree already
 exist (4a); `isolation: "worktree"` spawns a *fresh, auto-named* worktree off `main`, so the
@@ -329,29 +369,20 @@ Description: <description>
 
 1. **Populate the worktree's build tree, and wait for it.** Your `cwd` is a fresh git worktree with an empty `Applications/Forge/.forge-out/` tree. Build once as your first action — Forge configures and builds via the active profile. Do this before exploring: you'll want the built module artifacts present so `grep`/`Read`-based exploration works correctly on modules that use C++23 modules, and so your later `/phoe:verify` run is an incremental build, not a cold one.
 
-   A cold build here **exceeds the ten-minute command timeout**, so the harness backgrounds it whether or not you asked. Do not try to hold it in the foreground — that contract cannot be honored and it fails silently, leaving you believing you are waiting when you are not. Start it with a log inside this worktree, record its PID, and wait on that PID. `.forge-build/` is gitignored, so neither file dirties the tree:
+   A cold build here **exceeds the ten-minute command timeout**, so the harness backgrounds it whether or not you asked. Do not try to hold it in the foreground — that contract cannot be honored and it fails silently, leaving you believing you are waiting when you are not.
 
-   ```bash
-   mkdir -p .forge-build
-   nohup <build command> > .forge-build/build.log 2>&1 &
-   echo $! > .forge-build/build.pid
-   ```
+   Run the build as a **single plain command with `run_in_background: true`** and let the harness
+   notify you when it exits. Do not reach for `nohup … &`, a PID file, or an inline poll loop: the
+   command guard refuses all three, and a refusal prints no results, so it reads like a command that
+   ran and found nothing.
 
-   Poll in **bounded** batches — an unbounded `while` loop hits the same timeout that backgrounded the build, and being killed mid-wait reads as a failure rather than an unfinished build:
+   If you must watch progress, read the log **file**, not a pipe (a backgrounded build piped through
+   `tail` buffers and shows nothing for minutes), and read it as `tr '\r' '\n' | tail` — Forge
+   writes its heartbeat with carriage returns, so a plain `tail` shows one stale line forever on a
+   healthy build. A hand-rolled poll cannot help either: a foreground `sleep` is blocked and a
+   backgrounded one returns immediately.
 
-   ```bash
-   BUILD_PID=$(cat .forge-build/build.pid)
-   for _ in $(seq 1 16); do                                  # ~8 min, then return
-     kill -0 "$BUILD_PID" 2>/dev/null || break
-     sleep 30
-   done
-   kill -0 "$BUILD_PID" 2>/dev/null && echo "STILL BUILDING — run this block again" \
-     || tail -40 .forge-build/build.log
-   ```
-
-   `STILL BUILDING` means run the same block again; it is a normal cold build, not a failure.
-
-   **Do not wait by matching process command lines.** An unscoped match on the compiler or builder name returns hits from every sibling agent building concurrently — 106 in one run — so the wait never finishes. A pattern that scopes by placing this worktree's path next to the compiler name matches *nothing*, because the compiler binary appears on the command line before the include flag carrying that path; the wait then returns instantly, which looks exactly like a completed build. And a watcher pattern that matches its own command line never exits. A captured PID has none of these failure modes. Confirm from the log's final lines that the build reported a result before you act on it.
+   **Do not wait by matching process command lines.** An unscoped match on the compiler or builder name returns hits from every sibling agent building concurrently — 106 in one run — so the wait never finishes. A pattern that scopes by placing this worktree's path next to the compiler name matches *nothing*, because the compiler binary appears on the command line before the include flag carrying that path; the wait then returns instantly, which looks exactly like a completed build. And a watcher pattern that matches its own command line never exits. Confirm from the log's **terminal line** that the build reported a result before you act on it: a build that outran your wait leaves the previous binary in place, and a trial run then reports the previous code's result.
 
    Full detail, including why each naive form fails, is in `${CLAUDE_PLUGIN_ROOT}/references/dispatch-briefs.md` §4. Still do not end your turn with edits unverified or uncommitted — keep re-running the poll block, then continue.
 2. Read the affected files and explore related Phoenix code to understand the context. **Ground your approach in Phoenix's own patterns** — if the challenge touches UI, read Mosaic/Tessera/Emblema code; if it touches input, read Impulse; if it touches the renderer, read Aurora/Prism/Vulkan code. Do NOT generalize from external frameworks (ImGui, Qt, React, etc.) or from memory of how similar problems are solved elsewhere — that frequently ships wrong assumptions into the diff. When in doubt, grep for analogous existing features and mirror their shape.
@@ -682,7 +713,31 @@ Process challenges in **ID order** within the wave, and for each one:
   Suggestions must never be silently dropped. The triage subagent commits any changes (implementations and TODOs) to the challenge branch in its worktree. Wait for it to finish. After it returns, re-run `/phoe:verify`. Do NOT re-dispatch the reviewers. Log the triage outcome (implemented / deferred counts, broken out by source) in the final report.
 - **Quality NOTE or adversarial NOTE:** Proceed. Log notes in the final report.
 
-A challenge cannot reach 4h (Publish) until all three reviewers have returned and zero CRITICAL and zero WARNING findings remain across spec, quality, and adversarial. The adversarial gate is non-skippable — autonomous PR submission without it is forbidden.
+**Do not judge the trend until every reviewer has returned.** Two of three round-2 reviews once
+looked like textbook convergence (8 blocking → 3) before the adversarial pass landed 2 CRITICAL and
+6 WARNING. Judge on CRITICAL count plus total blocking count, and count findings raised *against
+surface a previous round demanded* as expected, not as thrashing — read literally, "the fix
+introduced a new finding" blocks every round that adds code.
+
+**Split a large finding set.** One pass handed ten findings touched five files outside the original
+diff and introduced three new defects there. Two or three narrow passes, each re-reviewed, converge
+where one broad pass does not.
+
+**Watch whose reasoning is failing.** In one saga the orchestrator's own fix *directions* caused
+three of five rounds' regressions — each agent did what it was told and the instruction was wrong.
+When three consecutive rounds each close a finding and open a new one, the shape is the problem:
+stop adding guards and ask what object the obligations want to be. Two corollaries: verify a design
+justification before briefing it ("the API doesn't allow X" — grep the API first), and adjudicate
+contradicting reviewers from the source rather than by counting votes, which has been wrong both
+times it was tested.
+
+**Prefer subtractive edits when the artifact is prose** — a deletion cannot introduce a false claim,
+and two fix rounds each replaced a wrong statement with a new wrong one.
+
+**Read each agent's `## Also Noticed` before its fix report**; it has carried a run's most valuable
+observation.
+
+A challenge cannot reach 4h (Publish) until all three reviewers have returned and zero CRITICAL and zero WARNING findings remain across spec, quality, and adversarial. The adversarial gate is non-skippable — autonomous PR submission without it is forbidden. If review dispatch is *unavailable* (session instructions forbidding the Agent tool, repeated 429/529 deaths), the gate is unmet, not passed: say so explicitly in the report and the PR body, substitute mutation testing with armed negative controls as a stated stand-in, and leave the challenge short of `review`. Four consecutive rounds once shipped on self-review alone with nothing recording that the gate had not run. A partial reviewer output — a fragment left by an overloaded or rate-limited dispatch — is a failed dispatch, never a clean pass; re-dispatch it.
 
 ### 4g. Move to Review
 
@@ -718,6 +773,17 @@ git -C .claude/worktrees/challenge-<label> rebase origin/main
 
 If this rebase conflicts, abort it, mark the challenge blocked with the conflicting files, keep
 the branch intact, and skip.
+
+**A clean rebase is not a correct rebase.** Two branches touching one module merge without conflict
+and still collide at runtime — main changed an accessor's return type mid-run and a fixture this
+branch added still spelled the old shape. Only the post-rebase build catches that, so re-run 4d's
+verify. And regenerate a tree-wide sweep on the new base rather than rebasing it: a rebase silently
+misses the instances main added while it was in flight.
+
+**Re-verify every tracker record against a freshly fetched `origin/main`.** A long run's worktree
+drifts dozens of commits; one run filed a blocker for a defect main had fixed the same day.
+
+**Exit the worktree as part of finishing the challenge**, before starting the next — see 4a.
 
 If matches exist, mark merged, clean up the branch/worktree, log "Pre-empted by parallel agent"
 in the final report, and skip to the next challenge:
