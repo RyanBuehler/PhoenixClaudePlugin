@@ -5,11 +5,11 @@ description: Use for ANY question or action involving Crucible, sagas, challenge
 
 # Crucible CLI — How to Talk to the Project Tracker
 
-Crucible is the project's bespoke saga/challenge/bug tracker. A `crucible` CLI client speaks to a long-running `crucible-server` over local TCP. This skill is what you read before issuing any `crucible ...` command.
+Crucible is the project's bespoke saga/challenge/bug tracker. A `crucible` CLI client speaks to `crucible-server`, which runs as a standing LAN service on **glacius** (192.168.68.50:9000) — not on the machine running this session. This skill is what you read before issuing any `crucible ...` command.
 
 ## Hard rules
 
-- **The server is managed externally.** Never `start`, `kill`, `probe`, `curl`, `pkill`, or otherwise touch `crucible-server`. If commands fail to connect, report the failure — do not try to start a server.
+- **The server is managed externally.** Never `start`, `kill`, `probe`, `curl`, `pkill`, or otherwise touch `crucible-server` yourself. If commands fail to connect, that means checking reachability to glacius (is the LAN up, is `~/.config/crucible/config.json` pointed at the right host — see **Connecting to the server** below), not looking for a local process to start — there generally isn't one on this machine. Administering the service itself (start/stop/status/logs/update) is out of scope for this skill; see `Applications/Crucible/README.md` in the Phoenix repo for that.
 - **The binary is project-local, not on PATH.** Forge builds it under a per-profile subtree whose name varies by host/build, so don't hardcode it. **Search the configured build tree (`.forge/`) as well as the bootstrap output (`.forge-out/`), newest first** — `.forge-out/` can hold a months-stale copy that still reports a plausible version number, and picking it up costs a round trip on every fresh session:
 
   ```bash
@@ -18,8 +18,9 @@ Crucible is the project's bespoke saga/challenge/bug tracker. A `crucible` CLI c
     | sort -rn | head -1 | cut -d' ' -f2-)
   ```
 
-  Then call `"$CRUCIBLE" ...`. There is no system-wide `crucible`. Build via `/phoe:build crucible` if the binary is missing.
-- **Storage lives at `~/.local/share/crucible-server/`** (`challenges/`, `sagas/`, `bugs/`, `archive/`, `bug-archive/`, `config.json`). Never edit those files by hand — go through the CLI so the server stays consistent.
+  Then call `"$CRUCIBLE" ...`. There is no system-wide `crucible`. Build via `/phoe:build crucible` if the binary is missing — this builds the `crucible` CLI client for *this* machine; it also produces a `crucible-server` binary, but that local copy is never the one serving real data (the one on glacius is).
+- **Storage lives at `~/.local/share/crucible-server/`** — on the server host (glacius), not this machine (`challenges/`, `sagas/`, `bugs/`, `archive/`, `bug-archive/`, `config.json`). Never edit those files by hand — go through the CLI so the server stays consistent.
+- **Connecting to the server.** A client's target is `~/.config/crucible/config.json` → `{"server": "192.168.68.50:9000"}`. `--port=<N>` (or `CRUCIBLE_SERVER_PORT`) only overrides the port — there's no flag to override the host for a single invocation, so a wrong host means fixing the config file.
 - **Use the CLI, not raw JSON.** This is reinforced by user feedback: do not hand-author challenge/saga/bug JSON files when a CLI subcommand exists.
 - **The CLI is the source of truth for status.** Never grep the filesystem or pgrep the server to answer status questions — ask the CLI.
 
@@ -337,7 +338,7 @@ If still in doubt, the source of truth is `Applications/Crucible/Source/Private/
 - **`bug list --tag=<X>` returns every bug** — the tag filter is silently ignored on bugs (a nonsense tag returns the full list too, while `--status`/`--priority`/`--severity` do filter). Do not read the unfiltered result as "every bug carries this tag". Filter client-side instead: `crucible --json bug list > bugs.json`, then select on `tags` — and redirect it, the JSON runs to ~145 KB for a few dozen bugs.
 - **`Error: Unknown flag: --append-tags` on `bug update`** — the incremental list verbs are challenge-only. Restate the whole list with the pipe-separated form.
 - **A second record appears after `import`** — the upsert missed an archived label. See **Importing JSON**.
-- **Connection errors** — server is down or wrong port. **Do not start it yourself.** Report the failure to the user.
+- **Connection errors** — server is down, or wrong/unreachable host, or wrong port. Check `~/.config/crucible/config.json`'s `server` field (see **Connecting to the server** above) before assuming the server itself is down. **Do not start it yourself.** Report the failure to the user.
 
 ## Output format reminders
 
