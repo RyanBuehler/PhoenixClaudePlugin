@@ -1,4 +1,5 @@
 ---
+name: test
 description: Run the engine test suite through Forge's in-process trial runner. Delegates builder-readiness to /phoe:build.
 ---
 

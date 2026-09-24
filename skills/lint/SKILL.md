@@ -1,4 +1,5 @@
 ---
+name: lint
 description: Run clang-tidy on changed files through Forge.
 ---
 

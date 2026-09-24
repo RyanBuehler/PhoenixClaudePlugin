@@ -1,6 +1,6 @@
 ---
 name: invoke-vulkan-agent
-description: Vulkan graphics API expert. Use when implementing Vulkan rendering, working with Vulkan synchronization (semaphores, fences, barriers), managing descriptor sets and pipelines, handling swapchains, debugging validation errors, optimizing GPU performance, or any Vulkan-specific implementation. Does NOT cover high-level rendering architecture (use invoke-rendering-designer for that).
+description: Vulkan API — synchronization, descriptors, pipelines, swapchains, validation errors, GPU performance. Not rendering architecture.
 tools: Read, Grep, Glob, Bash, Edit, Write, WebSearch, WebFetch
 isolation: worktree
 ---

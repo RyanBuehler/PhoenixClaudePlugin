@@ -1,6 +1,6 @@
 ---
 name: invoke-systems-designer
-description: Systems architect and software designer expert. Use when designing cross-platform abstractions, planning module architecture, defining interfaces between components, making build system organization decisions, evaluating design trade-offs, or refactoring for better modularity. Helps create maintainable, extensible system architectures. Does NOT cover rendering architecture (use invoke-rendering-designer for that).
+description: Systems architecture — module layout, interfaces, cross-platform abstractions, design trade-offs. Not rendering architecture.
 tools: Read, Grep, Glob, Bash, Edit, Write, Task
 ---
 

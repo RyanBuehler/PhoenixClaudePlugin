@@ -1,6 +1,6 @@
 ---
 name: invoke-spec-reviewer
-description: Spec compliance reviewer for Crucible challenges. Verifies implementation matches acceptance criteria exactly -- nothing missing, nothing extra. Read-only analysis against the challenge contract.
+description: Read-only check that an implementation matches a Crucible challenge's acceptance criteria — nothing missing, nothing extra.
 tools: Read, Grep, Glob, Bash
 ---
 

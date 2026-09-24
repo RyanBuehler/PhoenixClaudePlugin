@@ -1,5 +1,7 @@
 ---
+name: plan
 description: Brainstorm, design, and decompose a feature into a Crucible Saga with ordered, commit-sized Challenges.
+disable-model-invocation: true
 ---
 
 Plan a feature from idea to actionable Crucible Challenges grouped under a Saga. Accepts raw ideas (triggers brainstorming), structured plans/SDDs (skips to decomposition), or an existing saga label (extends it with new challenges).

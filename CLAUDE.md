@@ -271,7 +271,7 @@ Before running `git push` or `gh pr create`:
 
 ## Screenshot Capabilities
 
-For the rule on *how* to capture (and the prohibition on external screenshot apps), see `commands/screenshot.md`. This section documents the underlying engine commands and output paths.
+For the rule on *how* to capture (and the prohibition on external screenshot apps), see `skills/screenshot/SKILL.md`. This section documents the underlying engine commands and output paths.
 
 ### Commands
 

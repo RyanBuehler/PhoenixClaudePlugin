@@ -1,4 +1,5 @@
 ---
+name: build
 description: Build the engine or a tool executable (Crucible, Forge, Vigil) through Forge, the in-process builder. Single source of truth for build procedures.
 ---
 

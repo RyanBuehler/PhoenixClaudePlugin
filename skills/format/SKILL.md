@@ -1,4 +1,5 @@
 ---
+name: format
 description: Format C++ files on the current branch with clang-format and verify formatting is correct.
 ---
 

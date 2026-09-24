@@ -1,6 +1,6 @@
 ---
 name: trace-debug
-description: Use when investigating a reproducible Phoenix C++ bug whose root cause is unclear from reading, and you need to narrow down where state first goes wrong by instrumenting the suspect region with Scribe breadcrumb traces. Triggers include "trace this", "why isn't this firing", "bisect this", or similar printf-style debugging in a running Phoenix subsystem. Not for crashes with stack traces (use invoke-debugger-agent), non-reproducible bugs until stabilized, or bugs already understood from reading.
+description: Use when a reproducible Phoenix C++ bug's cause is unclear from reading — bisect the suspect region with Scribe breadcrumb traces ("trace this", "why isn't this firing"). Not for crashes with a stack trace.
 ---
 
 # Trace Debug — Bisecting Phoenix Bugs with Scribe Breadcrumbs
@@ -22,6 +22,9 @@ NO REPORT UNTIL THE CLEANUP AUDIT GREP RETURNS EMPTY
 Violating the letter of these rules is violating the spirit of the workflow.
 
 ## Auto-activation criteria
+
+Typical asks: "trace this", "why isn't this firing", "bisect this", or other printf-style
+debugging in a running Phoenix subsystem.
 
 Activate when ALL of these are true:
 - The bug is reproducible (deterministic repro exists, or you can stabilize it with the Phase 1 steps below).

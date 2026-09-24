@@ -12,7 +12,7 @@ git clone git@github.com:RyanBuehler/PhoenixClaudePlugin.git
 claude plugin add ./PhoenixClaudePlugin
 ```
 
-## Agents (13)
+## Agents (14)
 
 Specialized subagents for different aspects of engine development.
 
@@ -21,6 +21,7 @@ Specialized subagents for different aspects of engine development.
 |-------|-------------|
 | `invoke-code-reviewer` | C++ code review — bugs, UB, style, portability, modern C++23 |
 | `invoke-lint-agent` | clang-tidy static analysis plus include/module-import dependency hygiene |
+| `invoke-spec-reviewer` | Crucible challenge spec compliance — nothing missing, nothing extra |
 
 ### Architecture & Design
 | Agent | Description |
@@ -53,32 +54,44 @@ Specialized subagents for different aspects of engine development.
 | `invoke-perf-agent` | CPU profiling and optimization |
 | `invoke-concurrency-agent` | Thread safety, lock-free algorithms |
 
-## Commands (12)
+## Skills (21)
 
-Slash commands for common workflows.
+Every workflow is a skill under `skills/<name>/SKILL.md`, invoked as `/phoe:<name>`.
 
-| Command | Description |
-|---------|-------------|
-| `/plan` | Brainstorm, design, and decompose a feature into a Crucible Saga with ordered, commit-sized Challenges |
-| `/implement` | Pick up a Crucible Challenge by label and implement it end-to-end with verification |
-| `/build` | Build the project in Release configuration |
-| `/test` | Run the trial suite through Forge |
-| `/format` | Format staged C++ files and verify |
-| `/lint` | Run clang-tidy on changed files |
-| `/screenshot` | Capture a screenshot from the engine |
-| `/verify` | Full CI-mirror: build + format + lint + test |
-| `/scaffold-module` | Create a new module using `Tools/create_module.py` |
-| `/frontend-design` | Generate interactive HTML playground for iterating on UI layout and styling |
-| `/gc-worktrees` | Remove worktrees whose branch has provably landed on origin/main — dry-run first, PR-confirmed |
-| `/edit-plugin` | Edit the PhoenixClaudePlugin source — add/modify commands, agents, hooks, skills, or references and bump the version |
-
-## Skills (1)
-
-Auto-activating skills that trigger based on context.
+### Workflows you start
+These set `disable-model-invocation: true`, so they cost no context until you type them.
 
 | Skill | Description |
 |-------|-------------|
-| `trace-debug` | Auto-activates when investigating reproducible Phoenix bugs; instruments with Scribe breadcrumbs and bisects the suspect region by judgment |
+| `/phoe:plan` | Brainstorm, design, and decompose a feature into a Crucible Saga with ordered, commit-sized Challenges |
+| `/phoe:execute` | Autonomously execute N Crucible challenges via subagents |
+| `/phoe:frontend-design` | Generate an interactive HTML playground for iterating on UI layout and styling |
+| `/phoe:scaffold-module` | Create a new module using `Tools/create_module.py` |
+| `/phoe:gc-worktrees` | Remove worktrees whose branch has provably landed on origin/main — dry-run first, PR-confirmed |
+| `/phoe:edit-plugin` | Edit this plugin and bump its version |
+
+### Workflows either you or the model start
+| Skill | Description |
+|-------|-------------|
+| `/phoe:implement` | Pick up a Crucible Challenge and implement it end-to-end with verification |
+| `/phoe:bugfix` | Pick up a Crucible Bug and fix it end-to-end with verification |
+| `/phoe:build` | Build the engine or a tool executable through Forge |
+| `/phoe:test` | Run the trial suite through Forge |
+| `/phoe:verify` | Full CI-mirror: audits, build, format, lint, test |
+| `/phoe:format` | Format changed C++ files and verify |
+| `/phoe:lint` | Run clang-tidy on changed files |
+| `/phoe:screenshot` | Capture a screenshot from the engine |
+
+### Auto-activating
+| Skill | Description |
+|-------|-------------|
+| `crucible` | Any Crucible saga/challenge/bug question or action |
+| `agents` | Which background job owns a PR, branch, or worktree |
+| `audit` | Convention-drift audit of cold files or modules |
+| `pr-fixup` | Address review feedback on an open PR |
+| `trace-debug` | Scribe-breadcrumb bisection of a reproducible bug |
+| `ui-design-review` | Mosaic UI architecture and convention review |
+| `icon` | Add, replace, or audit Phosphor icons in the Editor |
 
 ## Hooks
 

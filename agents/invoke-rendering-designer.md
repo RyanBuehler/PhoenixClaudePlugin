@@ -1,6 +1,6 @@
 ---
 name: invoke-rendering-designer
-description: Rendering systems architect and design expert. Use when designing render graphs, frame graphs, multi-pass rendering architectures, GPU resource management patterns, renderer abstraction layers, material systems, scene graphs, or any high-level rendering architecture decisions. Helps create efficient, maintainable, and extensible rendering systems. Does NOT cover specific graphics API usage (use invoke-vulkan-agent for Vulkan).
+description: Rendering architecture — render graphs, passes, GPU resource management, materials, scene graphs. Not Vulkan API usage.
 tools: Read, Grep, Glob, Bash, Edit, Write, Task
 ---
 

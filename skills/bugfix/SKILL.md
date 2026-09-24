@@ -1,4 +1,5 @@
 ---
+name: bugfix
 description: Pick up a Crucible Bug by label (or "next" for highest-severity todo) and fix it end-to-end with verification, stopping at review status.
 ---
 

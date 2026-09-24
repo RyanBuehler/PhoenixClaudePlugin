@@ -1,5 +1,7 @@
 ---
+name: frontend-design
 description: Generate an interactive HTML playground approximating engine UI for iterating on layout, colors, and sizing before applying changes to engine code.
+disable-model-invocation: true
 ---
 
 Create an interactive HTML playground that approximates the target engine UI, letting the user iterate on layout and styling visually before changes are applied to engine code.

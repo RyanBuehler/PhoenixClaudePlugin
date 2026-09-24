@@ -1,6 +1,6 @@
 ---
 name: invoke-debugger-agent
-description: GDB/LLDB debugging expert for C++ applications. Use when setting breakpoints, analyzing core dumps, debugging crashes, watchpoints, conditional breakpoints, remote debugging, or stepping through complex control flow. Helps diagnose runtime issues efficiently.
+description: GDB/LLDB debugging — crashes, core dumps, breakpoints and watchpoints, stepping through control flow.
 tools: Read, Grep, Glob, Bash, Edit, Write
 isolation: worktree
 ---

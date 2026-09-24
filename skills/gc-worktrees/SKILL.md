@@ -1,4 +1,5 @@
 ---
+name: gc-worktrees
 description: Remove worktrees whose branch has provably landed on origin/main — dry-run first, PR-confirmed, with every skipped tree given a reason.
 allowed-tools: Read, Bash, Glob, Grep
 disable-model-invocation: true

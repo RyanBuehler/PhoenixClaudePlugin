@@ -1,4 +1,5 @@
 ---
+name: implement
 description: Pick up a Crucible Challenge by label (or "next" for highest-priority saga-aware todo) and implement it end-to-end with verification, stopping at review status.
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: invoke-platform-agent
-description: Specialized assistance for platform-specific C++ development on Linux and Windows. Use when working with POSIX or Win32 APIs, system calls, platform liaison modules, shared libraries/DLLs, process management, threading, file descriptors/handles, signals, memory mapping, registry/COM, or any OS-specific implementation. Helps write portable platform abstraction layers and OS-optimized code on either side.
+description: Platform-specific C++ on Linux and Windows — POSIX/Win32 APIs, liaison modules, processes, signals, shared libraries.
 tools: Read, Grep, Glob, Bash, Edit, Write
 isolation: worktree
 ---

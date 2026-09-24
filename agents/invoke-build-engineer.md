@@ -1,6 +1,6 @@
 ---
 name: invoke-build-engineer
-description: Build engineer expert for Forge (the in-process builder), its profiles and manifests, cross-platform builds, CI/CD pipelines, compilers, toolchains, and GitHub Actions. Use when working on build configuration, fixing build errors, setting up CI/CD, optimizing build pipelines, configuring compilers, or deploying across Linux and Windows platforms.
+description: Forge builds, profiles and manifests, compilers and toolchains, CI and GitHub Actions — build errors and pipeline changes.
 tools: Read, Grep, Glob, Bash, Edit, Write, WebSearch, WebFetch
 isolation: worktree
 ---

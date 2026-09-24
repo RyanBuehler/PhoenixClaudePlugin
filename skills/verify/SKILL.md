@@ -1,4 +1,5 @@
 ---
+name: verify
 description: Full CI-mirror verification sequence — configure, build, format check, lint, policy audits, and test through Forge. The mandatory pre-commit check.
 ---
 

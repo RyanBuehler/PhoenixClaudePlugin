@@ -1,6 +1,6 @@
 {
   "name": "phoe",
-  "description": "Phoenix Engine C++ development toolkit — agents, commands, hooks, and references for cross-platform game engine development.",
+  "description": "Phoenix Engine C++ development toolkit — agents, skills, hooks, and references for cross-platform game engine development.",
   "author": {
     "name": "Ryan Buehler"
   },

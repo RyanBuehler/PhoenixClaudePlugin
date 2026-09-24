@@ -1,6 +1,6 @@
 ---
 name: invoke-shader-expert
-description: GLSL/SPIR-V shader development expert. Use when writing shaders, debugging shader compilation, interpreting Vulkan validation layer shader errors, optimizing shader performance, or working with SPIR-V tooling. Complements invoke-vulkan-agent for GPU pipeline work.
+description: GLSL/SPIR-V shaders — writing, compile errors, validation-layer shader errors, and shader performance.
 tools: Read, Grep, Glob, Bash, Edit, Write, WebSearch, WebFetch
 isolation: worktree
 ---

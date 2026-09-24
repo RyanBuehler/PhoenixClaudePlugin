@@ -1,6 +1,6 @@
 ---
 name: invoke-code-reviewer
-description: Expert C++ code review and analysis. Reviews code for bugs, undefined behavior, style issues, performance optimizations, and modern C++23 improvements. Use when the user asks to review C++ code, check for issues, analyze code quality, or wants feedback on their implementation.
+description: C++ code review for bugs, undefined behavior, style, performance, and modern C++23 — use when asked to review code.
 tools: Read, Grep, Glob, Bash
 ---
 

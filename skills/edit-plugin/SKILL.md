@@ -1,5 +1,6 @@
 ---
-description: Edit the PhoenixClaudePlugin source — add or modify commands, agents, hooks, skills, or references following plugin conventions, then bump the calendar version.
+name: edit-plugin
+description: Edit the PhoenixClaudePlugin source — add or modify skills, agents, hooks, or references following plugin conventions, then bump the calendar version.
 allowed-tools: Read, Edit, Write, Bash, Glob, Grep, Agent
 disable-model-invocation: true
 ---
@@ -18,16 +19,23 @@ Verify the path exists and contains `.claude-plugin/plugin.json` with `"name": "
 
 ## 2. Make Requested Edits
 
-The user will describe what changes to make (new agents, commands, CLAUDE.md updates, reference docs, hooks, etc.). Apply those changes following the plugin's existing conventions:
+The user will describe what changes to make (new agents, skills, CLAUDE.md updates, reference docs, hooks, etc.). Apply those changes following the plugin's existing conventions:
 
-- **Commands**: Markdown files in `commands/` with YAML frontmatter (`description` field)
+- **Skills**: `skills/<name>/SKILL.md` with YAML frontmatter (`name`, `description`). Slash workflows
+  are skills too — there is no `commands/` directory. A workflow only the user starts
+  (`/phoe:plan`, `/phoe:execute`) sets `disable-model-invocation: true`, which drops it from
+  the model's listing entirely.
 - **Agents**: Markdown files in `agents/` with YAML frontmatter (`name`, `description`, `tools` fields)
+- **Descriptions are paid every session.** Every skill and agent `description` sits in the
+  system prompt of every session. Keep an agent's to one sentence (~150 chars) naming what it
+  covers; keep a skill's to when it applies. Trigger phrases, "not for X, use Y" routing, and
+  other detail go in the body, which loads only on invocation.
 - **Hooks**: Update `hooks/hooks.json` using `${CLAUDE_PLUGIN_ROOT}` for script paths
 - **References**: Markdown files in `references/`
-- **Scripts**: Python files in `scripts/`, invoked from a command as
-  `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/<name>.py`. Anything a command must do
+- **Scripts**: Python files in `scripts/`, invoked from a skill as
+  `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/<name>.py`. Anything a skill must do
   deterministically — classification, destructive actions — belongs here rather than
-  in the command's prose, and gets a `tests/test_<name>.py` alongside it.
+  in the skill's prose, and gets a `tests/test_<name>.py` alongside it.
 - **CLAUDE.md**: The plugin's project-level instruction file at the repo root
 
 Review existing files for style and formatting conventions before writing new ones.

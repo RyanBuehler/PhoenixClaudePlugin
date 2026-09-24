@@ -1,5 +1,7 @@
 ---
+name: execute
 description: Autonomously execute N Crucible challenges via subagents with zero user interaction. Supports parallel execution of independent challenges and sequential execution within sagas.
+disable-model-invocation: true
 allowed-tools: Read, Edit, Write, Bash, Glob, Grep, Agent
 ---
 

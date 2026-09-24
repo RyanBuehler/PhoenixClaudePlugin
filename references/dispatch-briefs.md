@@ -95,7 +95,7 @@ reviewer knows how to read a mismatch:
 - **Which profiles were actually verified** — and if the change edits a profile, that profile must
   appear in the verified set. One brief listed six profiles as verified while the commit edited six
   *other* profiles, none of which any listed verify touched. A reviewer taking that at face value
-  concludes the change was validated. See `${CLAUDE_PLUGIN_ROOT}/commands/verify.md` for what one
+  concludes the change was validated. See `${CLAUDE_PLUGIN_ROOT}/skills/verify/SKILL.md` for what one
   verify run does and does not cover.
 
 **Resolve every design-doc reference the contract cites.** Confirm the file exists in *this*
