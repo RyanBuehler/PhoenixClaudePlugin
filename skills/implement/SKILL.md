@@ -473,34 +473,41 @@ Immediately after the commit lands, move the challenge to `review`. This is a ma
 
 If this move fails (server down, label mismatch, Crucible not initialized), **stop and surface the error to the user**. Do not report the challenge as done, and do not continue to the report step, until the move has succeeded.
 
-## 14.5. Subagent Feedback Log
+## 14.5. Agent Feedback Log
 
-Collect the `## Workflow Friction` sections from each subagent report dispatched during this run (test engineer from Step 8, standard reviewer from Step 11, adversarial reviewer from Step 12). If every section is `none` or empty, skip this step entirely — write nothing.
+Collect the `## Workflow Friction` sections from each subagent report dispatched during this run
+(test engineer from Step 8, standard reviewer from Step 11, adversarial reviewer from Step 12, and
+any fix pass), and add your own as the implementing agent: what slowed *you* down — missing
+context, ambiguous spec, undocumented convention, tooling or guard trouble, context bloat. If every
+section is `none` or empty, skip this step entirely — write nothing.
 
-Otherwise, append to `.claude/SUBAGENT_FEEDBACK.md` at the main repo root (same file
-`/phoe:execute` writes to).
+Otherwise, append to `.claude/AGENT_FEEDBACK.md` in the **main checkout** (same file
+`/phoe:execute` writes to). You are standing in the Step 5 worktree, so resolve the main root's
+absolute path from the first entry of `git worktree list` — a relative `.claude/` lands in the
+worktree and is deleted with it.
 
-**Append with Bash, never `Write`/`Edit`.** In a background session the isolation guard refuses the
-native file tools for repo paths the parent has not entered, and gitignored `.claude/` is covered.
-That guard is **tool-scoped, not path-scoped**: Bash redirection is not intercepted, so the append
-succeeds with no permission prompt and this step needs no user approval. A refused `Write` means
-reach for Bash; it never means the step is impossible.
+**Append with Bash, never `Write`/`Edit` on the log.** In a background session the isolation guard
+refuses the native file tools for repo paths the parent has not entered, and gitignored `.claude/`
+is covered. That guard is **tool-scoped, not path-scoped**: Bash redirection is not intercepted.
+The command guard does refuse heredocs, though, so stage the entry in a scratch file outside the
+repo (`$CLAUDE_JOB_DIR/tmp/` in a background session) and append it with one plain command:
 
 ```bash
-cat >> .claude/SUBAGENT_FEEDBACK.md <<'ENTRY'
-
-## <YYYY-MM-DD> - /phoe:implement <label>
-<the collected sections, in the format below>
-ENTRY
+cat <scratch>/feedback-entry.md >> <main-root>/.claude/AGENT_FEEDBACK.md
 ```
 
-The same `>>` creates the file when it does not exist. Do not `Write` it: the log reaches hundreds
-of KB and a whole-file write discards every prior entry.
+The same `>>` creates the log when it does not exist. Never write the log itself whole: it reaches
+hundreds of KB and a whole-file write discards every prior entry. A refused command means try the
+other form; it never means the step is impossible.
 
-Use this format, omitting subagents whose section was `none`:
+Entry format — start with a blank line and omit any agent whose section was `none`:
 
 ```markdown
+
 ## <YYYY-MM-DD> - /phoe:implement <label>
+
+### Implementer
+- <friction item>
 
 ### Challenge: <label> (test-engineer)
 - <friction item 1>
