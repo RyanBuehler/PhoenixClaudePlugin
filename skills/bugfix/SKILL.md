@@ -238,10 +238,10 @@ policy audits → test). All must pass. It covers **one profile**: if the fix to
 the profiles you actually ran when you report. See `/phoe:verify` §2a, and §2b for why a run that
 aborts at the toolchain audit has tested nothing.
 
-**d. A cold build outlives the command timeout** and gets backgrounded by the harness. Wait on it
-with the bounded, worktree-scoped poll in
-`${CLAUDE_PLUGIN_ROOT}/references/dispatch-briefs.md` §4 — a process-name match is either unscoped
-(never finishes) or silently matches nothing (returns instantly, looking like a completed build).
+**d. A cold build can outlive the command timeout.** Run it, and the verify, through
+`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/forge_wait.py start --log <worktree>/.forge-wait/<name>.log -- <forge command>` in the
+foreground with `timeout: 600000`, and repeat the `wait --log ...` call it prints until it reports an
+exit. Never watch the log in between — see `${CLAUDE_PLUGIN_ROOT}/references/dispatch-briefs.md` §4.
 
 **e. If any verification fails** — fix the issue and re-verify. Do not proceed until everything passes.
 

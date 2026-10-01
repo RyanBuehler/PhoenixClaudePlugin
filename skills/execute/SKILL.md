@@ -248,12 +248,14 @@ For each challenge in the wave:
    first `/phoe:build` (4b) bootstraps it, but doing it here as part of setup avoids a cold first
    build surprising the implementer:
    ```bash
-   python3 .claude/worktrees/challenge-<label>/Applications/Forge/Scripts/bootstrap.py
+   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/forge_wait.py start --log .claude/worktrees/challenge-<label>/.forge-wait/bootstrap.log -- python3 .claude/worktrees/challenge-<label>/Applications/Forge/Scripts/bootstrap.py
    ```
-   **Wait for the binary to exist before dispatching the implementer.** 4b has the implementer build
-   first; against a bootstrap still in flight that build dies with `No such file or directory`, which
-   reads like a broken tree. Budget ~9 minutes for the bootstrap and ~25 for the cold build, and tell
-   the implementer not to edit during the bootstrap — it bakes the on-disk tree into the binary.
+   Run it in the **foreground** with `timeout: 600000`. It blocks until the bootstrap exits (or
+   9.5 minutes pass, when it prints the `wait --log ...` call to repeat), so the binary exists when it
+   returns `exited 0`. Do not watch the bootstrap's log or poll for the binary: each look is a
+   full-context request. 4b has the implementer build first, and against a bootstrap still in flight
+   that build dies with `No such file or directory`, which reads like a broken tree. Tell the
+   implementer not to edit during the bootstrap — it bakes the on-disk tree into the binary.
 
 **Two worktree-navigation traps, both of which silently point work at the wrong branch:**
 
@@ -371,22 +373,24 @@ Description: <description>
 
 1. **Populate the worktree's build tree, and wait for it.** Your `cwd` is a fresh git worktree with an empty `Applications/Forge/.forge-out/` tree. Build once as your first action — Forge configures and builds via the active profile. Do this before exploring: you'll want the built module artifacts present so `grep`/`Read`-based exploration works correctly on modules that use C++23 modules, and so your later `/phoe:verify` run is an incremental build, not a cold one.
 
-   A cold build here **exceeds the ten-minute command timeout**, so the harness backgrounds it whether or not you asked. Do not try to hold it in the foreground — that contract cannot be honored and it fails silently, leaving you believing you are waiting when you are not.
+   A cold build here can exceed the ten-minute command timeout, so run it — and every later
+   `forge verify` — through the wait script, as a **foreground** Bash call with `timeout: 600000`:
 
-   Run the build as a **single plain command with `run_in_background: true`** and let the harness
-   notify you when it exits. Do not reach for `nohup … &`, a PID file, or an inline poll loop: the
-   command guard refuses all three, and a refusal prints no results, so it reads like a command that
-   ran and found nothing.
+   ```bash
+   Applications/Forge/.bootstrap-out/forge configure editor
+   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/forge_wait.py start --log <worktree>/.forge-wait/build.log -- Applications/Forge/.bootstrap-out/forge build editor --summary
+   ```
 
-   If you must watch progress, read the log **file**, not a pipe (a backgrounded build piped through
-   `tail` buffers and shows nothing for minutes), and read it as `tr '\r' '\n' | tail` — Forge
-   writes its heartbeat with carriage returns, so a plain `tail` shows one stale line forever on a
-   healthy build. A hand-rolled poll cannot help either: a foreground `sleep` is blocked and a
-   backgrounded one returns immediately.
+   Two separate calls: a fresh tree must be configured first, or the build fails in 0.0s with no
+   cause. `.forge-wait/` is gitignored, so the logs never reach a commit.
 
-   **Do not wait by matching process command lines.** An unscoped match on the compiler or builder name returns hits from every sibling agent building concurrently — 106 in one run — so the wait never finishes. A pattern that scopes by placing this worktree's path next to the compiler name matches *nothing*, because the compiler binary appears on the command line before the include flag carrying that path; the wait then returns instantly, which looks exactly like a completed build. And a watcher pattern that matches its own command line never exits. Confirm from the log's **terminal line** that the build reported a result before you act on it: a build that outran your wait leaves the previous binary in place, and a trial run then reports the previous code's result.
-
-   Full detail, including why each naive form fails, is in `${CLAUDE_PLUGIN_ROOT}/references/dispatch-briefs.md` §4. Still do not end your turn with edits unverified or uncommitted — keep re-running the poll block, then continue.
+   It blocks until the command exits, then prints the result once. If it reports `still running`
+   (exit 124 — not a failure), call the `wait --log ...` command it prints, again in the foreground,
+   until it reports `exited`. Do not read, `tail`, or `wc` the log while the run is going, and do not
+   sleep between calls: each look costs a full-context request, and that watching once spent nearly
+   half of every subagent's tokens. Read the phase lines it prints, not the exit code alone.
+   Full detail is in `${CLAUDE_PLUGIN_ROOT}/references/dispatch-briefs.md` §4. Do not end your turn
+   with edits unverified or uncommitted.
 2. Read the affected files and explore related Phoenix code to understand the context. **Ground your approach in Phoenix's own patterns** — if the challenge touches UI, read Mosaic/Tessera/Emblema code; if it touches input, read Impulse; if it touches the renderer, read Aurora/Prism/Vulkan code. Do NOT generalize from external frameworks (ImGui, Qt, React, etc.) or from memory of how similar problems are solved elsewhere — that frequently ships wrong assumptions into the diff. When in doubt, grep for analogous existing features and mirror their shape.
 3. Follow the strategy steps (if provided) or plan your own approach based on what you read in step 2
 4. Implement the changes
@@ -428,7 +432,7 @@ Description: <description>
   compression library is false by default, even on a single host.
 - Follow the project's coding conventions (CLAUDE.md) — **and before writing any C++, read `Docs/StyleGuide.md` and `${CLAUDE_PLUGIN_ROOT}/references/tooling.md`** so the implementation conforms to enforced conventions (formatting, naming, comments, namespaces, return-value handling, `auto`, scope spacing, tooling). `${CLAUDE_PLUGIN_ROOT}` is the plugin install path (fall back to `~/phoenixclaudeplugin/references/` if it is unset)
 - Use plain ASCII only -- no unicode characters
-- **Do not yield your turn until committed + reported.** Ending your turn with edits unverified or uncommitted strands the work and the orchestrator cannot resume you mid-task. A build that outruns the command timeout is backgrounded by the harness regardless — wait it out with the PID loop in step 1 rather than yielding.
+- **Do not yield your turn until committed + reported.** Ending your turn with edits unverified or uncommitted strands the work and the orchestrator cannot resume you mid-task. A build that outruns the command timeout is waited out with the wait script in step 1, not by yielding.
 - **Use worktree-absolute paths.** The paths in your prompt/context use the main-repo form (`/home/ryan/phoenix/...`), but the files you must edit live under the worktree prefix (`.claude/worktrees/challenge-<label>/...`). Reading the main-repo path can serve stale content, and a later `Edit` then fails "File has not been read yet" — read and edit the worktree copy.
 - **This shell is zsh.** Quote `grep --include` globs (`'*.cpp'`, not `*.cpp`) and do not rely on unquoted `$VAR` word-splitting — pass file lists literally or use arrays. An unquoted multi-file variable collapses to a single argument and silently checks nothing.
 - **Numeric safety.** Any clamp / `min` / `max` over a caller-supplied float must guard with `isfinite`/`isnan` FIRST — `std::clamp`/`min`/`max` pass NaN straight through into casts and persisted state. This is a recurring CRITICAL class the adversarial reviewer keeps catching.

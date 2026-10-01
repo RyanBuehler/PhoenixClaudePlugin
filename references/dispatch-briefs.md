@@ -261,58 +261,36 @@ Paste the block below **verbatim** into every reviewer prompt, substituting the 
 
 ## 4. Implementer dispatch — waiting on a build
 
-Do not tell an implementer to "run the build in the foreground and do not yield." A full cold build
-here exceeds the ten-minute command timeout, so the harness backgrounds it regardless. The
-instruction writes a contract the environment cannot honor, and it breaks silently: the agent
-believes it is waiting and is not.
+A cold build, a verify, or a bootstrap here can outlive the ten-minute command timeout, and every
+look at a running build's log is a full-context request: in one month, subagents spent 46% of
+their tokens re-reading build logs. Give the implementer one blocking wait instead of a way to
+watch:
 
-**Do not prescribe the `nohup` + PID-file recipe this section used to carry.** The command guard
-refuses all three of its parts — `nohup … > log 2>&1 &`, the `echo $! > …` capture, and the
-`for _ in $(seq 1 16)` poll — so agents handed it stranded turns mid-build with edits uncommitted.
-Never prescribe a shape that has not been run in an isolated agent.
-
-Give the implementer a wait mechanism that survives the guard:
-
-> Your build will outlive the command timeout, so run it as a **single plain command with the
-> harness's background mode** (`run_in_background: true`) — not `nohup`, not `&`, not a compound
-> command. The harness notifies you when it exits; that is the only wait primitive both allowed here
-> and honest.
+> Run every long Forge command — `bootstrap.py`, `forge build`, `forge verify` — through the
+> plugin's wait script, as a **foreground** Bash call with `timeout: 600000`:
 >
 > ```bash
-> Applications/Forge/.bootstrap-out/forge build <profile>    # run_in_background: true
+> python3 ${CLAUDE_PLUGIN_ROOT}/scripts/forge_wait.py start --log <worktree>/.forge-wait/verify.log -- Applications/Forge/.bootstrap-out/forge verify editor --summary
 > ```
 >
-> If you must poll instead, four things are true and each has cost an agent a run:
+> (`${CLAUDE_PLUGIN_ROOT}` is substituted only in skill text; if your shell sees it empty, the
+> plugin lives at `~/phoenixclaudeplugin`.) It runs the command detached and blocks for up to 9.5 minutes, then prints the outcome once:
+> `exited <code>` with the log (whole if short; otherwise head, tail, and every `FAILED` line in
+> between), or `still running` with the exact `wait --log …` command to call next. Call that, again
+> in the foreground, until it reports an exit. That is the whole wait: do not read the log while
+> the run is going, do not `tail` it, and do not sleep between calls.
 >
-> - **A foreground `sleep` is blocked, and a backgrounded one returns immediately.** An
->   `until …; do sleep; done` loop launched in the background is reaped and reports success with
->   empty output — indistinguishable from the condition being met.
-> - **A loop is refused by the guard** wherever it appears inline. If you need one, run it from a
->   script *outside the repository* by absolute path.
-> - **Watch the log file, not a pipe.** Piping a backgrounded build through `tail` buffers and shows
->   nothing for minutes. Redirect to a file and read it as `tr '\r' '\n' | tail` — Forge writes its
->   progress heartbeat with carriage returns, so a plain `tail` shows one stale line forever on a
->   healthy build, which looks exactly like a wedged one.
-> - **Anchor any `Monitor` pattern.** Verify's phase labels collide (`^(Format|Lint|Test) ` matches
->   the earlier `Test tools` line; `violations` matches `no violations`), and an unanchored pattern
->   exits the wait early on its own grep.
+> Completion is read from an exit-status file, not from the log's wording. **Exit code 124 means
+> still running, not failed**; 125 means the command died without recording a status. On an exit,
+> read the phase lines in the printed log, not the exit code alone — a `FAILED` build beside a
+> passing test tally means the trials ran against the previous binary.
 >
-> Do not wait by matching process command lines. Two shapes of that loop are broken:
->
-> - **Unscoped** — a bare match on the compiler or builder name returned 106 hits from sibling agents
->   building concurrently, so the wait never finishes.
-> - **Scoped the obvious way** — a pattern that places the worktree path next to the compiler name
->   matches nothing, because the compiler binary appears on the command line *before* the include
->   flag that carries the worktree path. It silently matches zero processes and the wait returns
->   instantly, which looks exactly like a completed build.
->
-> A watcher pattern that matches its own command line never exits, for the mirror-image reason.
-> A `pkill -f` cleanup has the same two failure modes and a third: Forge's own command line is
-> relative, so an absolute-path pattern matches nothing while exiting 0.
->
-> A build that is still running is never a finished build. Confirm from the log's **terminal line**
-> that the build reported a result — a build that outran your poll leaves the previous binary in
-> place, so a trial run then reports the previous code's result.
+> Keep the log inside your own worktree, so two agents never share one; `start` refuses a log a live
+> run still owns.
+
+Do not prescribe `nohup … &`, PID files, inline `until`/`for` loops, or process-name matching — the
+command guard refuses the first three, and a match on the compiler or builder name either catches
+every sibling agent's build or silently matches nothing. The wait script replaces all of them.
 
 **Two more things the implementer needs told, each of which has cost a full rebuild:**
 

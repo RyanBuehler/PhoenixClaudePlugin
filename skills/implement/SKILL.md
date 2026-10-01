@@ -297,10 +297,10 @@ policy audits → test). All must pass. `/phoe:verify` covers **one profile**: i
 anything under `Applications/Forge/`, or edited a build profile, verify that profile explicitly too —
 a green editor verify does not run Forge's own trials and has twice hidden a broken one.
 
-**c. A cold build outlives the command timeout** and gets backgrounded by the harness. Wait on it
-properly — capture the PID or the log, scoped to this worktree — per
-`${CLAUDE_PLUGIN_ROOT}/references/dispatch-briefs.md` §4. A process-name match is either unscoped
-(never finishes) or silently matches nothing (returns instantly, looking like a completed build).
+**c. A cold build can outlive the command timeout.** Run it, and the verify, through
+`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/forge_wait.py start --log <worktree>/.forge-wait/<name>.log -- <forge command>` in the
+foreground with `timeout: 600000`, and repeat the `wait --log ...` call it prints until it reports an
+exit. Never watch the log in between — see `${CLAUDE_PLUGIN_ROOT}/references/dispatch-briefs.md` §4.
 
 **d. If any verification fails** — fix the issue and re-verify. Do not proceed until everything passes.
 
