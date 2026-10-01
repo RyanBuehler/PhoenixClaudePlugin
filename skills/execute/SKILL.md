@@ -1,6 +1,6 @@
 ---
 name: execute
-description: Autonomously execute N Crucible challenges via subagents with zero user interaction. Supports parallel execution of independent challenges and sequential execution within sagas.
+description: Autonomously execute N Crucible challenges via subagents (at most 3 at once) with zero user interaction. Runs independent challenges in parallel, sagas in order, and groups related small challenges into one PR.
 disable-model-invocation: true
 allowed-tools: Read, Edit, Write, Bash, Glob, Grep, Agent
 ---
@@ -128,17 +128,35 @@ Partition into execution **waves** via topological levels:
 - **Wave 1:** Challenges whose only predecessors are in wave 0.
 - Continue until all challenges are assigned.
 
+**Then group where it makes sense.** Challenges that would ship better as one PR go onto one
+combined branch (4a), handled by one implementer, one verify, one review round, and one PR. Group
+when the challenges share a surface (same module or overlapping `affected_files` — a file-overlap
+edge between two small challenges is usually better grouped than serialized across waves), or are
+each only a few lines or prose. Do not group a large or risky challenge with anything, challenges in
+unrelated modules, or more than 4. A group is one **dispatch unit**; an ungrouped challenge is its
+own unit. When unsure, don't group — a failed member blocks its whole group.
+
 Print the execution plan:
 
 ```
 Execution Plan:
   Wave 0 (parallel): #42 add-viewport-resize, #54 forge-compiler-launcher
   Wave 1 (sequential): #43 wire-canvas-events (depends on #42)
+  Wave 1 (group, one PR): #57 rename-tessera-padding + #58 tessera-padding-docs (shared surface)
 ```
 
 ## 4. Execute Waves
 
 For each wave, execute the following steps:
+
+### Concurrency cap — at most 3 subagents in flight
+
+Never have more than **3** subagents running at once, across the whole run: implementers, fix and
+triage passes, and reviewers all count, and a background agent counts until its notification
+arrives. A wave with more than 3 dispatch units runs in batches — dispatch the next unit as one
+returns. 4e's three reviewers for one unit fill the cap on their own, so nothing else runs beside
+them. Unbounded fan-out (3 reviewers × rounds × parallel challenges) has exhausted Ryan's usage in
+a single run; grouping (Step 3) is the other lever, since a group costs one unit.
 
 ### Docs-only fast path
 
@@ -178,21 +196,19 @@ Every worktree is an independent checkout with its own Forge output tree (`.forg
 
 Before creating worktrees, decide how challenges in the wave map onto branches. Two patterns:
 
-- **Branch-per-challenge** (default for parallel work) — every challenge gets its own
-  `challenge/<label>` branch and worktree. Required when challenges in the wave can run in
-  parallel (no dependency edges between them) — they need isolated checkouts to run
-  simultaneously without colliding. Each challenge ends up as its own PR.
-- **Combined branch** (for short, dependent runs) — multiple consecutive challenges share one
-  branch and one worktree. Only valid when the challenges form a strict dependency chain (each
-  must run after the previous), are intended to ship together, and total ≤4 challenges.
-  Long chains are still better as branch-per-challenge so an early failure does not block the
-  whole batch.
+- **Branch-per-challenge** (default) — every challenge gets its own `challenge/<label>` branch
+  and worktree, so parallel units run simultaneously without colliding. Each challenge ends up as
+  its own PR.
+- **Combined branch** — multiple challenges share one branch and one worktree and ship as one PR.
+  Used for a group chosen in Step 3, or for a short dependent chain (rule 2), and capped at 4
+  challenges. Long chains are still better as branch-per-challenge so an early failure does not
+  block the whole batch.
 
 Apply this rule to each wave:
 
-1. If the wave has more than one challenge that can run in parallel (i.e. the wave is parallel
-   by construction), use **branch-per-challenge** for every challenge in the wave. Combining is
-   not an option for parallel work.
+1. A group from Step 3 uses a **combined branch** named after its lowest-ID member. Its members
+   may come from different waves; place the group in the latest of them. Every other challenge in
+   a parallel wave uses **branch-per-challenge**.
 2. If the wave is a single challenge whose predecessor was the prior wave's only challenge
    *and* both belong to the same saga *and* the prior challenge has not yet been merged to
    `main`, prefer **combined branch** — extend the prior challenge's branch in the same
@@ -303,8 +319,9 @@ that entered only the first worktree left later implementers blocked. Two ways t
   supported fallback.
 
 Default to **serial-native** for small waves (≤3) where native tooling matters, and **parallel-Bash**
-for larger waves where concurrency is the point. Do not claim native tools for a parallel wave — they
-will silently fail for every worktree but one.
+for larger waves where concurrency is the point — still at most 3 implementers at once (see the
+concurrency cap). Do not claim native tools for a parallel wave — they will silently fail for every
+worktree but one.
 
 **Losing `git` is the half that bites.** A subagent in a worktree the parent has not entered has
 *every* `git` form refused, not just the file tools — so an implementer can finish and verify a
@@ -332,8 +349,9 @@ branch.)
 
 For a parallel wave of independent worktrees, enter-and-dispatch one worktree at a time (the
 orchestrator occupies a single cwd); within each, the implementer addresses files by absolute
-worktree path. Combining is never used for parallel work (4a), so each parallel implementer is its
-own dispatch.
+worktree path. Each dispatch unit is one implementer: a group's implementer gets every member's
+Challenge through Saga Context sections in the template below, works them in ID order, and commits
+once per challenge so each stays reviewable on its own.
 
 **Implementer subagent prompt template:**
 
@@ -414,6 +432,10 @@ Description: <description>
   moved under it; a comment recording an intervening rename, or a behavior that landed since and
   must not be dropped, is newer than the description. Follow the comment where the two disagree,
   and report which description text you found stale -- do not reconcile it silently.
+- **New names: use your recommendation, flag it for confirmation.** Where CLAUDE.md or the challenge
+  says a new name needs Ryan's confirmation, do not stall: pick it through `Docs/StyleGuide.md`
+  §Naming, declare it in exactly one place so a rename stays cheap, and list every such name under
+  a `## Names Pending Confirmation` heading in your report (name, what it names, the runner-up).
 - Do NOT modify files outside the challenge's scope unless absolutely necessary
 - **Grounding -- cite only what exists.** Before referencing any project helper, type,
   toolchain, tool, inspector page, script, vendored dependency, or directory -- in code,
@@ -555,7 +577,8 @@ For each completed challenge, working inside its worktree (`.claude/worktrees/ch
 
 ### 4e. Review (spec + quality + adversarial in parallel per challenge)
 
-Process challenges in ID order. For each challenge, dispatch all three reviewers simultaneously — as **read-only** `Explore` agents pointed at the challenge worktree, which is what makes parallel dispatch safe — wait for all to return, then move to the next challenge. Reviewers work over the frozen range `$REVIEW_BASE..$REVIEW_SHA` resolved below, which pins the review to a commit while the shared checkout keeps moving underneath it.
+Process challenges in ID order; a combined branch is reviewed once as a unit, over the whole
+branch's range, with every member's contract in each brief. For each challenge, dispatch all three reviewers simultaneously — as **read-only** `Explore` agents pointed at the challenge worktree, which is what makes parallel dispatch safe — wait for all to return, then move to the next challenge. Reviewers work over the frozen range `$REVIEW_BASE..$REVIEW_SHA` resolved below, which pins the review to a commit while the shared checkout keeps moving underneath it.
 
 **A reviewer that returns with zero tool uses and no verdict is a failed dispatch, not a pass.** Reviewers occasionally terminate early (no `git diff` run, no per-criterion table). Detect this — an empty or verdict-less return — and re-dispatch that reviewer once with the same prompt; never treat an empty review as a clean gate.
 
@@ -809,7 +832,7 @@ For every reviewed challenge that survives the pre-push check, push its branch a
 request. Group by strategy:
 
 - **branch-per-challenge:** push the challenge branch and create a single-challenge PR.
-- **combined-branch:** wait until every challenge in the chain has reached `review`, then push
+- **combined-branch:** wait until every challenge in the chain or group has reached `review`, then push
   the shared branch once and create one PR that lists all the challenges it carries.
 
 ```bash
@@ -938,9 +961,17 @@ autonomous operation.
 
 Print a summary table:
 
+**Names pending confirmation go first.** Collect every implementer's `## Names Pending
+Confirmation` list, record each on its challenge as a Crucible comment marked "pending Ryan's
+confirmation", and open the report with them. A run never waits on a naming answer, but the names
+must be confirmed at this interaction, before their PRs merge.
+
 ```
 /phoe:execute Results
 =====================
+
+Names pending confirmation:
+  RasterBaselinePass (wire-raster-baseline) -- the pass that records the reference image; runner-up: ReferenceRasterPass
 
 | Challenge | Wave | Status | Branch | PR | Notes |
 |-----------|------|--------|--------|----|-------|

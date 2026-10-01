@@ -7,6 +7,10 @@ Implement a Crucible Challenge end-to-end with human supervision. Accepts a labe
 
 > **This is the human-supervised workflow.** For fully autonomous execution of multiple challenges, use `/phoe:execute`.
 
+> **At most 3 subagents in flight at once.** Count every running dispatch — test-writer, reviewers,
+> fix passes, background agents until their notification arrives. A fourth waits for one to return.
+> Unbounded fan-out has exhausted Ryan's usage in a single run.
+
 ## Arguments
 
 - **`<label>`** — the challenge label to implement
