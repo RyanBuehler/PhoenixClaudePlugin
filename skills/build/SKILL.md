@@ -71,8 +71,10 @@ profiles` is the live source of truth.
 
 ## 3. Configure + Build
 
-Always run configure then build. Capture the structured result with `--json` so a successful run
-stays a single machine-parseable object (status, durations, warning/error counts, built-binary path).
+Always run configure then build. `--json` gives a machine-readable result: stdout carries one
+`{phase, progress, message}` NDJSON record per line while the build runs, then the result document
+(status, durations, counts, `output_path`). Read stdout **line by line** — parsing it as a single
+object, or slicing from the first brace to the last, sees the progress records as noise.
 
 ```bash
 FORGE=$(forge_bin) || { python3 Applications/Forge/Scripts/bootstrap.py && FORGE=$(forge_bin); }
@@ -82,14 +84,11 @@ PROFILE=editor   # or editor-release for a GUI editor
 "$FORGE" build "$PROFILE" --json
 ```
 
-**On failure:** `--json` reports `success:false` with `error_count` but **not** the error text
-(it silences the per-node stream). To see what broke, re-run the same `build` **without** `--json` —
-the default tier prints a bounded head+tail excerpt of each failing node (root cause + the
-`N errors generated` summary). The failed node is still dirty, so the re-run only recompiles it:
-
-```bash
-"$FORGE" build "$PROFILE"   # no --json: surfaces the failing compiler output
-```
+**On failure:** the result document carries `success:false` and a `failures` array — one
+`{type, label, exit_code, diagnostics}` entry per failing node, with the compiler's output verbatim.
+Read the error from there; no text-mode re-run is needed. A build that fails before any node runs
+(stale cache, no graph) leaves `failures` empty and puts the reason in `message`. In text mode a
+failing node's diagnostic also prints **whole**, never as an excerpt.
 
 - **Output path:** read the built binary's path from the build result's `output_path` field — do
   not hardcode it. Engine artifacts land under `Applications/Forge/.forge-out/<tree>/bin/`, where

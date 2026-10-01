@@ -44,10 +44,15 @@ for bootstrap details.
 "$FORGE" verify editor
 ```
 
-`editor` is the Headless, tests-enabled profile CI runs against. Do **not** pass `--json` here: a
-verify-gate failure should surface the failing phase's output inline — the default tier prints a
-bounded head+tail excerpt and the format/lint/audit diffs — rather than reduce a failure to an
-`error_count` with no error text.
+**A verify that may outlive the ten-minute command timeout** — a cold tree, a fresh worktree — runs
+through `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/forge_wait.py start --log <worktree>/.forge-wait/verify.log -- "$FORGE" verify editor`
+as a foreground call with `timeout: 600000`. It blocks and reports once; repeat the `wait --log ...`
+call it prints if it says `still running` (exit 124). Never poll the log: each look is a
+full-context request.
+
+`editor` is the Headless, tests-enabled profile CI runs against. Do **not** pass `--json` here: read
+the failing phase's output inline. A failing node's diagnostic prints **whole** in every mode, with
+the format/lint/audit diffs, and `--summary` cuts a green run to one tally line per phase.
 
 **New files no longer need staging.** `forge` scopes both format-check and lint to the branch
 surface (`--files=branch`), and that selection deliberately folds in untracked, non-ignored files
