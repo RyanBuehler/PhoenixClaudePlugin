@@ -81,13 +81,19 @@ phase's staleness guard and costs a full rebuild. So: `forge format` first, then
 Forge's own trials**: a change under `Applications/Forge/` can be green here and broken in CI. That
 has happened twice, and a human caught it, not this workflow.
 
+- **The local set is `editor`, plus what the change owns.** Always `editor` — it is the coverage
+  hub for engine trials. Add the app profile whose own directory you changed (`game` for
+  `Applications/Game/`, `vigil`, `crucible`, `forgegui`), and `forge` when the builder changed.
+  **Do not mirror CI's lane set.** CI runs every lane on any `Applications/Forge/` change; copying
+  that locally once cost one agent seven profiles. `minimal` stays CI's: it is a cold build in its
+  own tree, and it fails only for a missing dependency declaration.
 - A change touching the builder needs `"$FORGE" verify forge` explicitly, in addition to `editor`.
 - **Adding a module manifest, or an application `requires_module` entry, invalidates Forge's
   module-metadata fixtures** (`Applications/Forge/Trials/CodeGen/Fixtures/expected_modulemetadata_forge_*.cpp`).
-  Only `verify forge` builds those trials, so the editor profile reports green while CI reds. There
-  is no regeneration script: diff the generated `ModuleMetadata.generated.cpp` against the fixture
-  and splice in only the lines your change caused — the two renders differ in more than your change,
-  so a wholesale copy is wrong. Build-free pre-check: grep both fixtures for the new module name.
+  Only `verify forge` builds those trials, so the editor profile reports green while CI reds.
+  Regenerate them with `"$FORGE" regenerate-fixtures`, which renders the same scan the fixture trial
+  does, then review the diff — it should show only your change. Build-free pre-check: grep both
+  fixtures for the new module name.
 - **A change that edits a build profile must verify that profile.** Do not report a set of profiles
   as verified unless each one was actually run — a dispatch brief once listed six verified profiles
   while the commit under review edited six *others*, none of which any listed run touched.
@@ -100,11 +106,15 @@ has happened twice, and a human caught it, not this workflow.
 
 ### 2b. Flags, and the failures that are not yours
 
-`forge verify` takes the profile and `--build-dir`, plus the verbosity family (`--quiet`,
-`--summary`). **It rejects everything else, including `--jobs`** — the flag that would cap
-parallelism is exactly the one verify does not have. The rejection is instant (`error: unknown
-flag: --jobs`), so with output redirected it reads as an empty log rather than a failure. Serialize
-with other agents instead; there is no in-command throttle.
+`forge verify` takes the profile, `--build-dir`, `--jobs=N`/`-j N` (the cap reaches build, lint and
+test), and the verbosity family (`--quiet`, `--summary`). An unknown flag is rejected instantly, so
+with output redirected it reads as an empty log rather than a failure.
+
+**Do not wrap forge commands in an external lock.** Forge bounds machine load itself: a run takes a
+machine-wide build slot, and every compile and trial inside it holds one slot of the core slot pool,
+shared fairly between concurrent runs (`Docs/Forge_DD.md` §7.7). An outside `flock` serializes every
+build behind one queue again, and a small rebuild waits out a full verify. `bootstrap.py` is the one
+exception: it takes neither slot, so serialize a cold bootstrap with other agents.
 
 Two aborts that are the environment, not the change:
 

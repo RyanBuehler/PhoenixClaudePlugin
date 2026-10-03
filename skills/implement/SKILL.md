@@ -297,9 +297,10 @@ All verification must pass before proceeding:
 **a. Challenge verification steps** — run any commands from the challenge's `verification` field (shown in the challenge JSON).
 
 **b. Full project verification** — run `/phoe:verify` (configure → build → format-check → lint →
-policy audits → test). All must pass. `/phoe:verify` covers **one profile**: if this challenge touched
-anything under `Applications/Forge/`, or edited a build profile, verify that profile explicitly too —
-a green editor verify does not run Forge's own trials and has twice hidden a broken one.
+policy audits → test). All must pass. `/phoe:verify` covers **one profile**: always `editor`, plus
+`forge` if this challenge touched `Applications/Forge/` — a green editor verify does not run Forge's
+own trials and has twice hidden a broken one — plus the app profile whose own directory it changed
+and any build profile it edited. Never CI's full lane set; `minimal` stays with CI.
 
 **c. A cold build can outlive the command timeout.** Run it, and the verify, through
 `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/forge_wait.py start --log <worktree>/.forge-wait/<name>.log -- <forge command>` in the

@@ -563,10 +563,10 @@ For each completed challenge, working inside its worktree (`.claude/worktrees/ch
    sequence: configure + build, format-check, lint (clang-tidy on changed files), the policy audits,
    and test.
 
-   **One verify run covers one profile.** If the challenge touched anything under
-   `Applications/Forge/`, or edited a build profile, verify that profile explicitly as well — the
-   editor profile does not run Forge's own trials, and a green editor verify has twice hidden a
-   broken Forge trial. Record the profiles actually verified; 4e's brief has to report them, and a
+   **One verify run covers one profile.** Always `editor`; add `forge` if the challenge touched
+   `Applications/Forge/` (the editor profile does not run Forge's own trials, and a green editor
+   verify has twice hidden a broken Forge trial), the app profile whose own directory it changed,
+   and any build profile it edited. Never CI's full lane set; `minimal` stays with CI. Record the profiles actually verified; 4e's brief has to report them, and a
    change that edits a profile must name that profile in the set.
 
 4. Run challenge-specific verification commands from the challenge JSON.

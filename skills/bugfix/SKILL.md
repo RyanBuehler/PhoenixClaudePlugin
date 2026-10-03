@@ -233,9 +233,10 @@ All verification must pass before proceeding:
 **b. Bug verification steps** — run any commands from the bug's `verification` field.
 
 **c. Full project verification** — run `/phoe:verify` (configure → build → format-check → lint →
-policy audits → test). All must pass. It covers **one profile**: if the fix touched anything under
-`Applications/Forge/`, or edited a build profile, verify that profile explicitly as well, and name
-the profiles you actually ran when you report. See `/phoe:verify` §2a, and §2b for why a run that
+policy audits → test). All must pass. It covers **one profile**: always `editor`, plus `forge` if
+the fix touched `Applications/Forge/`, plus the app profile whose own directory it changed, plus any
+build profile it edited — never CI's full lane set, and leave `minimal` to CI. Name the profiles you
+actually ran when you report. See `/phoe:verify` §2a, and §2b for why a run that
 aborts at the toolchain audit has tested nothing.
 
 **d. A cold build can outlive the command timeout.** Run it, and the verify, through
