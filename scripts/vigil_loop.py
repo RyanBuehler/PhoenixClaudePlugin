@@ -1,27 +1,34 @@
 #!/usr/bin/env python3
 """Profile one repro in a Phoenix Editor with Vigil, from launch to a parsed finding, with no window touched.
 
-`run` drives the whole loop and prints one JSON summary on stdout:
+`run` launches its own Editor and drives the whole loop, then prints one JSON summary on stdout:
 
   1. configure  write Vigil.cfg beside the Editor: profiling on, streaming to --port, and a capture file
-  2. watch      start `vigil monitor --json` on --port, so the engine has a reader to attach to
+  2. watch      start `vigil monitor --json` on --port, so the engine has a reader to stream to
   3. launch     start the Editor with --console-pipe, so commands reach it and answers come back
   4. attach     `vigil.trace <category> on` over the pipe -- the first answer proves an engine is there
   5. repro      send each --repro line over the pipe, then wait for --repro-signal and --settle
   6. stop       `vigil.trace <category> off`, then `quit`, which closes the capture whole
-  7. query      `vigil query --json` over the whole capture and over the repro's frames
-  8. assert     `vigil check --json` with the budgets given, and the worst frame of each frame budget
+  7. restore    put Vigil.cfg back as the run found it, so a later launch neither profiles nor truncates the capture
+  8. query      `vigil query --json` over the whole capture and over the repro's frames
+  9. assert     `vigil check --json` over the repro's frames, and the worst frame of each frame budget
 
-`configure` does step 1 alone, for an engineer who launches the Editor by hand.
+It launches the Editor rather than attaching to a running one because no agent may open a capture at run
+time: the console pipe refuses vigil.capture.start, and a capture opened late lacks the thread names and
+label definitions already sent. A capture named in Vigil.cfg opens with the engine.
 
-Vigil.cfg is a text parcel the engine writes and checksums by its struct's size, so it is never
-written from scratch here: an existing one is read and its fields rewritten. A missing or unreadable
-one is first replaced by the engine's own defaults, by launching the Editor once with --quit.
+`configure` does step 1 alone, for an engineer who launches the Editor by hand; it restores nothing.
 
-Exit status follows the vigil verbs: 0 the loop ran and every assertion held, 1 misuse (bad arguments,
-an unknown category, a repro the engine refused), 2 no answer (no engine attached, profiling off, an
-empty or unreadable capture), 3 an assertion failed (a budget missed, gaps present). The summary's
-`failure` names which.
+Vigil.cfg is a text parcel the engine writes and checksums by its struct's size, so it is never written
+from scratch here: an existing one is read and its fields rewritten. One that is absent, or holds no parcel
+header, is first replaced by the engine's own defaults, by launching the Editor once with --quit. One that
+is a parcel this script cannot read is refused, untouched, since replacing it would lose its settings.
+
+Exit status follows the vigil verbs: 0 the loop ran and every assertion held, 1 misuse (an unknown
+category, a repro the engine refused), 2 no answer (no engine attached, profiling off, an empty or
+unreadable capture), 3 an assertion failed (a budget missed, gaps present, pulses dropped), 4 the loop
+could not run (a binary that would not start, a file held open, a Vigil.cfg it does not recognize),
+130 interrupted. The summary's `failure` names which.
 """
 
 import argparse
@@ -29,9 +36,9 @@ import importlib.util
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path
 
@@ -39,6 +46,8 @@ PASSED = 0
 MISUSED = 1
 UNANSWERED = 2
 FAILED = 3
+UNRUNNABLE = 4
+INTERRUPTED = 130
 
 PARCEL_MAGIC = 1346915928  # "PHNX", 0x50484E58
 # Header (magic, type id, version), checksum, then the struct's own version: five tokens before the fields.
@@ -60,6 +69,10 @@ class LoopFailure(Exception):
 		super().__init__(message)
 		self.status = status
 		self.failure = failure
+
+
+class NotAParcel(ValueError):
+	"""The file does not open with a parcel header, so no engine wrote it and nothing in it is lost by seeding."""
 
 
 # --- Vigil.cfg -------------------------------------------------------------------------------------
@@ -109,7 +122,7 @@ def ParseConfig(text):
 	"""Split a Vigil.cfg into the prefix the engine owns and VigilConfiguration's fields, in declaration order."""
 	tokens = text.split()
 	if len(tokens) < PREFIX_TOKENS or tokens[0] != str(PARCEL_MAGIC):
-		raise ValueError("it does not open with a parcel header")
+		raise NotAParcel("it does not open with a parcel header")
 	reader = TokenReader(tokens)
 	reader.position = PREFIX_TOKENS
 	fields = {
@@ -120,7 +133,7 @@ def ParseConfig(text):
 		"EnabledTraceCategories": reader.TakeStrings(),
 	}
 	if reader.position != len(tokens):
-		raise ValueError("it holds more than the fields this script knows; VigilConfiguration has changed")
+		raise ValueError("it holds more than the fields this script knows")
 	return tokens[:PREFIX_TOKENS], fields
 
 
@@ -136,6 +149,60 @@ def FormatConfig(prefix, fields):
 	return " ".join(tokens)
 
 
+def ConfigPath(editor):
+	return Path(editor).resolve().parent / "Configuration" / CONFIG_NAME
+
+
+def ReadConfig(config_path):
+	"""The prefix and fields of Vigil.cfg, or None when no engine wrote one: absent, or without a parcel header."""
+	try:
+		text = config_path.read_text()
+	except FileNotFoundError:
+		return None
+	except UnicodeDecodeError:
+		return None
+	except OSError as error:
+		raise LoopFailure(UNRUNNABLE, "config_inaccessible", f"{config_path} could not be read: {error}") from error
+	try:
+		return ParseConfig(text)
+	except NotAParcel:
+		return None
+	except ValueError as error:
+		raise LoopFailure(UNRUNNABLE, "config_unrecognized",
+			f"{config_path} is a parcel this script cannot read ({error}). VigilConfiguration has likely changed; the "
+			"file is left as it is rather than replaced by defaults, which would lose its settings") from error
+
+
+def WriteConfig(config_path, text):
+	try:
+		config_path.parent.mkdir(parents=True, exist_ok=True)
+		config_path.write_text(text)
+	except OSError as error:
+		raise LoopFailure(UNRUNNABLE, "config_inaccessible", f"{config_path} could not be written: {error}") from error
+
+
+def SnapshotConfig(config_path):
+	"""Vigil.cfg's bytes as the run found it, or None when there was none."""
+	try:
+		return config_path.read_bytes()
+	except FileNotFoundError:
+		return None
+	except OSError as error:
+		raise LoopFailure(UNRUNNABLE, "config_inaccessible", f"{config_path} could not be read: {error}") from error
+
+
+def RestoreConfig(config_path, snapshot):
+	"""Put Vigil.cfg back as the run found it. False when it could not be."""
+	try:
+		if snapshot is None:
+			config_path.unlink(missing_ok=True)
+		elif not config_path.exists() or config_path.read_bytes() != snapshot:
+			config_path.write_bytes(snapshot)
+		return True
+	except OSError:
+		return False
+
+
 def EditorEnvironment(editor_command):
 	"""Forge puts an Editor's shared libraries in lib/ beside bin/, which Windows finds only through PATH."""
 	environment = dict(os.environ)
@@ -148,33 +215,82 @@ def EditorEnvironment(editor_command):
 	return environment
 
 
+# --- processes -------------------------------------------------------------------------------------
+
+def Launch(command, step, **options):
+	"""Start a process; on POSIX in a session of its own, so a kill reaches what it started (xvfb-run's Xvfb)."""
+	if os.name != "nt":
+		options["start_new_session"] = True
+	try:
+		return subprocess.Popen(command, **options)
+	except OSError as error:
+		raise LoopFailure(UNRUNNABLE, "launch_failed", f"{step}: could not start {command[0]}: {error}") from error
+
+
+def Kill(process):
+	"""Kill a process and, on POSIX, everything in its process group, then reap it."""
+	if os.name == "nt":
+		if process.poll() is None:
+			process.kill()
+	else:
+		try:
+			os.killpg(process.pid, signal.SIGKILL)
+		except (ProcessLookupError, PermissionError):
+			pass
+	process.wait()
+
+
+def Stop(process, seconds):
+	"""Wait for a process to exit, and kill it with what it started when it outlives the wait. None when killed."""
+	try:
+		return process.wait(seconds)
+	except subprocess.TimeoutExpired:
+		Kill(process)
+		return None
+
+
+def Terminate(process, seconds):
+	"""Ask a process, and on POSIX its group, to end; kill it when it does not within the wait."""
+	if process.poll() is None:
+		if os.name == "nt":
+			process.terminate()
+		else:
+			try:
+				os.killpg(process.pid, signal.SIGTERM)
+			except (ProcessLookupError, PermissionError):
+				pass
+	return Stop(process, seconds)
+
+
+def RaiseInterrupt(signum, frame):
+	raise KeyboardInterrupt
+
+
+# --- configure -------------------------------------------------------------------------------------
+
 def SeedConfig(config_path, editor_command, timeout):
 	"""Have the engine write its defaults: it replaces a Vigil.cfg it cannot parse, and --quit ends it at once."""
-	config_path.parent.mkdir(parents=True, exist_ok=True)
-	config_path.write_text("unparsable\n")
-	try:
-		subprocess.run([*editor_command, "--quit"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-			stderr=subprocess.DEVNULL, timeout=timeout, check=False, cwd=config_path.parent,
-			env=EditorEnvironment(editor_command))
-	except subprocess.TimeoutExpired as error:
+	WriteConfig(config_path, "unparsable\n")
+	seed = Launch([*editor_command, "--quit"], "seed Vigil.cfg", stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+		stderr=subprocess.DEVNULL, cwd=config_path.parent, env=EditorEnvironment(editor_command))
+	if Stop(seed, timeout) is None:
 		raise LoopFailure(UNANSWERED, "config_unwritten",
-			f"the Editor launched to write {config_path} did not exit within {timeout:g} s") from error
+			f"the Editor launched to write {config_path} did not exit within {timeout:g} s and was killed")
 
 
 def Configure(config_path, editor_command, port, capture_file, categories, timeout):
 	"""Write Vigil.cfg with profiling on, return the fields written."""
-	try:
-		prefix, fields = ParseConfig(config_path.read_text())
-	except (OSError, ValueError, UnicodeDecodeError):
+	parsed = ReadConfig(config_path)
+	if parsed is None:
 		if not editor_command:
 			raise LoopFailure(UNANSWERED, "config_unwritten",
-				f"{config_path} is missing or unreadable, and no Editor was given to write its defaults")
+				f"{config_path} is missing or holds no parcel header, and no Editor was given to write its defaults")
 		SeedConfig(config_path, editor_command, timeout)
-		try:
-			prefix, fields = ParseConfig(config_path.read_text())
-		except (OSError, ValueError, UnicodeDecodeError) as error:
+		parsed = ReadConfig(config_path)
+		if parsed is None:
 			raise LoopFailure(UNANSWERED, "config_unwritten",
-				f"the Editor did not leave a readable {config_path}: {error}. Is VigilAgent in this build?") from error
+				f"the Editor did not leave a readable {config_path}. Is VigilAgent in this build?")
+	prefix, fields = parsed
 	fields.update({
 		"Enabled": True,
 		"Host": "127.0.0.1",
@@ -182,8 +298,14 @@ def Configure(config_path, editor_command, port, capture_file, categories, timeo
 		"CaptureFile": capture_file,
 		"EnabledTraceCategories": categories or ["None"],
 	})
-	config_path.write_text(FormatConfig(prefix, fields))
+	WriteConfig(config_path, FormatConfig(prefix, fields))
 	return fields
+
+
+def RequireExecutable(path, what):
+	"""Refuse a binary that is not there before anything is written beside it."""
+	if not Path(path).is_file() and not shutil.which(path):
+		raise LoopFailure(UNRUNNABLE, "launch_failed", f"{what} {path} does not exist; build it first")
 
 
 # --- the loop --------------------------------------------------------------------------------------
@@ -218,6 +340,40 @@ def ReadEvents(path):
 def NewestFrame(path):
 	frames = [event["frame"] for event in ReadEvents(path) if event.get("event") == "frame"]
 	return frames[-1] if frames else None
+
+
+def GapFrames(path):
+	"""The frames the monitor reported a gap in: the engine lost events there."""
+	return [event["frame"] for event in ReadEvents(path) if event.get("event") == "frame" and event.get("gap")]
+
+
+def ReproWindow(before, after):
+	"""The repro's frames, from the first after the newest frame seen before it to the newest seen after it."""
+	if before is None or after is None or after <= before:
+		return None
+	return [before + 1, after]
+
+
+def CheckArguments(capture, budgets, frame_budgets, max_dropped_pulses, window):
+	"""vigil check's arguments, held to the repro's frames when they are known; None when nothing is asserted."""
+	assertions = [f"--budget={value}" for value in budgets] + [f"--frame-budget={value}" for value in frame_budgets]
+	if max_dropped_pulses is not None:
+		assertions.append(f"--max-dropped-pulses={max_dropped_pulses}")
+	if not assertions:
+		return None
+	arguments = ["check", str(capture), "--json", *assertions]
+	if window is not None:
+		arguments.append(f"--frames={window[0]}:{window[1]}")
+	return arguments
+
+
+def NameCheckFailure(verdict):
+	"""The failure a failed check earns: gaps first, as they void the rest, then dropped pulses, then budgets."""
+	if not verdict.get("gaps_passed", True):
+		return "gaps"
+	if not verdict.get("dropped_pulses_passed", True):
+		return "pulses_dropped"
+	return "budget_missed"
 
 
 def WaitForEvent(path, name, process, seconds):
@@ -263,16 +419,51 @@ def Attach(pipe, category, editor, seconds):
 		return answer
 	if NOT_OPEN_TO_AGENTS in answer:
 		raise LoopFailure(UNANSWERED, "profiling_inactive",
-			f"the engine answered but has no vigil.trace, so VigilAgent is not running ({answer}); build an "
-			"editor-profiling profile and check Vigil.cfg's Enabled")
+			f"the engine answered but has no vigil.trace, so VigilAgent is not running ({answer}); build a profile "
+			"that links VigilAgent and check Vigil.cfg's Enabled")
 	if UNKNOWN_CATEGORY in answer:
 		raise LoopFailure(MISUSED, "unknown_category", answer)
 	raise LoopFailure(MISUSED, "refused", answer)
 
 
+def WaitForRepro(signal_path, error_path, editor, seconds):
+	"""Wait for the repro's done signal; its error file, or the Editor exiting, ends the wait at once."""
+	deadline = time.monotonic() + seconds
+	while True:
+		if error_path and Path(error_path).exists():
+			try:
+				detail = Path(error_path).read_text(errors="replace").strip()
+			except OSError:
+				detail = ""
+			raise LoopFailure(UNANSWERED, "repro_failed", f"{error_path} appeared: {detail or 'the repro failed'}")
+		if Path(signal_path).exists():
+			return
+		code = editor.poll()
+		if code is not None:
+			raise LoopFailure(UNANSWERED, "no_engine", f"the Editor exited with {code} during the repro; read editor.log")
+		if time.monotonic() >= deadline:
+			raise LoopFailure(UNANSWERED, "repro_unfinished",
+				f"{signal_path} did not appear within {seconds:g} s of the repro")
+		time.sleep(0.1)
+
+
+def OpenLog(path):
+	try:
+		return Path(path).open("w")
+	except OSError as error:
+		raise LoopFailure(UNRUNNABLE, "work_locked",
+			f"{path} could not be written: {error}. Is a previous run's Editor or vigil still running?") from error
+
+
 def RunVerb(vigil, arguments, output_path):
-	result = subprocess.run([vigil, *arguments], capture_output=True, text=True, check=False)
-	Path(output_path).write_text(result.stdout)
+	try:
+		result = subprocess.run([vigil, *arguments], capture_output=True, text=True, check=False)
+	except OSError as error:
+		raise LoopFailure(UNRUNNABLE, "launch_failed", f"could not start {vigil}: {error}") from error
+	try:
+		Path(output_path).write_text(result.stdout)
+	except OSError as error:
+		raise LoopFailure(UNRUNNABLE, "work_locked", f"{output_path} could not be written: {error}") from error
 	answer = None
 	if result.stdout.strip():
 		try:
@@ -282,43 +473,26 @@ def RunVerb(vigil, arguments, output_path):
 	return result.returncode, answer, result.stderr.strip()
 
 
-def Stop(process, seconds):
-	if process.poll() is not None:
-		return process.returncode
-	try:
-		return process.wait(seconds)
-	except subprocess.TimeoutExpired:
-		process.kill()
-		process.wait()
-		return None
-
-
-def Run(args):
-	work = Path(args.work).resolve()
-	work.mkdir(parents=True, exist_ok=True)
-	capture = work / "capture.vigil"
-	monitor_path = work / "monitor.ndjson"
+def Record(args, work, capture, monitor_path, config_path, summary):
+	"""Steps 1 to 7: everything that runs a process or changes Vigil.cfg, undone in its finally whatever ends it."""
 	pipe = args.pipe or DefaultPipePath()
 	launch = [*(args.launch_prefix.split() if args.launch_prefix is not None else DefaultLaunchPrefix()), args.editor]
-	summary = {"work": str(work), "capture": str(capture), "pipe": pipe, "port": args.port, "categories": args.category}
-	for stale in (capture, monitor_path):
-		stale.unlink(missing_ok=True)
-
-	config_path = Path(args.editor).resolve().parent / "Configuration" / CONFIG_NAME
-	Configure(config_path, launch, args.port, capture.as_posix(), [], args.startup_timeout)
-	summary["config"] = str(config_path)
-
-	monitor = subprocess.Popen(
-		[args.vigil, "monitor", "--json", f"--port={args.port}", f"--seconds={args.monitor_seconds:g}"],
-		stdin=subprocess.DEVNULL, stdout=monitor_path.open("w"), stderr=(work / "monitor.err").open("w"))
-	editor = None
+	summary["pipe"] = pipe
+	snapshot = SnapshotConfig(config_path)
+	processes = []
 	try:
+		Configure(config_path, launch, args.port, capture.as_posix(), [], args.startup_timeout)
+
+		monitor = Launch([args.vigil, "monitor", "--json", f"--port={args.port}", f"--seconds={args.monitor_seconds:g}"],
+			"vigil monitor", stdin=subprocess.DEVNULL, stdout=OpenLog(monitor_path), stderr=OpenLog(work / "monitor.err"))
+		processes.append(monitor)
 		if not WaitForEvent(monitor_path, "listening", monitor, 10):
 			raise LoopFailure(UNANSWERED, "port_in_use",
 				f"vigil monitor did not listen on port {args.port}: {(work / 'monitor.err').read_text().strip()}")
 
-		editor = subprocess.Popen([*launch, f"--console-pipe={pipe}"], cwd=work, stdin=subprocess.DEVNULL,
-			stdout=(work / "editor.log").open("w"), stderr=subprocess.STDOUT, env=EditorEnvironment(launch))
+		editor = Launch([*launch, f"--console-pipe={pipe}"], "Editor", cwd=work, stdin=subprocess.DEVNULL,
+			stdout=OpenLog(work / "editor.log"), stderr=subprocess.STDOUT, env=EditorEnvironment(launch))
+		processes.append(editor)
 
 		for index, category in enumerate(args.category):
 			# Only the first waits out start-up; every answer is read for the same refusals.
@@ -332,15 +506,9 @@ def Run(args):
 		for line in args.repro:
 			SendOrFail(pipe, line, editor, "repro")
 		if args.repro_signal:
-			deadline = time.monotonic() + args.repro_timeout
-			while not Path(args.repro_signal).exists():
-				if time.monotonic() >= deadline:
-					raise LoopFailure(UNANSWERED, "repro_unfinished",
-						f"{args.repro_signal} did not appear within {args.repro_timeout:g} s of the repro")
-				time.sleep(0.1)
+			WaitForRepro(args.repro_signal, args.repro_error, editor, args.repro_timeout)
 		time.sleep(args.settle)
-		after = NewestFrame(monitor_path)
-		summary["repro_frames"] = [before + 1 if before is not None else None, after]
+		summary["repro_frames"] = ReproWindow(before, NewestFrame(monitor_path))
 
 		for category in args.category:
 			SendOrFail(pipe, f"vigil.trace {category} off", editor, "stop")
@@ -351,10 +519,31 @@ def Run(args):
 				f"the Editor did not exit within {args.exit_timeout:g} s of quit and was killed; its capture is cut off")
 		WaitForEvent(monitor_path, "disconnected", monitor, 5)
 	finally:
-		if editor is not None and editor.poll() is None:
-			editor.kill()
-		monitor.terminate()
-		Stop(monitor, 10)
+		# The monitor first, then the Editor: neither outlives the run, nor does the configuration it set.
+		for process in reversed(processes):
+			Terminate(process, 10)
+		summary["config_restored"] = RestoreConfig(config_path, snapshot)
+		if not summary["config_restored"]:
+			print(f"vigil_loop: {config_path} could not be restored; it still turns profiling on", file=sys.stderr)
+
+
+def Run(args, summary):
+	RequireExecutable(args.editor, "the Editor")
+	RequireExecutable(args.vigil, "vigil")
+	work = Path(args.work).resolve()
+	capture = work / "capture.vigil"
+	monitor_path = work / "monitor.ndjson"
+	config_path = ConfigPath(args.editor)
+	summary.update({"work": str(work), "capture": str(capture), "config": str(config_path), "port": args.port,
+		"categories": args.category})
+	try:
+		work.mkdir(parents=True, exist_ok=True)
+		capture.unlink(missing_ok=True)
+	except OSError as error:
+		raise LoopFailure(UNRUNNABLE, "work_locked",
+			f"{capture} could not be replaced: {error}. Is a previous run's Editor still running?") from error
+
+	Record(args, work, capture, monitor_path, config_path, summary)
 
 	code, whole, error = RunVerb(args.vigil, ["query", str(capture), "--json", "--top=10"], work / "query.json")
 	if code != 0 or whole is None:
@@ -365,20 +554,23 @@ def Run(args):
 		raise LoopFailure(UNANSWERED, "empty_capture",
 			"the capture holds no frames: the engine recorded nothing before it quit, or wrote to another file")
 
-	first, last = summary["repro_frames"]
-	if first is not None and last is not None and first <= last:
-		code, window, error = RunVerb(args.vigil, ["query", str(capture), "--json", "--top=10", f"--frames={first}:{last}"],
-			work / "query-repro.json")
-		if code == 0 and window is not None:
-			summary["repro_query"] = {"frame_count": window["frame_count"], "scopes": window["scopes"]}
+	window = summary["repro_frames"]
+	if window is not None:
+		code, scoped, error = RunVerb(args.vigil,
+			["query", str(capture), "--json", "--top=10", f"--frames={window[0]}:{window[1]}"], work / "query-repro.json")
+		if code == 0 and scoped is not None:
+			summary["repro_query"] = {"frame_count": scoped["frame_count"], "scopes": scoped["scopes"]}
+	summary["monitor_gap_frames"] = GapFrames(monitor_path)
 
-	assertions = [f"--budget={value}" for value in args.budget] + [f"--frame-budget={value}" for value in args.frame_budget]
-	if args.max_dropped_pulses is not None:
-		assertions.append(f"--max-dropped-pulses={args.max_dropped_pulses}")
-	if not assertions:
-		return PASSED, summary
+	arguments = CheckArguments(capture, args.budget, args.frame_budget, args.max_dropped_pulses, window)
+	if arguments is None:
+		# Nothing to assert, so vigil check does not run; the monitor's gaps still void the measurement.
+		if summary["monitor_gap_frames"]:
+			summary["failure"] = "gaps"
+			return FAILED
+		return PASSED
 
-	code, verdict, error = RunVerb(args.vigil, ["check", str(capture), "--json", *assertions], work / "check.json")
+	code, verdict, error = RunVerb(args.vigil, arguments, work / "check.json")
 	if verdict is None:
 		raise LoopFailure(code or UNANSWERED, "check_unanswered", f"vigil check exited {code}: {error}")
 	summary["check"] = verdict
@@ -396,11 +588,11 @@ def Run(args):
 					for scope in breakdown["scopes"]]
 		findings.append(finding)
 	summary["findings"] = findings
-	if code == 0:
-		return PASSED, summary
-	if code == 3:
-		summary["failure"] = "gaps" if not verdict.get("gaps_passed", True) else "budget_missed"
-		return FAILED, summary
+	if code == PASSED:
+		return PASSED
+	if code == FAILED:
+		summary["failure"] = NameCheckFailure(verdict)
+		return FAILED
 	raise LoopFailure(code, "check_unanswered", f"vigil check exited {code}: {error}")
 
 
@@ -409,20 +601,21 @@ def Main(argv):
 	sub = parser.add_subparsers(dest="action", required=True)
 
 	configure = sub.add_parser("configure", help="write Vigil.cfg beside an Editor with profiling on")
-	configure.add_argument("--editor", required=True, help="the Editor executable from a profiling build")
+	configure.add_argument("--editor", required=True, help="the Editor executable from a build that links VigilAgent")
 	configure.add_argument("--port", type=int, default=DEFAULT_PORT)
 	configure.add_argument("--capture", default="", help="the .vigil file to write for the whole session")
 	configure.add_argument("--category", action="append", default=[], help="a trace scope category on from launch")
 	configure.add_argument("--timeout", type=float, default=180.0, help="seconds the defaults-writing launch may take")
 
-	run = sub.add_parser("run", help="run the whole loop and print a JSON summary")
-	run.add_argument("--editor", required=True, help="the Editor executable from a profiling build")
+	run = sub.add_parser("run", help="launch an Editor, run the whole loop and print a JSON summary")
+	run.add_argument("--editor", required=True, help="the Editor executable from a build that links VigilAgent")
 	run.add_argument("--vigil", required=True, help="the vigil executable")
 	run.add_argument("--work", required=True, help="directory for the capture, the logs and every answer")
 	run.add_argument("--category", action="append", required=True,
 		help="trace scope category to enable for the repro; repeat for several")
 	run.add_argument("--repro", action="append", default=[], help="console line to run as the repro, in order")
 	run.add_argument("--repro-signal", help="a file whose appearance says the repro finished")
+	run.add_argument("--repro-error", help="a file whose appearance says the repro failed")
 	run.add_argument("--repro-timeout", type=float, default=60.0)
 	run.add_argument("--settle", type=float, default=2.0, help="seconds of frames before and after the repro")
 	run.add_argument("--budget", action="append", default=[], help="SCOPE=MS, passed to vigil check")
@@ -430,7 +623,8 @@ def Main(argv):
 	run.add_argument("--max-dropped-pulses", type=int)
 	run.add_argument("--port", type=int, default=DEFAULT_PORT)
 	run.add_argument("--pipe", help="console pipe path (default: a per-run name)")
-	run.add_argument("--launch-prefix", help="words before the Editor, such as 'xvfb-run -a' (default: xvfb-run when there is no display)")
+	run.add_argument("--launch-prefix",
+		help="words before the Editor, such as 'xvfb-run -a' (default: xvfb-run when there is no display)")
 	run.add_argument("--startup-timeout", type=float, default=180.0)
 	run.add_argument("--exit-timeout", type=float, default=60.0)
 	run.add_argument("--monitor-seconds", type=float, default=900.0)
@@ -438,20 +632,28 @@ def Main(argv):
 
 	if args.action == "configure":
 		try:
-			fields = Configure(Path(args.editor).resolve().parent / "Configuration" / CONFIG_NAME, [args.editor],
-				args.port, args.capture, args.category, args.timeout)
+			RequireExecutable(args.editor, "the Editor")
+			fields = Configure(ConfigPath(args.editor), [args.editor], args.port, args.capture, args.category, args.timeout)
 		except LoopFailure as failure:
 			print(f"vigil_loop: {failure}", file=sys.stderr)
 			return failure.status
 		print(json.dumps(fields))
 		return PASSED
 
+	# A SIGTERM unwinds like Ctrl+C, so the Editor, the monitor and Vigil.cfg are put right on the way out.
+	signal.signal(signal.SIGTERM, RaiseInterrupt)
+	summary = {}
 	try:
-		status, summary = Run(args)
+		status = Run(args, summary)
 	except LoopFailure as failure:
-		print(json.dumps({"failure": failure.failure, "message": str(failure)}, indent="\t"))
+		summary.update({"failure": failure.failure, "message": str(failure)})
+		print(json.dumps(summary, indent="\t"))
 		print(f"vigil_loop: {failure}", file=sys.stderr)
 		return failure.status
+	except KeyboardInterrupt:
+		summary.update({"failure": "interrupted", "message": "interrupted; the Editor and monitor were stopped"})
+		print(json.dumps(summary, indent="\t"))
+		return INTERRUPTED
 	print(json.dumps(summary, indent="\t"))
 	return status
 

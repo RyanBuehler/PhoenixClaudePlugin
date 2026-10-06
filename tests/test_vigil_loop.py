@@ -6,13 +6,18 @@ stand-in engine on the platform's console pipe channel, because how each refusal
 contract the loop's failure names rest on.
 """
 
+import contextlib
 import importlib.util
+import io
+import json
 import os
 import socket
+import subprocess
 import sys
 import tempfile
 import textwrap
 import threading
+import time
 import unittest
 from pathlib import Path
 
@@ -124,6 +129,33 @@ class ConfigTests(unittest.TestCase):
 			with self.assertRaises(ValueError, msg=text):
 				vigil_loop.ParseConfig(text)
 
+	def test_only_a_file_without_a_parcel_header_is_not_a_parcel(self):
+		for text in ("", "unparsable", "1 2 3 4 5 0 0 0 0 0"):
+			with self.assertRaises(vigil_loop.NotAParcel, msg=text):
+				vigil_loop.ParseConfig(text)
+		for text in (DEFAULTS + " 7", DEFAULTS.rsplit(" ", 2)[0]):
+			try:
+				vigil_loop.ParseConfig(text)
+			except vigil_loop.NotAParcel:
+				self.fail(f"a parcel with other fields is still a parcel: {text}")
+			except ValueError:
+				pass
+
+
+def SeedingEditor(directory, marker=None):
+	"""Stands in for an engine that replaces a Vigil.cfg it cannot parse, in its Configuration directory."""
+	editor = Path(directory) / "editor.py"
+	editor.write_text(textwrap.dedent(f"""
+		import sys
+		from pathlib import Path
+		assert sys.argv[1:] == ["--quit"]
+		assert Path("Vigil.cfg").read_text().strip() == "unparsable"
+		Path("Vigil.cfg").write_text({DEFAULTS!r})
+		if {str(marker) if marker else ""!r}:
+			Path({str(marker) if marker else ""!r}).write_text("launched")
+	"""))
+	return [sys.executable, str(editor)]
+
 
 class ConfigureTests(unittest.TestCase):
 
@@ -156,17 +188,26 @@ class ConfigureTests(unittest.TestCase):
 		self.assertEqual((raised.exception.status, raised.exception.failure), (vigil_loop.UNANSWERED, "config_unwritten"))
 
 	def test_a_missing_file_is_seeded_by_the_editor_writing_its_defaults(self):
-		# Stands in for an engine that replaces a Vigil.cfg it cannot parse, in its Configuration directory.
-		editor = Path(self._tmp.name) / "editor.py"
-		editor.write_text(textwrap.dedent(f"""
-			import sys
-			from pathlib import Path
-			assert sys.argv[1:] == ["--quit"]
-			assert Path("Vigil.cfg").read_text().strip() == "unparsable"
-			Path("Vigil.cfg").write_text({DEFAULTS!r})
-		"""))
-		vigil_loop.Configure(self.config, [sys.executable, str(editor)], 4747, "capture.vigil", [], 30)
+		vigil_loop.Configure(self.config, SeedingEditor(self._tmp.name), 4747, "capture.vigil", [], 30)
 		self.assertEqual(vigil_loop.ParseConfig(self.config.read_text())[1]["CaptureFile"], "capture.vigil")
+
+	def test_a_file_without_a_parcel_header_is_seeded_too(self):
+		self.config.parent.mkdir()
+		self.config.write_text("Enabled=true\nPort=4747\n")
+		vigil_loop.Configure(self.config, SeedingEditor(self._tmp.name), 4747, "", [], 30)
+		self.assertTrue(vigil_loop.ParseConfig(self.config.read_text())[1]["Enabled"])
+
+	def test_a_parcel_of_other_fields_is_refused_untouched_and_no_editor_launched(self):
+		self.config.parent.mkdir()
+		changed = DEFAULTS + " 1 4 72 101 121 33"
+		self.config.write_text(changed)
+		marker = Path(self._tmp.name) / "launched"
+		with self.assertRaises(vigil_loop.LoopFailure) as raised:
+			vigil_loop.Configure(self.config, SeedingEditor(self._tmp.name, marker), 4747, "", [], 30)
+		self.assertEqual((raised.exception.status, raised.exception.failure),
+			(vigil_loop.UNRUNNABLE, "config_unrecognized"))
+		self.assertEqual(self.config.read_text(), changed)
+		self.assertFalse(marker.exists())
 
 	def test_an_editor_that_leaves_no_readable_file_is_named_as_the_cause(self):
 		editor = Path(self._tmp.name) / "editor.py"
@@ -175,6 +216,122 @@ class ConfigureTests(unittest.TestCase):
 			vigil_loop.Configure(self.config, [sys.executable, str(editor)], 4747, "", [], 30)
 		self.assertEqual(raised.exception.failure, "config_unwritten")
 		self.assertIn("VigilAgent", str(raised.exception))
+
+	def test_an_editor_that_never_exits_is_killed_and_named(self):
+		editor = Path(self._tmp.name) / "editor.py"
+		editor.write_text("import time\ntime.sleep(60)\n")
+		started = time.monotonic()
+		with self.assertRaises(vigil_loop.LoopFailure) as raised:
+			vigil_loop.Configure(self.config, [sys.executable, str(editor)], 4747, "", [], 1)
+		self.assertEqual(raised.exception.failure, "config_unwritten")
+		self.assertLess(time.monotonic() - started, 30)
+
+
+class RestoreTests(unittest.TestCase):
+
+	def setUp(self):
+		self._tmp = tempfile.TemporaryDirectory()
+		self.config = Path(self._tmp.name) / "Configuration" / "Vigil.cfg"
+		self.config.parent.mkdir()
+
+	def tearDown(self):
+		self._tmp.cleanup()
+
+	def test_a_file_the_run_found_is_put_back_byte_for_byte(self):
+		self.config.write_bytes(DEFAULTS.encode())
+		snapshot = vigil_loop.SnapshotConfig(self.config)
+		vigil_loop.Configure(self.config, None, 4848, "C:/work/capture.vigil", ["Aurora"], 5)
+		self.assertTrue(vigil_loop.RestoreConfig(self.config, snapshot))
+		self.assertEqual(self.config.read_bytes(), DEFAULTS.encode())
+
+	def test_a_file_the_run_did_not_find_is_removed_again(self):
+		snapshot = vigil_loop.SnapshotConfig(self.config)
+		self.assertIsNone(snapshot)
+		self.config.write_text(DEFAULTS)
+		self.assertTrue(vigil_loop.RestoreConfig(self.config, snapshot))
+		self.assertFalse(self.config.exists())
+
+
+class CheckTests(unittest.TestCase):
+
+	def test_the_check_is_held_to_the_repro_frames_when_they_are_known(self):
+		arguments = vigil_loop.CheckArguments("c.vigil", [], ["PNG::Encode=50"], None, [129, 362])
+		self.assertEqual(arguments, ["check", "c.vigil", "--json", "--frame-budget=PNG::Encode=50", "--frames=129:362"])
+
+	def test_unknown_repro_frames_check_the_whole_capture(self):
+		arguments = vigil_loop.CheckArguments("c.vigil", ["Engine::Cycle=2"], [], 0, None)
+		self.assertEqual(arguments, ["check", "c.vigil", "--json", "--budget=Engine::Cycle=2", "--max-dropped-pulses=0"])
+
+	def test_nothing_to_assert_runs_no_check(self):
+		self.assertIsNone(vigil_loop.CheckArguments("c.vigil", [], [], None, [1, 2]))
+
+	def test_the_repro_window_runs_from_after_the_frame_before_to_the_frame_after(self):
+		self.assertEqual(vigil_loop.ReproWindow(128, 362), [129, 362])
+		self.assertIsNone(vigil_loop.ReproWindow(None, 362))
+		self.assertIsNone(vigil_loop.ReproWindow(362, 362))
+
+	def test_a_failed_check_is_named_by_what_voids_the_most(self):
+		self.assertEqual(vigil_loop.NameCheckFailure({"gaps_passed": False, "dropped_pulses_passed": False}), "gaps")
+		self.assertEqual(vigil_loop.NameCheckFailure({"gaps_passed": True, "dropped_pulses_passed": False}),
+			"pulses_dropped")
+		self.assertEqual(vigil_loop.NameCheckFailure({"gaps_passed": True, "dropped_pulses_passed": True}),
+			"budget_missed")
+
+
+class ProcessTests(unittest.TestCase):
+
+	def test_a_process_outliving_its_wait_is_killed(self):
+		process = vigil_loop.Launch([sys.executable, "-c", "import time; time.sleep(60)"], "sleeper")
+		self.assertIsNone(vigil_loop.Stop(process, 0.5))
+		self.assertIsNotNone(process.poll())
+
+	@unittest.skipIf(os.name == "nt", "a process group is POSIX; Windows kills the process alone")
+	def test_a_kill_reaches_what_the_process_started(self):
+		process = vigil_loop.Launch(["sh", "-c", "sleep 60 & echo $!; wait"], "shell", stdout=subprocess.PIPE, text=True)
+		child = int(process.stdout.readline())
+		vigil_loop.Kill(process)
+		deadline = time.monotonic() + 10
+		while time.monotonic() < deadline:
+			try:
+				os.kill(child, 0)
+			except ProcessLookupError:
+				return
+			time.sleep(0.1)
+		self.fail(f"the shell's child {child} outlived the kill")
+
+	def test_a_command_that_does_not_exist_is_launch_failed(self):
+		with self.assertRaises(vigil_loop.LoopFailure) as raised:
+			vigil_loop.Launch([str(Path(tempfile.gettempdir()) / "no-such-editor.exe")], "Editor")
+		self.assertEqual((raised.exception.status, raised.exception.failure), (vigil_loop.UNRUNNABLE, "launch_failed"))
+
+
+def RunMain(argv):
+	output = io.StringIO()
+	with contextlib.redirect_stdout(output), contextlib.redirect_stderr(io.StringIO()):
+		status = vigil_loop.Main(argv)
+	return status, json.loads(output.getvalue())
+
+
+class RunTests(unittest.TestCase):
+
+	def test_an_editor_that_does_not_exist_is_refused_before_anything_is_written(self):
+		with tempfile.TemporaryDirectory() as directory:
+			editor = Path(directory) / "bin" / "editor.exe"
+			status, summary = RunMain(["run", "--editor", str(editor), "--vigil", sys.executable,
+				"--work", str(Path(directory) / "work"), "--category", "Aurora"])
+			self.assertEqual((status, summary["failure"]), (vigil_loop.UNRUNNABLE, "launch_failed"))
+			self.assertFalse((Path(directory) / "bin").exists())
+			self.assertFalse((Path(directory) / "work").exists())
+
+	@unittest.skipUnless(os.name == "nt", "only Windows refuses to remove a file another handle holds open")
+	def test_a_capture_held_open_is_work_locked(self):
+		with tempfile.TemporaryDirectory() as directory:
+			work = Path(directory) / "work"
+			work.mkdir()
+			with (work / "capture.vigil").open("w"):
+				status, summary = RunMain(["run", "--editor", sys.executable, "--vigil", sys.executable,
+					"--work", str(work), "--category", "Aurora"])
+			self.assertEqual((status, summary["failure"]), (vigil_loop.UNRUNNABLE, "work_locked"))
 
 
 class EnvironmentTests(unittest.TestCase):
@@ -238,6 +395,37 @@ class EventTests(unittest.TestCase):
 				'{"event":"frame","frame":42}\n{"event":"disconnected"}\n')
 			self.assertEqual(vigil_loop.NewestFrame(path), 42)
 			self.assertIsNone(vigil_loop.NewestFrame(Path(directory) / "absent.ndjson"))
+
+	def test_the_monitor_gap_frames_are_those_it_flagged(self):
+		with tempfile.TemporaryDirectory() as directory:
+			path = Path(directory) / "monitor.ndjson"
+			path.write_text('{"event":"frame","frame":7,"gap":false}\n{"event":"frame","frame":8,"gap":true}\n'
+				'{"event":"disconnected","gap":true}\n')
+			self.assertEqual(vigil_loop.GapFrames(path), [8])
+
+
+class ReproTests(unittest.TestCase):
+
+	def test_the_repro_error_file_ends_the_wait_at_once_with_its_text(self):
+		with tempfile.TemporaryDirectory() as directory:
+			error = Path(directory) / ".capture-error"
+			error.write_text("PNG encode failed")
+			with self.assertRaises(vigil_loop.LoopFailure) as raised:
+				vigil_loop.WaitForRepro(Path(directory) / ".last-capture", error, Running(), 30)
+			self.assertEqual(raised.exception.failure, "repro_failed")
+			self.assertIn("PNG encode failed", str(raised.exception))
+
+	def test_the_signal_ends_the_wait(self):
+		with tempfile.TemporaryDirectory() as directory:
+			signal_path = Path(directory) / ".last-capture"
+			signal_path.write_text("capture-001.png")
+			vigil_loop.WaitForRepro(signal_path, Path(directory) / ".capture-error", Running(), 1)
+
+	def test_no_signal_within_the_wait_is_unfinished(self):
+		with tempfile.TemporaryDirectory() as directory:
+			with self.assertRaises(vigil_loop.LoopFailure) as raised:
+				vigil_loop.WaitForRepro(Path(directory) / ".last-capture", None, Running(), 0.3)
+			self.assertEqual(raised.exception.failure, "repro_unfinished")
 
 
 if __name__ == "__main__":

@@ -110,6 +110,9 @@ class StandInEngine:
 
 class TransportTests(unittest.TestCase):
 
+	def test_the_exit_statuses_are_numbered_as_the_vigil_verbs_number_theirs(self):
+		self.assertEqual((console_pipe.ANSWERED, console_pipe.MISUSED, console_pipe.UNANSWERED), (0, 1, 2))
+
 	def test_an_ok_answer_is_printed_and_exits_zero(self):
 		engine = StandInEngine(Frame("OK Mosaic"))
 		try:
@@ -120,7 +123,7 @@ class TransportTests(unittest.TestCase):
 		self.assertEqual(result.stdout.strip(), "OK Mosaic")
 		self.assertEqual(engine.received, b"--reply -- vigil.trace Mosaic on\n")
 
-	def test_an_err_answer_is_printed_and_exits_one(self):
+	def test_an_err_answer_is_printed_and_exits_three(self):
 		engine = StandInEngine(Frame("ERR Command 'vigil.capture.start' is not available to agents"))
 		try:
 			result = Run("send", "--pipe", engine.path, "--wait", "5", "--", "vigil.capture.start")
@@ -129,7 +132,7 @@ class TransportTests(unittest.TestCase):
 		self.assertEqual(result.returncode, console_pipe.REFUSED, result.stderr)
 		self.assertIn("not available to agents", result.stdout)
 
-	def test_no_engine_on_the_pipe_exits_three_and_says_so(self):
+	def test_no_engine_on_the_pipe_exits_two_and_says_so(self):
 		if os.name == "nt":
 			path = f"\\\\.\\pipe\\phoe-console-pipe-absent-{os.getpid()}"
 		else:

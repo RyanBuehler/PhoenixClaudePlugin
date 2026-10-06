@@ -13,8 +13,9 @@ Where the answer travels differs by platform, and nothing else does:
 
   console_pipe.py send --pipe PATH [--wait SECONDS] -- <command...>
 
-Exit status: 0 the engine answered OK, 1 it answered ERR, 2 misuse, 3 no engine answered -- none was
-listening on PATH within --wait, or the connection ended before a whole answer arrived.
+Exit status, numbered as the vigil verbs number theirs: 0 the engine answered OK, 1 misuse, 2 no engine
+answered -- none was listening on PATH within --wait, or the connection ended before a whole answer
+arrived -- and 3 the engine answered ERR.
 """
 
 import argparse
@@ -25,9 +26,9 @@ import threading
 import time
 
 ANSWERED = 0
-REFUSED = 1
-MISUSED = 2
-UNANSWERED = 3
+MISUSED = 1
+UNANSWERED = 2
+REFUSED = 3
 
 REPLY_HEADER = "--reply --"
 WINDOWS_PIPE_PREFIXES = ("\\\\.\\pipe\\", "//./pipe/")
