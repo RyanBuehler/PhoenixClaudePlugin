@@ -54,7 +54,7 @@ Specialized subagents for different aspects of engine development.
 | `invoke-perf-agent` | CPU profiling and optimization |
 | `invoke-concurrency-agent` | Thread safety, lock-free algorithms |
 
-## Skills (21)
+## Skills (22)
 
 Every workflow is a skill under `skills/<name>/SKILL.md`, invoked as `/phoe:<name>`.
 
@@ -81,6 +81,7 @@ These set `disable-model-invocation: true`, so they cost no context until you ty
 | `/phoe:format` | Format changed C++ files and verify |
 | `/phoe:lint` | Run clang-tidy on changed files |
 | `/phoe:screenshot` | Capture a screenshot from the engine |
+| `/phoe:vigil` | Profile an Editor interaction with Vigil, from launch to a parsed finding |
 
 ### Auto-activating
 | Skill | Description |
