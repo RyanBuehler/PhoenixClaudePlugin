@@ -564,8 +564,8 @@ This is the pre-merge pass; the authoritative pass re-runs post-merge in Step 17
 
 ## 16. Publish
 
-Push the branch and open a pull request. Confirm with the user before pushing or running
-`gh pr create` — these are shared-state actions per CLAUDE.md's Push & Pull Request Workflow.
+Push the branch and open a pull request, after the credential check in CLAUDE.md's Push & Pull
+Request Workflow.
 
 ```bash
 git push -u origin challenge/<label>
@@ -612,8 +612,7 @@ without rewording this step:
 Refer to the PR as **PR #<N>** (the trailing `/pull/<N>` segment) in all subsequent narration and the report — never URL alone.
 
 Compose the summary from the challenge title and the key changes — keep it concise; the
-challenge spec in Crucible is the detailed record. If the user declines to push, leave the
-branch local for them to publish later.
+challenge spec in Crucible is the detailed record.
 
 If PR review comments come back later, check out the branch, apply fixes, rebuild to confirm
 they compile (full `/phoe:verify` only when changes are significant — new logic, API changes,
@@ -654,11 +653,13 @@ Whenever this challenge's PR is confirmed merged (here or in Step 2's
 reconciliation), after the reconciliation pass above, clean up and report — then
 **stop**; do not begin the next challenge:
 
-1. **Clean up the worktree and branch** from the main repo root (skip either if
-   already gone):
+1. **Clean up the worktree, local branch, and remote branch** from the main repo
+   root, per the plugin CLAUDE.md's *Concluding work* (skip any already gone):
    ```bash
    git worktree remove .claude/worktrees/challenge-<label>
    git branch -D challenge/<label>
+   git push origin --delete challenge/<label>
+   git fetch --prune origin
    ```
    If this session entered the worktree via `EnterWorktree(path=...)` in Step 5, first
    `ExitWorktree(keep)` to return to the main checkout — then the `git worktree

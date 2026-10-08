@@ -76,6 +76,12 @@ class AttributionCheckTestCase(unittest.TestCase):
 		command = 'git log origin/main..HEAD --format=%B | grep -ci "co-authored-by: claude"'
 		self.assertEqual(self._run(command), 0)
 
+	def test_read_only_gh_passes(self):
+		self.assertFalse(self._asks("gh pr view 4 -R RyanBuehler/PhoenixClaudePlugin"))
+		self.assertFalse(self._asks("gh pr list -R PhoenixClaudePlugin --search claude"))
+		self.assertFalse(self._asks("gh issue view 9 --repo PhoenixClaudePlugin"))
+		self.assertTrue(self._asks("gh pr comment 4 --body 'Claude found it'"))
+
 	def test_missing_body_file_passes(self):
 		self.assertEqual(self._run("gh pr create --body-file /nonexistent/body.md"), 0)
 
@@ -104,6 +110,21 @@ class AttributionCheckTestCase(unittest.TestCase):
 			self.assertFalse(self._asks("git -C /r/.claude/worktrees/a commit -m 'Fix the cull'"))
 		finally:
 			os.unlink(path)
+
+	def test_any_path_naming_claude_does_not_ask(self):
+		self.assertFalse(self._asks("git -C ~/phoenixclaudeplugin commit -m 'Bump version'"))
+		self.assertFalse(self._asks("git -C /home/u/PhoenixClaudePlugin commit -m 'x'"))
+		self.assertFalse(self._asks(
+			'gh pr create --title T --body "See plugins/claude-plugins-official/README.md"'))
+		self.assertFalse(self._asks("git commit --file=/tmp/claude-msg.txt -m 'x'"))
+
+	def test_url_and_prose_beside_a_path_still_ask(self):
+		self.assertTrue(self._asks('gh pr create --title T --body "Docs: https://claude.com/x"'))
+		self.assertTrue(self._asks("git -C ~/phoenixclaudeplugin commit -m 'Ask Claude later'"))
+
+	def test_attribution_beside_a_path_is_blocked(self):
+		command = 'git -C ~/.claude/x commit -m "x\n\nCo-Authored-By: Claude <noreply@anthropic.com>"'
+		self.assertEqual(self._run(command), 2)
 
 	def test_unrelated_command_mentioning_claude_passes(self):
 		self.assertFalse(self._asks('ls ~/.claude && echo "claude"'))

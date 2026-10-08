@@ -20,14 +20,16 @@ ATTRIBUTION_RE = re.compile(
 
 MENTION_RE = re.compile(r"claude|chat[\s_-]*gpt|codex", re.IGNORECASE)
 
-# `.claude/` paths (job tmp dirs, worktrees) name a directory, not an assistant.
-CLAUDE_PATH_RE = re.compile(r"[^\s\"']*\.claude/[^\s\"']*")
+# A path token (`~/.claude/jobs/x`, `~/phoenixclaudeplugin`) names a location, not an
+# assistant. A URL is not exempt: a link to an assistant's site is a mention.
+PATH_TOKEN_RE = re.compile(r"(?<![^\s\"'=])(?![^\s\"']*://)[^\s\"']*/[^\s\"']*")
 
 # Only commands that write text somewhere durable are checked, so a read-only
 # `git log | grep "Co-Authored-By: Claude"` audit still runs.
 PUBLISHING_RE = re.compile(
 	r"\bgit\s+(?:-C\s+\S+\s+)?(commit|tag|notes|merge)\b"
-	r"|\bgh\s+(pr|issue|release|api)\b"
+	r"|\bgh\s+(pr|issue|release)\s+(?!(list|view|diff|checks|status)\b)"
+	r"|\bgh\s+api\b"
 )
 
 BODY_FILE_FLAGS = {"-F", "--file", "--body-file", "--notes-file", "--input"}
@@ -94,7 +96,7 @@ def main():
 		if found:
 			block(where, found.group(0))
 	for where, text in texts:
-		found = MENTION_RE.search(CLAUDE_PATH_RE.sub("", text))
+		found = MENTION_RE.search(PATH_TOKEN_RE.sub("", text))
 		if found:
 			ask(where, found.group(0))
 	print("{}")

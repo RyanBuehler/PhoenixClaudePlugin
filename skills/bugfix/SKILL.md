@@ -59,6 +59,9 @@ git rev-parse --verify bug/<LABEL> 2>/dev/null \
 "$CRUCIBLE" bug move --label=<LABEL> merged
 ```
 
+   Then clean up its worktree and branches per Step 15's cleanup block, once the landing check
+   there passes.
+
 4. If a review bug shows no merge evidence, leave it in `review`.
 
 Then pick the next todo using severity-aware selection:
@@ -325,8 +328,8 @@ If this move fails (server down, label mismatch, Crucible not initialized), **st
 
 ## 14. Publish
 
-Push the branch and open a pull request. Confirm with the user before pushing or running
-`gh pr create` — these are shared-state actions per CLAUDE.md's Push & Pull Request Workflow.
+Push the branch and open a pull request, after the credential check in CLAUDE.md's Push & Pull
+Request Workflow.
 
 ```bash
 git push -u origin bug/<label>
@@ -352,8 +355,6 @@ non-GitHub review system fits without rewording this step:
 "$CRUCIBLE" bug update --label=<LABEL> --replace-review-link="${PR_URL}"
 ```
 
-If the user declines to push, leave the branch local for them to publish later.
-
 If PR review comments come back later, check out the branch, apply fixes, rebuild to confirm
 they compile, commit with a brief "Address review: …" message, and push.
 
@@ -372,6 +373,17 @@ But once the PR is confirmed merged into remote `main`, reconciling the tracking
 
 ```bash
 "$CRUCIBLE" bug move --label=<LABEL> merged
+```
+
+Then clean up the worktree, local branch, and remote branch from the main repo root, per the plugin
+CLAUDE.md's *Concluding work* (skip any already gone; `ExitWorktree(keep)` first if this session
+entered the worktree in Step 4):
+
+```bash
+git worktree remove .claude/worktrees/bug-<label>
+git branch -D bug/<label>
+git push origin --delete bug/<label>
+git fetch --prune origin
 ```
 
 > **Note:** When the user moves a bug to `merged`, it is automatically archived in the server's data dir. If work needs to be revisited, use `"$CRUCIBLE" bug unarchive --label=<LABEL>` to restore it to `todo` status.

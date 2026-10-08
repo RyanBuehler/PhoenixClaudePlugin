@@ -886,8 +886,9 @@ flag accepts any URL string, so a non-GitHub review system fits without rewordin
 
 Refer to each PR as **PR #<N>** (the trailing `/pull/<N>` segment) in narration and the Report table — never URL alone. Record each `PR #<N>` + URL for the final report.
 
-After the wave's PRs are open, clean up worktrees (the branches and commits stay until the
-user removes them). If the orchestrator's cwd is currently *inside* the worktree being removed
+After the wave's PRs are open, clean up worktrees only — the local and remote branches carry the
+open PRs. They are deleted once each PR provably lands, per the plugin CLAUDE.md's *Concluding
+work*, by whichever later session observes the merge. If the orchestrator's cwd is currently *inside* the worktree being removed
 (you entered it via `EnterWorktree(path=...)` in 4b), `ExitWorktree(keep)` to return to the main
 checkout first — a raw `git worktree remove` on the worktree you are standing in dangles the pin.
 Removing a worktree you are not currently in is fine:

@@ -89,6 +89,10 @@ the command exits non-zero; do not retry one with `--force` by hand.
 Afterwards the script runs `git worktree prune`. Report what was removed, what was reclaimed, and
 every `review by hand` entry — those need a human.
 
+The script deletes local branches only; it never touches `origin`. For each removed branch whose
+remote head still exists (`git ls-remote --heads origin <branch>`), delete it per the plugin CLAUDE.md's *Concluding work* — the script's `landed` verdict
+is the proof that procedure requires.
+
 ## 5. Refusals
 
 The script exits 2 rather than guess when:

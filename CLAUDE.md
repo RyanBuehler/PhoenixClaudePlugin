@@ -3,7 +3,6 @@
 ## Hard Requirements
 
 - **NEVER mention Claude Code in commit messages.** No "Generated with Claude Code", no Co-Authored-By Claude, nothing. Commit messages should look like they were written by a human developer.
-- **Never push or open a pull request without explicit confirmation.** See [Push & Pull Request Workflow](#push--pull-request-workflow).
 - **NEVER manufacture machine load without explicit, per-instance user permission.** No CPU spin loops, fork bombs, memory balloons, disk fillers, or parallel-job storms sized beyond the host. This machine is shared with the user and with other agent sessions, and orphaned load is misattributed to whoever runs next. See [Never manufacture machine load](#never-manufacture-machine-load).
 - **Never combine `cd` and `git` in a compound command** (e.g. `cd /some/dir && git status`). Changing into an untrusted directory before running git exposes you to bare repository attacks where a malicious `.git` config can execute arbitrary code. Use `git -C <path>` or run from the known working directory.
 - The repository's own `CLAUDE.md` is binding where it speaks; this file adds what an agent needs and the codebase has no reason to carry.
@@ -172,9 +171,33 @@ Create every branch via worktree, from the main repo root:
 
 The worktree path uses dashes where the branch uses slashes. Plain `git checkout -b`, `git switch -c`, and `git branch <name>` are blocked at tool-use time by `hooks/branch-worktree-check.py`.
 
-Remove a worktree when done (the branch stays until the user deletes it):
+### Concluding work: worktree, local branch, remote branch
 
-    git worktree remove .claude/worktrees/<type>-<label>
+The repository does not auto-delete a head branch on merge, so every branch an agent pushes stays
+on `origin` until something deletes it. The agent that observes its own branch land deletes all
+three artifacts; nothing else will.
+
+**Trigger — landing proven, never inferred.** The PR's `state` is `MERGED` **and** its merge
+commit is reachable from `origin/main` (`git merge-base --is-ancestor <merge-sha> origin/main`
+after `git fetch origin main`). An open PR, a PR closed unmerged, or a remote branch that has
+merely vanished is not landing — leave every artifact in place and say so in the report.
+
+**Between pushing and landing**, remove only the worktree. The local and remote branches carry the
+open PR; review fixes are made from a fresh worktree on the same branch.
+
+**Once landed**, from the main checkout, skipping any step whose artifact is already gone:
+
+    git worktree remove .claude/worktrees/<type>-<label>   # never --force; a refusal means uncommitted work
+    git branch -D <type>/<label>                           # -D: a squash merge is not an ancestor, so -d refuses
+    git push origin --delete <type>/<label>                # the PR has landed; the branch serves nothing
+    git fetch --prune origin
+
+If the session entered the worktree with `EnterWorktree(path=...)`, `ExitWorktree(keep)` first —
+entering by path takes no removal ownership, and removing the tree you stand in dangles the pin.
+
+Delete only the branch this work created. A landed branch that another open PR targets
+(`gh pr list --base <type>/<label>`) is kept until that PR is retargeted.
+Report what was removed and anything kept, with the reason.
 
 `/phoe:gc-worktrees` removes worktrees whose branch has provably landed on `origin/main` —
 an ancestor of main, or a merged pull request for that head. A deleted remote branch alone
@@ -245,21 +268,14 @@ checkout and reports success for code you did not change.
 
 ## Push & Pull Request Workflow
 
-Pushing and PR creation are shared-state, outside-visible actions. Never take
-them autonomously.
-
-Before running `git push` or `gh pr create`:
+Pushing and PR creation need no confirmation from the user — a hook gates them at tool-use
+time. Before running `git push` or `gh pr create`:
 
 1. **Verify git credentials are configured and authenticate against the remote.**
    Run `git config user.name`, `git config user.email`, and
    `git ls-remote <remote> HEAD` to confirm auth works. If credentials are
    missing, expired, or fail against the remote, stop and surface the failure
    to the user — do not attempt the push.
-2. **Ask the user for explicit confirmation.** Even when verification has
-   passed and credentials are valid, always ask before pushing or opening a
-   pull request. Present what you intend to push (branch, commits, target
-   remote) and wait for an explicit go-ahead. A prior approval does not carry
-   forward to later pushes.
 - To verify compilation and run all tests locally, mirror the CI pipeline.
 - It is mandatory to execute the full verification suite before committing. Run
   `/phoe:verify` — it drives Forge through audits + build + format + lint + test using the
