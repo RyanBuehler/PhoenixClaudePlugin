@@ -383,7 +383,7 @@ private:
 ### Subsystem Registry — and why not a service locator
 
 A classic service locator (`static Register<T>()` / `static Get<T>()` over function-local
-statics) is **forbidden here**: `CLAUDE.md` bans new global singletons and static `Get()`
+statics) is **forbidden here**: the plugin `CLAUDE.md` bans new global singletons and static `Get()`
 accessors outright, and a template-keyed static registry is one wearing a different hat. It also
 hides lifetime — nothing says when the service was registered or whether it still exists.
 

@@ -5,7 +5,7 @@
 - **NEVER mention Claude Code in commit messages.** No "Generated with Claude Code", no Co-Authored-By Claude, nothing. Commit messages should look like they were written by a human developer.
 - **NEVER manufacture machine load without explicit, per-instance user permission.** No CPU spin loops, fork bombs, memory balloons, disk fillers, or parallel-job storms sized beyond the host. This machine is shared with the user and with other agent sessions, and orphaned load is misattributed to whoever runs next. See [Never manufacture machine load](#never-manufacture-machine-load).
 - **Never combine `cd` and `git` in a compound command** (e.g. `cd /some/dir && git status`). Changing into an untrusted directory before running git exposes you to bare repository attacks where a malicious `.git` config can execute arbitrary code. Use `git -C <path>` or run from the known working directory.
-- The repository's own `CLAUDE.md` is binding where it speaks; this file adds what an agent needs and the codebase has no reason to carry.
+- The repository carries no agent guide; this file is the only one. Never add a `CLAUDE.md` or other agent material to the repository.
 
 ## Where the rules live
 
@@ -35,12 +35,12 @@ agent material, so it lives here. Two exist, and they follow one shape:
 | Formatter and linter mechanics | `${CLAUDE_PLUGIN_ROOT}/references/tooling.md` |
 | Standalone command scripts | `${CLAUDE_PLUGIN_ROOT}/scripts/` |
 | C++, Python, Vulkan, portability references | `${CLAUDE_PLUGIN_ROOT}/references/` |
-| Architecture, module layout, ownership tiers | the repository's `CLAUDE.md` |
+| Ownership tiers, boundary data flow, dependencies | [Codebase Rules](#codebase-rules) below |
 | Build, test, verify | `Applications/Forge/`, `Docs/Forge_DD.md`, `/phoe:verify` |
 | Blessed and banned terms | `Docs/Lexicon.md` |
 
-The repository's `CLAUDE.md` and `Docs/StyleGuide.md` bind. If this file ever contradicts one of
-them, this file is the stale one and the fix belongs here.
+`Docs/StyleGuide.md` binds. If this file ever contradicts it, this file is the stale one and the fix
+belongs here.
 
 ## Agent Conduct
 
@@ -218,12 +218,85 @@ The build-touching `agents/invoke-*.md` definitions (`build-engineer`, `test-eng
 
 **Before writing any C++**, read the repository's `Docs/StyleGuide.md` — formatting, naming,
 language features, comments, TODOs, and design practices, all of it binding — and the
-conventions in the repository's `CLAUDE.md` that override it. For tooling mechanics — formatter
+[Codebase Rules](#codebase-rules) below, which are stricter where they overlap. For tooling mechanics — formatter
 and linter configuration, invocation, troubleshooting — see
 `${CLAUDE_PLUGIN_ROOT}/references/tooling.md`.
 
 Formatting and linting run through Forge: `/phoe:format` and `/phoe:lint`, or the whole
 CI-mirror sequence with `/phoe:verify`.
+
+## Codebase Rules
+
+Durable rules the repository's docs do not state elsewhere. `Docs/StyleGuide.md`,
+`Docs/Lexicon.md` (what to call things) and `Docs/Patterns.md` (how to structure things) carry
+the rest.
+
+**Code style**
+- American English in code and comments (color/center/behavior). Audit your own added lines;
+  don't churn pre-existing text.
+- Where correctness depends on an ordering the code does not control — another module's, another
+  thread's — state the assumed ordering and the failure it prevents at the dependent site, as a
+  guarantee, never a file or line. Only for genuine cross-module or cross-thread dependencies.
+- Guard non-finite values with `Math::IsFinite`, not `std::isfinite` — it constant-evaluates and
+  needs no `<cmath>`, which the curated `Std` does not carry on the clang arm.
+- Test pointers and handles directly (`if (!Current)`, `REQUIRES(Found, ...)`), never against
+  `nullptr`.
+- Acronyms are all-caps in module and type names (`GLTF`, not `Gltf`); `Json` is the lone exception.
+
+**Naming a new concept is the owner's call.** `Docs/StyleGuide.md` §Naming a new symbol is the
+procedure. If it, `Docs/Lexicon.md` and `Docs/Patterns.md` don't settle a word, ask Ryan before it
+spreads through a branch; never drive a later rename with a bulk regex.
+
+**No new global singletons or static `Get()` accessors** — use the subsystem registry or
+owner-injected closures. This is stricter than the style guide's §Singletons, which still allows a
+documented exception.
+
+**Ownership tiers.** Every engine system has one owner that drives it through its full, concrete
+interface (Tier 1). All other code reaches it only through a subsystem: a narrow,
+registry-discovered interface that names no concrete type (Tier 2), e.g.
+`Subsystem::FindRealm("Overworld"_L)`. Foreign TUs name only their own value types. Where a typed
+operation must cross into typed storage over an open type set, erase the *value* (bytes plus a
+per-type move/relocate op) and let the owner resolve storage; never `void*` in a public signature —
+`byte*` behind a typed accessor. A system without a clear single owner gets a designated one or is
+Tier-2-only.
+
+**Boundary data flow — submit intent, don't register objects.** A caller submits a self-contained
+description of the work (inputs, outputs, the operation as data) and the owner realizes it. Never
+hand a system a reference to yourself so it can call back or "make you ready"; pass values, not
+closures over foreign mutable state. Readiness is the owner's concern. Prefer a declarative per-tick
+snapshot the owner consumes over a live, self-registering object.
+
+**The Symbiote pillar.** Every Editor operation is one binding; Python, the console, the agent action
+and any user control are projections of it, registered automatically. Compositions are Python, never
+new bindings. `Docs/Symbiote_DD.md` §0 holds the rules; changing one changes the pillar, with Ryan.
+
+**Dependencies, configuration, toolchain**
+- No third-party libraries; OS dependencies (X11/ALSA/Vulkan) are the only exception.
+- Build configuration flows through `Build::` module constants, never `-D` macros.
+- Unreleased software: refactor freely — no back-compat shims or deprecation paths.
+- Linux builds use Clang. Import specific `Phoenix.<Module>` partitions; there is no
+  `import Phoenix;` umbrella.
+
+**UI.** No web stack — no HTML/JS/CSS/HTTP surface; all Editor UI is native (Mosaic).
+
+**Testing.** Trial content stays out of production source. Trials live in the owning module's
+`Trials/`; `Source/` carries no trial scaffolding, fixtures, or trial-scenario narration, and a
+production comment never states a specific trial's setup or expectation.
+
+## Searching & Shell
+
+- Prefer `git grep` — it sees only tracked files in your own worktree. A recursive `grep -r` or
+  `find` from the root also sweeps `.forge*/`, `.bootstrap-out/` and `.claude/worktrees/`, so a
+  symbol you just deleted still appears dozens of times; exclude those three.
+- `git grep` traps: context flags go before the pattern (a trailing `-A3` is parsed as a revision);
+  it rejects `--include`; it has no `-r`; and it exits 0 both on no match and on a pathspec that
+  matched nothing, so an absence claim needs a second confirming form.
+- More false absences: a misspelled revision is swallowed silently; piping through `cat` replaces
+  the exit status; `git grep A && git grep B` never runs B after a miss — chain with `;`; and `-c`
+  over several files prints per-file counts, not one number.
+- The shell is zsh. Quote every glob-bearing flag — an unquoted glob matching nothing aborts the
+  whole line and reads as a search miss. Quote a bare `===`; EQUALS expansion kills the line. Pass a
+  pattern containing `>` with `-e`.
 
 ## Crucible Lifecycle Reference
 

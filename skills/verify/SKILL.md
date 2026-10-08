@@ -134,7 +134,7 @@ Two aborts that are the environment, not the change:
 | configure / build   | `"$FORGE" build editor` (`/phoe:build`)   |
 | format-check        | `"$FORGE" format` then re-check (`/phoe:format`) |
 | lint                | `"$FORGE" lint` (`/phoe:lint`)            |
-| forbidden-token audit | fix the flagged path/token; see CLAUDE.md "Forbidden tokens" |
+| forbidden-token audit | fix the flagged path/token; see `Docs/ContinuousIntegration.md` |
 | toolchain audit     | usually the host outran a pinned SDK version (see §2b); genuinely yours if you edited `Tools/toolchain.lock.json` or a manifest `dependencies` block |
 | trial-friend / IO-seam / heap-seam audit | run the named `Tools/audit_*.py` directly for its full output |
 | test                | `"$FORGE" test editor --output-on-failure` (`/phoe:test`) |

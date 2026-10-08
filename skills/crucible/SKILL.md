@@ -172,7 +172,7 @@ Pipe-separated lists (`a|b|c`) are accepted on create for any list-valued field.
 **`Warning: affected_files path does not exist` is unreliable — ignore it, and check the paths
 yourself.** The existence check runs against the *server's* notion of the project root, not the
 directory the command was run from, so paths that plainly exist in the repo root are warned about
-anyway (`--affected-files="CLAUDE.md"` from the repo root warns). Treating the warning as
+anyway (`--affected-files="README.md"` from the repo root warns). Treating the warning as
 load-bearing trains you to ignore a check that should be. Verify paths with `ls`/`git ls-files`
 before creating, and don't use `--strict-paths` — it turns these false warnings into hard errors.
 
