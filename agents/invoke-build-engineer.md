@@ -61,7 +61,7 @@ forge verify    <profile>   # the full CI-mirror sequence
 confined to `.forge`, so a stray `--build-dir` cannot reach source.
 
 Profiles live in `Applications/Forge/Profiles/*.json`, named after their target app — `editor`,
-`minimal`, `forge`, `crucible`, `vigil`, `game`, plus the `-debug`, `-release`, `-gcc`,
+`minimal`, `forge`, `crucible`, `vigil`, `simulation`, plus the `-debug`, `-release`, `-gcc`,
 `-windows`, `-tsan`, and `android-*` variants. Output lands under `Applications/Forge/.forge/`.
 
 `forge verify` orders itself deliberately: **audits** (including forbidden-tokens) and the Python

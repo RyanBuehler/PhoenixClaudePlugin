@@ -82,8 +82,8 @@ Forge's own trials**: a change under `Applications/Forge/` can be green here and
 has happened twice, and a human caught it, not this workflow.
 
 - **The local set is `editor`, plus what the change owns.** Always `editor` — it is the coverage
-  hub for engine trials. Add the app profile whose own directory you changed (`game` for
-  `Applications/Game/`, `vigil`, `crucible`, `forgegui`), and `forge` when the builder changed.
+  hub for engine trials. Add the app profile whose own directory you changed (`vigil`,
+  `crucible`, `forgegui`), and `forge` when the builder changed.
   **Do not mirror CI's lane set.** CI runs every lane on any `Applications/Forge/` change; copying
   that locally once cost one agent seven profiles. `minimal` stays CI's: it is a cold build in its
   own tree, and it fails only for a missing dependency declaration.

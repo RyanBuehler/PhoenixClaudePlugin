@@ -61,7 +61,7 @@ Phoenix/
 │   ├── Editor/
 │   │   ├── Modules/                   # App-private modules (e.g. Pictures)
 │   │   └── Source/
-│   ├── Game/, Forge/, Crucible/, Vigil/, Minimal/
+│   ├── Simulation/, Forge/, Crucible/, Vigil/, Minimal/
 │
 ├── Tools/                             # Python helpers (module.py, create_module.py, ...)
 └── Applications/Forge/                 # The in-process builder: profiles, manifests, recipes
