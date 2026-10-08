@@ -373,7 +373,7 @@ with `git diff --name-only`, never from the challenge's `Files` field.
 Paste `dispatch-briefs.md` §3 — **Review dispatch preamble** — verbatim into each reviewer prompt,
 substituting the resolved `REVIEW_BASE`/`REVIEW_SHA` for its `<BASE>`/`<SHA>` placeholders. It
 covers reading the frozen commit rather than the working tree, the path and pathspec hazards, the
-command guard, the zsh traps, and the requirement that every cited path and symbol be resolved
+zsh traps, and the requirement that every cited path and symbol be resolved
 before it is reported.
 
 ### 10.5c. Dispatch read-only

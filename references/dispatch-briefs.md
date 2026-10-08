@@ -170,7 +170,7 @@ Paste the block below **verbatim** into every reviewer prompt, substituting the 
 > `.bootstrap-out/` and `.claude/worktrees/` — a generated `compile_commands.json` alone can exceed
 > the output cap.
 >
-> **Empty output is not evidence.** Seven different mechanisms produce an empty result — or a
+> **Empty output is not evidence.** Six different mechanisms produce an empty result — or a
 > plausible `0` — that looks exactly like a genuine negative:
 >
 > 1. A pathspec that matches nothing makes `git diff`/`git show` **exit 0 and print nothing** —
@@ -178,42 +178,17 @@ Paste the block below **verbatim** into every reviewer prompt, substituting the 
 >    anything: a dead pathspec and a genuinely absent pattern both give exit 1 with no output and no
 >    diagnostic. A `git grep` miss is never by itself evidence of absence.
 > 2. A shell trap (below) can abort the command before it runs.
-> 3. The background-session command guard can refuse the command outright.
-> 4. **A misspelled revision is swallowed.** `git grep <typo-sha> …` prints nothing and exits 0
+> 3. **A misspelled revision is swallowed.** `git grep <typo-sha> …` prints nothing and exits 0
 >    with no diagnostic.
-> 5. **A pipe replaces the exit status.** `git grep -n Foo <sha> | cat` reports `cat`'s exit 0,
+> 4. **A pipe replaces the exit status.** `git grep -n Foo <sha> | cat` reports `cat`'s exit 0,
 >    destroying the signal the check rests on. Run absence checks unpiped.
-> 6. **An `&&` chain drops its second command.** A no-match exits 1, so `git grep A && git grep B`
+> 5. **An `&&` chain drops its second command.** A no-match exits 1, so `git grep A && git grep B`
 >    never runs B, and B's silence reads as absence. Chain with `;`.
-> 7. **`git grep -r`** is not an option at all; piped into `grep -c` it prints a convincing `0`, and
+> 6. **`git grep -r`** is not an option at all; piped into `grep -c` it prints a convincing `0`, and
 >    `-c` over several files prints per-file counts rather than one number.
 >
 > So: **before claiming anything is missing, absent, or unreferenced, confirm it with a second
 > command of a different shape**, and state which tree you searched.
->
-> **The command guard.** In a background session a guard inspects the *whole command line* and can
-> refuse it. It does not require a pipe, an and-chain or a redirect — plain single commands have been
-> refused: a bare diff limited to one module's code directory, and a bare search with one pathspec.
-> It also fires on text in a downstream filter that the `git` command never receives, which shows it
-> scans the line rather than the git arguments. A refusal prints an error and no results; read the
-> error, and never record a refused command's empty output as a negative.
->
-> It refuses two independent things, and its message names neither:
->
-> - **A path segment**, which appears in every engine module path here — so it fires on the most
->   common command shape in a review. Escapes, most reliable first: **truncate the path above the
->   offending segment** and filter afterwards (`-- 'Engine/Modules/Rendering/Mirage'`); quote the
->   pathspec as a glob (`-- '*/Mirage/*'`); reduce several pathspecs to one. Quoting alone does not
->   always clear it, and `git show <SHA>:<path>` is refused *intermittently* — the same call can run
->   in one batch and be refused in the next, so keep `sed -n` on an absolute path as a fallback.
-> - **A command shape**, regardless of path: `for`/`while` loops, heredocs (including ones whose body
->   merely contains `git` or a brace), `;`- and `&&`-chains, process substitution in anything naming
->   git, and `nohup … &`. Use one plain command per call, or run a script from outside the repository
->   by absolute path.
->
-> Every refusal blames git, a worktree escape, or a redirect that is not in the command, so it never
-> names the real trigger. A workaround that broadens a pathspec **changes what you searched** — say
-> which shape you ran when a finding rests on it.
 >
 > **Shell traps.** Bash here runs under **zsh**, and each of these has cost a reviewer a round trip:
 >
@@ -288,9 +263,9 @@ watch:
 > Keep the log inside your own worktree, so two agents never share one; `start` refuses a log a live
 > run still owns.
 
-Do not prescribe `nohup … &`, PID files, inline `until`/`for` loops, or process-name matching — the
-command guard refuses the first three, and a match on the compiler or builder name either catches
-every sibling agent's build or silently matches nothing. The wait script replaces all of them.
+Do not prescribe `nohup … &`, PID files, inline `until`/`for` loops, or process-name matching — a
+match on the compiler or builder name either catches every sibling agent's build or silently
+matches nothing. The wait script replaces all of them.
 
 **Two more things the implementer needs told, each of which has cost a full rebuild:**
 

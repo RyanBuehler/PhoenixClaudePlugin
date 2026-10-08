@@ -631,7 +631,7 @@ directory is warm and whether a build has run on this branch.
 it is the single source for this block, and every failure mode it prevents fails toward
 a *false clean*: a reviewer that cannot find something reports it as absent, and that
 reaches the PR body. It covers reading the frozen commit instead of the working tree,
-the stat-path and pathspec hazards, the command guard, the zsh traps, and the rule that
+the stat-path and pathspec hazards, the zsh traps, and the rule that
 every cited path and symbol is resolved before it is reported.
 
 Resolve the range once, at dispatch time, and substitute the values into the preamble's
