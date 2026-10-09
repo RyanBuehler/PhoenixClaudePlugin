@@ -50,7 +50,7 @@ as a foreground call with `timeout: 600000`. It blocks and reports once; repeat 
 call it prints if it says `still running` (exit 124). Never poll the log: each look is a
 full-context request.
 
-`editor` is the Headless, tests-enabled profile CI runs against. Do **not** pass `--json` here: read
+`editor` is the debug, tests-enabled profile CI runs against. Do **not** pass `--json` here: read
 the failing phase's output inline. A failing node's diagnostic prints **whole** in every mode, with
 the format/lint/audit diffs, and `--summary` cuts a green run to one tally line per phase.
 
@@ -63,17 +63,13 @@ remains the only way to use the opt-in `--staged` scope.
 **An empty selection is not a pass.** If the gate reports zero files while you changed C++, that is
 a failed run, not a clean one — find out why before believing it.
 
-**Three shapes that read as a broken change and are not.** `forge build` failing in 0.2s with "the
-source set changed since `forge configure` ran" means you added or deleted a file: Forge globs at
-configure time, so `configure` first. A `FAILED` build line beside a passing test tally in the same
-run means the trials ran against stale binaries — read the build line first, and never push on the
-test line alone. And `forge format` takes no `--files` flag; the bare command is the whole
-interface.
+**An inventory mismatch needs configure.** Adding or deleting a source changes the graph inputs;
+configure the intended profile before building. A failed build is never test evidence: test also
+checks successful-build state and the runner refuses stale or foreign binaries.
 
-**Run `forge format` before you build, never after.** This is about the *manual* rewrite command, not
-verify's internal `format-check` phase, which only inspects and cannot invalidate anything. A
-`forge format` run after a build leaves sources newer than their trial binaries, which trips the test
-phase's staleness guard and costs a full rebuild. So: `forge format` first, then verify.
+**Format before building** with `/phoe:format` or `python3 Tools/format.py --files=branch`.
+Verify's internal `format-check` only inspects; rewriting sources after a build can invalidate
+the binary-staleness check and requires rebuilding.
 
 ### 2a. Scope — one verify covers one profile
 
@@ -132,8 +128,8 @@ Two aborts that are the environment, not the change:
 | Failed phase        | Iterate with                              |
 |---------------------|-------------------------------------------|
 | configure / build   | `"$FORGE" build editor` (`/phoe:build`)   |
-| format-check        | `"$FORGE" format` then re-check (`/phoe:format`) |
-| lint                | `"$FORGE" lint` (`/phoe:lint`)            |
+| format-check        | `/phoe:format`, then re-check |
+| lint                | `"$FORGE" lint --build-dir=<configured-editor-tree>` (`/phoe:lint`) |
 | forbidden-token audit | fix the flagged path/token; see `Docs/ContinuousIntegration.md` |
 | toolchain audit     | usually the host outran a pinned SDK version (see §2b); genuinely yours if you edited `Tools/toolchain.lock.json` or a manifest `dependencies` block |
 | trial-friend / IO-seam / heap-seam audit | run the named `Tools/audit_*.py` directly for its full output |

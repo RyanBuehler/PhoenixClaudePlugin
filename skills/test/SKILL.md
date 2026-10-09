@@ -22,7 +22,8 @@ binaries produced by a `configure` + `build` of the test profile.
 
 ## 2. Profile
 
-Use `editor` — the Headless engine profile, which has tests enabled. `editor-release` has tests
+Use `editor` — the debug engine profile, which has tests enabled. Its build type does not decide
+whether a display is available. `editor-release` has tests
 **disabled** and will not run trials.
 
 ## 3. Test
@@ -40,10 +41,11 @@ single area.
 not a regex, so an alternation pattern matches nothing. The runner says so on a zero match and
 suggests near names; act on that text rather than concluding the suite is red.
 
-**`forge test` does not build.** It runs the binaries a previous `configure` + `build` produced, so
-a tree with unbuilt edits tests the previous code and reports green. After adding a file, reconfigure
-first — including after merging main, since Forge globs at configure time and *other people's* new
-trial files are just as invisible.
+**`forge test` does not build.** It checks the configured source inventory and successful-build
+state, then the runner checks binary staleness and writer identity. Missing configuration,
+added/deleted files, failed builds, stale binaries, or foreign writers cause refusal rather than
+proof of current code. Configure after inventory changes (including a merge), build successfully,
+then test. Source collection happens at configure; a new file needs that step to enter the graph.
 
 **Three claims a green run does not support**, each of which has shipped an unverified acceptance
 criterion:
@@ -53,9 +55,9 @@ criterion:
 - **A skipped case counts as a pass.** `--require-executed-cases` fails a trial whose cases skipped
   instead of running; pass it whenever a criterion rests on a trial executing. A skip-count jump
   (say 8 → 153) is a symptom to explain — usually load starving device init — not a host fact.
-- **A green suite does not mean the assertions bite.** Arm a negative control: break the production
-  line the trial names, confirm the trial fails, restore it, and re-arm after any later edit. A
-  mutation that stays green usually means the trial pins a different property than its name claims.
+- **A green suite does not mean the assertions bite.** Follow the
+  [negative-control protocol](../../references/negative-controls.md). Each claimed behavior needs
+  an independently observable witness on its actual production path; a red suite alone is insufficient.
 
 `--list-cases` lists every case that ran, skips and failures marked, without the subsystem trace; it
 is the cheapest way to answer "did my case execute".

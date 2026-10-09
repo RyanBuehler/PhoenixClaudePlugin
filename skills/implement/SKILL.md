@@ -11,6 +11,11 @@ Implement a Crucible Challenge end-to-end with human supervision. Accepts a labe
 > fix passes, background agents until their notification arrives. A fourth waits for one to return.
 > Unbounded fan-out has exhausted Ryan's usage in a single run.
 
+For dependent PRs and semantic sibling overlap, use
+[parallel integration](../../references/parallel-integration.md). Its recorded-parent and
+replacement-branch gates supersede ordinary follower-rebase guidance below. For early TU
+diagnostics, use [targeted compilation](../../references/targeted-compilation.md).
+
 ## Arguments
 
 - **`<label>`** — the challenge label to implement
@@ -593,9 +598,9 @@ echo "Opened PR #${PR_NUM}: ${PR_URL}"
   `gh pr list --head <branch>` before a second attempt.
 - `git log origin/<branch>` reads a possibly stale tracking ref and has reported a successful push as
   failed, inviting a pointless force-push. `git ls-remote origin <branch>` is authoritative.
-- **Never merge a stacked PR into its base branch.** Once the base merges, merging the follower into
-  the dead base reports `MERGED` and lands nothing on main — two PRs' fixes sat stranded and looked
-  shipped. Rebase followers onto main instead.
+- **For stacked PRs, follow [parallel integration](../../references/parallel-integration.md).**
+  Confirm native stack identity or recover child-only work onto main through that recipe before
+  presenting a dependent PR as ready.
 
 After a successful `gh pr create`, record the review link on the challenge so future
 sessions and `crucible challenge show` surface the PR URL without grepping comments.

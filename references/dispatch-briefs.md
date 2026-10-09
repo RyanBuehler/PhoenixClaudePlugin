@@ -52,6 +52,12 @@ concurrently with a review of the same tree.
 
 ## 2. Assembling the brief
 
+Implementers may use [targeted compilation](targeted-compilation.md) for early syntax/type
+diagnostics; report its exact TU/profile and provenance separately from verified profiles.
+For assertion evidence, use [negative controls](negative-controls.md) and include each witness's
+claim/path, mutation, executed case, intended failure, successful build and verified restoration.
+For sibling overlap and dependent PRs, use [parallel integration](parallel-integration.md).
+
 **Resolve every commit hash at dispatch time. Never transcribe one.**
 
 ```bash

@@ -61,15 +61,19 @@ after their target. The engine profiles are:
 
 | Profile          | Build Type | Tests    | Use                                            |
 |------------------|------------|----------|------------------------------------------------|
-| `editor`         | Headless   | enabled  | **default** — the build→test→verify loop       |
+| `editor`         | debug      | enabled  | **default** — the build→test→verify loop       |
 | `editor-release` | Release    | disabled | a **runnable windowed GUI editor**             |
 
 Default to `editor` — it has tests enabled, so `/phoe:test` and `/phoe:verify` work against it.
-("Headless" is the config name, not a no-window promise — the `editor` profile still maps a real
-window.) Use `editor-release` only when the user wants to *run* the editor GUI. `forge list
+The build type does not decide display capability; `editor` can map a real window.
+Use `editor-release` for a release GUI run. `forge list
 profiles` is the live source of truth.
 
 ## 3. Configure + Build
+
+For an early check of one ordinary changed TU before a queued build, use the
+[targeted-compilation recipe](../../references/targeted-compilation.md). Its profile provenance
+and exclusive-access gates are required; the result is partial evidence, not a build.
 
 Always run configure then build. `--json` gives a machine-readable result: stdout carries one
 `{phase, progress, message}` NDJSON record per line while the build runs, then the result document
@@ -91,7 +95,7 @@ Read the error from there; no text-mode re-run is needed. A build that fails bef
 failing node's diagnostic also prints **whole**, never as an excerpt.
 
 - **Output path:** read the built binary's path from the build result's `output_path` field — do
-  not hardcode it. Engine artifacts land under `Applications/Forge/.forge-out/<tree>/bin/`, where
+  not hardcode it. Shared engine artifacts land under `Applications/Forge/.forge/<tree>/bin/`, where
   `<tree>` is a per-profile name derived from the build group, platform, and build type.
 - **Jobs / memory:** the in-process builder keeps peak compiler output in RAM. On a memory-tight
   host, cap parallelism with `--jobs=N` (~2.5 GB/job); on a workstation the default is fine.
@@ -128,7 +132,7 @@ TARGET=crucible   # or forge, or vigil
 ```
 
 **Finding the built binary — discover, don't hardcode.** The output lands under
-`Applications/Forge/.forge-out/` in a per-profile subtree whose name depends on the host and build
+the configured build tree (`Applications/Forge/.forge/` for shared groups) in a subtree whose name depends on the host and build
 config (build group, platform, build type), so never hardcode that subtree in a consuming command —
 read `output_path` from the `build --json` result, or discover it:
 

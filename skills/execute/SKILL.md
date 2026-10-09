@@ -7,6 +7,12 @@ allowed-tools: Read, Edit, Write, Bash, Glob, Grep, Agent
 
 Autonomously execute Crucible challenges using subagents. No user interaction required -- the challenge JSON is the complete spec. Report results at the end.
 
+Integration follows [parallel integration](../../references/parallel-integration.md): check
+sibling contracts before dispatch and after rebases; dependent stacks use its native-stack or
+replacement-branch lifecycle instead of the ordinary main-rebase steps below. Negative controls
+follow [the witness protocol](../../references/negative-controls.md); include its witness rows
+in test-writing briefs and the verification report.
+
 ## Arguments
 
 - **`<N>`** -- execute the next N eligible challenges (saga-aware priority selection)
