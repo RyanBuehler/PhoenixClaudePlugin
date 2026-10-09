@@ -31,6 +31,7 @@ class TranslationUnitTests(unittest.TestCase):
             self.assertIn("-Iinclude", command)
             self.assertIn("-DVALUE=1", command)
             self.assertIn("-fsyntax-only", command)
+            self.assertIn("--no-default-config", command)
             self.assertNotIn("-c", command)
             self.assertFalse(any("unit.o" in argument or "unit.d" in argument or
                                  "unit.pcm" in argument for argument in command))
@@ -85,6 +86,11 @@ class TranslationUnitTests(unittest.TestCase):
             foreign = subprocess.run(command, capture_output=True, text=True)
             self.assertNotEqual(foreign.returncode, 0)
             self.assertIn("foreign profile", foreign.stderr)
+            entry["arguments"] = ["clang++", "-I", str(directory / "generated-editor"), "-c", str(source)]
+            database.write_text(json.dumps([entry]))
+            paired = subprocess.run(command, capture_output=True, text=True)
+            self.assertNotEqual(paired.returncode, 0)
+            self.assertIn("foreign profile", paired.stderr)
             database.write_text("[]")
             missing = subprocess.run(command, capture_output=True, text=True)
             self.assertNotEqual(missing.returncode, 0)

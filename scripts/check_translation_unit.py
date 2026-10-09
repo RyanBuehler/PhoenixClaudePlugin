@@ -74,7 +74,7 @@ def check_command(entry, source, check_copy=None):
         raise ValueError(f"expected one exact source operand, found {sources}")
     if check_copy:
         command.extend(["-iquote", str(source.parent)])
-    command.extend(["-fsyntax-only", "-fno-implicit-modules", "-fno-implicit-module-maps"])
+    command.extend(["--no-default-config", "-fsyntax-only", "-fno-implicit-modules", "-fno-implicit-module-maps"])
     return command
 
 
@@ -102,9 +102,10 @@ def main():
         command = check_command(entry, source, options.check_copy.resolve() if options.check_copy else None)
         expected_roots = {f"generated-{options.profile}", f"generated-test-{options.profile}",
                           f"generated-trials-{options.profile}"}
-        for argument in command:
+        for index, argument in enumerate(command):
             if argument.startswith("-I"):
-                include = (directory / argument[2:]).resolve()
+                operand = command[index + 1] if argument == "-I" else argument[2:]
+                include = (directory / operand).resolve()
                 if include.is_relative_to(directory):
                     for part in include.relative_to(directory).parts:
                         if part.startswith("generated-") and part not in expected_roots:

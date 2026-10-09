@@ -38,7 +38,9 @@ invalidates the result. Do not run the standalone compiler concurrently with a c
 
 The script requires one exact TU entry, expands response files, keeps compiler/include/module
 mappings/semantic flags, removes object/BMI/dependency output flags, bypasses ccache and runs
-`-fsyntax-only` with implicit module creation disabled. It never invokes the entry through a shell.
+`-fsyntax-only` with implicit module creation and implicit Clang config loading disabled. If a
+build relies on a compiler config file, use Forge instead: required semantic settings must already
+be explicit in validated database arguments. It never invokes the entry through a shell.
 Unknown side-effect modes fail closed. Missing entries, response files or BMIs require Forge;
 do not invent include paths or ignore diagnostics. Module-interface changes (`.cppm`) and changed
 imported interfaces require Forge to rebuild the dependency closure before a consumer check.
