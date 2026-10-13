@@ -2,9 +2,9 @@
 
 ## Hard Requirements
 
-- **NEVER mention Claude Code in commit messages.** No "Generated with Claude Code", no Co-Authored-By Claude, nothing. Commit messages should look like they were written by a human developer.
+- **NEVER mention Claude Code in commit messages.** No "Generated with Claude Code", no Co-Authored-By Claude, nothing. Commit messages should look like they were written by a human developer. `hooks/attribution-check.py` refuses the trailer and banner forms; a bare mention or a `.claude` path never trips it.
 - **NEVER manufacture machine load without explicit, per-instance user permission.** No CPU spin loops, fork bombs, memory balloons, disk fillers, or parallel-job storms sized beyond the host. This machine is shared with the user and with other agent sessions, and orphaned load is misattributed to whoever runs next. See [Never manufacture machine load](#never-manufacture-machine-load).
-- **Never combine `cd` and `git` in a compound command** (e.g. `cd /some/dir && git status`). Changing into an untrusted directory before running git exposes you to bare repository attacks where a malicious `.git` config can execute arbitrary code. Use `git -C <path>` or run from the known working directory.
+- **Never combine `cd` and `git` in a compound command.** Use `git -C <path>` instead; `hooks/bash-guard.py` denies the combination.
 - The repository carries no agent guide; this file is the only one. Never add a `CLAUDE.md` or other agent material to the repository.
 
 ## Where the rules live
@@ -105,12 +105,9 @@ The `cd`-and-`git` prohibition in **Hard Requirements** is a stricter variant of
 
 Do not spawn CPU load generators, busy-wait spinners, fork bombs, memory balloons, disk fillers, or parallel-job storms sized beyond the host. This is a hard prohibition, not a preference, and it requires **explicit user permission for each instance**. "Go debug this flake" is not permission to load the machine. Permission granted once does not carry to the next flake, the next command, or the next session.
 
-The rule covers the class, not one idiom. All of these are prohibited without permission:
-
-- **CPU** — `while :; do :; done` spinners, `yes > /dev/null`, `stress`/`stress-ng`, deliberately oversubscribed `--parallel`/`-j` values.
-- **Memory** — balloon allocations intended to force pressure or swapping.
-- **Disk** — fillers written to exhaust free space or saturate I/O.
-- **Process** — fork storms, and running many heavy builds or test suites concurrently to "see what breaks".
+The rule covers the class: CPU spinners and `stress`, memory balloons, disk fillers, fork storms, and
+oversubscribed `--parallel`/`-j`. `hooks/bash-guard.py` denies the common idioms, but it cannot see them all;
+the rule binds regardless.
 
 **Why this is a hard rule: the blast radius crosses sessions.** The host is shared with the user and with other agents working in sibling worktrees. Load you create is invisible to them, outlives the command that started it, and gets attributed to whoever runs next — they will spend their session triaging a phantom regression against their own diff.
 
@@ -286,14 +283,12 @@ production comment never states a specific trial's setup or expectation.
 ## Searching & Shell
 
 - Prefer `git grep` — it sees only tracked files in your own worktree. A recursive `grep -r` or
-  `find` from the root also sweeps `.forge*/`, `.bootstrap-out/` and `.claude/worktrees/`, so a
+  `find` from the root (denied by `hooks/bash-guard.py` unless it excludes them) also sweeps `.forge*/`, `.bootstrap-out/` and `.claude/worktrees/`, so a
   symbol you just deleted still appears dozens of times; exclude those three.
-- `git grep` traps: context flags go before the pattern (a trailing `-A3` is parsed as a revision);
-  it rejects `--include`; it has no `-r`; and it exits 0 both on no match and on a pathspec that
-  matched nothing, so an absence claim needs a second confirming form.
-- More false absences: a misspelled revision is swallowed silently; piping through `cat` replaces
-  the exit status; `git grep A && git grep B` never runs B after a miss — chain with `;`; and `-c`
-  over several files prints per-file counts, not one number.
+- `git grep` exits 0 both on no match and on a pathspec that matched nothing, so an absence claim
+  needs a second confirming form. A misspelled revision is swallowed silently, piping through `cat`
+  replaces the exit status, and `-c` over several files prints per-file counts. `hooks/bash-guard.py`
+  denies the flag-order, `--include` and `&&`-chain forms.
 - The shell is zsh. Quote every glob-bearing flag — an unquoted glob matching nothing aborts the
   whole line and reads as a search miss. Quote a bare `===`; EQUALS expansion kills the line. Pass a
   pattern containing `>` with `-e`.
@@ -341,14 +336,11 @@ checkout and reports success for code you did not change.
 
 ## Push & Pull Request Workflow
 
-Pushing and PR creation need no confirmation from the user — a hook gates them at tool-use
-time. Before running `git push` or `gh pr create`:
+`hooks/push-gate.py` gates `git push` and `gh pr create` at tool-use time. It checks that git identity
+is configured and that `git ls-remote <remote> HEAD` authenticates, denies with the failure when
+either does not hold, and otherwise allows the command without asking. Pushing and PR creation need
+no confirmation from the user.
 
-1. **Verify git credentials are configured and authenticate against the remote.**
-   Run `git config user.name`, `git config user.email`, and
-   `git ls-remote <remote> HEAD` to confirm auth works. If credentials are
-   missing, expired, or fail against the remote, stop and surface the failure
-   to the user — do not attempt the push.
 - To verify compilation and run all tests locally, mirror the CI pipeline.
 - It is mandatory to execute the full verification suite before committing. Run
   `/phoe:verify` — it drives Forge through audits + build + format + lint + test using the
