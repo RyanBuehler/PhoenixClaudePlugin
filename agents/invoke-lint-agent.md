@@ -2,6 +2,7 @@
 name: invoke-lint-agent
 description: clang-tidy plus include and module-import hygiene; run after modifying C++ or when builds are slow.
 tools: Read, Bash, Grep, Glob, WebSearch, WebFetch
+model: sonnet
 isolation: worktree
 ---
 

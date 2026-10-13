@@ -2,6 +2,7 @@
 name: invoke-test-engineer
 description: Tests with the Trials framework — writing, organizing, fixing failures, coverage, and test strategy.
 tools: Read, Grep, Glob, Bash, Edit, Write
+model: sonnet
 isolation: worktree
 ---
 

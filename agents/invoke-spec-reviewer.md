@@ -2,6 +2,7 @@
 name: invoke-spec-reviewer
 description: Read-only check that an implementation matches a Crucible challenge's acceptance criteria — nothing missing, nothing extra.
 tools: Read, Grep, Glob, Bash
+model: sonnet
 ---
 
 # Crucible Spec Compliance Reviewer

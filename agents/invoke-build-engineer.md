@@ -2,6 +2,7 @@
 name: invoke-build-engineer
 description: Forge builds, profiles and manifests, compilers and toolchains, CI and GitHub Actions — build errors and pipeline changes.
 tools: Read, Grep, Glob, Bash, Edit, Write, WebSearch, WebFetch
+model: sonnet
 isolation: worktree
 ---
 
