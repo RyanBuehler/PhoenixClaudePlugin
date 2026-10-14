@@ -48,8 +48,8 @@ git log main --oneline -i --grep="<LABEL>"
 git log main --oneline --grep="#<ID>"
 
 # Signal B — merge-commit style, where the branch ref is still present locally
-git rev-parse --verify bug/<LABEL> 2>/dev/null \
-  && git merge-base --is-ancestor bug/<LABEL> main \
+git rev-parse --verify bug/<branch-label> 2>/dev/null \
+  && git merge-base --is-ancestor bug/<branch-label> main \
   && echo "branch tip is ancestor of main"
 ```
 
@@ -112,20 +112,22 @@ Display the bug details: title, description, severity, reproduction steps, accep
 ## 4. Create a Dedicated Worktree
 
 From the main repo root, create the worktree and branch (this exact `git worktree add` form is what
-the plugin's `branch-worktree-check.py` hook blesses):
+the plugin's `branch-worktree-check.py` hook blesses). `<branch-label>` is the bug label cut so
+`bug/<branch-label>` fits the hook's 40-character cap (see the plugin CLAUDE.md, Branch & Worktree
+Workflow); the hook's refusal of a long name names the shortened branch:
 
 ```bash
-git worktree add .claude/worktrees/bug-<label> -b bug/<label>
+git worktree add .claude/worktrees/bug-<branch-label> -b bug/<branch-label>
 ```
 
-Then **enter it with the `EnterWorktree` tool** — `EnterWorktree(path=".claude/worktrees/bug-<label>")`.
+Then **enter it with the `EnterWorktree` tool** — `EnterWorktree(path=".claude/worktrees/bug-<branch-label>")`.
 In a background session, Claude Code's isolation guard refuses native `Write`/`Edit` in any worktree
 the session has not entered through the harness, forcing slow Bash/heredoc edits; `EnterWorktree(path=...)`
 registers the worktree with the guard so native file tools keep working. It enters *by path* without
-taking removal ownership, so a later `git worktree remove .claude/worktrees/bug-<label>` (after the
+taking removal ownership, so a later `git worktree remove .claude/worktrees/bug-<branch-label>` (after the
 PR merges) still works normally; if this session entered via `EnterWorktree`, `ExitWorktree(keep)`
 first. (Do not create the worktree with `EnterWorktree(name=...)` — that mints its own branch/path
-naming and breaks the `bug/<label>` convention.)
+naming and breaks the `bug/<branch-label>` convention.)
 
 **Bootstrap Forge in the worktree** so the first `/phoe:verify` is incremental, not a cold failure —
 a fresh worktree can lack its own `Applications/Forge/.bootstrap-out/forge`:
@@ -332,9 +334,9 @@ Push the branch and open a pull request, after the credential check in CLAUDE.md
 Request Workflow.
 
 ```bash
-git push -u origin bug/<label>
+git push -u origin bug/<branch-label>
 PR_URL=$(gh pr create \
-  --head bug/<label> \
+  --head bug/<branch-label> \
   --base main \
   --title "<bug title>" \
   --body "$(cat <<'EOF'
@@ -363,7 +365,7 @@ they compile, commit with a brief "Address review: …" message, and push.
 Tell the user:
 - What was fixed and the root cause
 - Verification results (all passing, reproduction steps no longer trigger)
-- Branch name: `bug/<label>`
+- Branch name: `bug/<branch-label>`
 - Pull request URL (if pushed) or "branch left local; not pushed"
 - The bug is now in `review` status — user inspects before it lands
 
@@ -380,9 +382,9 @@ CLAUDE.md's *Concluding work* (skip any already gone; `ExitWorktree(keep)` first
 entered the worktree in Step 4):
 
 ```bash
-git worktree remove .claude/worktrees/bug-<label>
-git branch -D bug/<label>
-git push origin --delete bug/<label>
+git worktree remove .claude/worktrees/bug-<branch-label>
+git branch -D bug/<branch-label>
+git push origin --delete bug/<branch-label>
 git fetch --prune origin
 ```
 

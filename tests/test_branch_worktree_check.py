@@ -79,7 +79,7 @@ class TestRegistryOverride(HookTestCase):
 		"""Default behaviour preserved when no opt-in marker is present."""
 		code, output = self._run(
 			"git worktree add .claude/worktrees/short-name "
-			"-b challenge/very-long-label-that-exceeds-comfort"
+			"-b challenge/combined-saga-label"
 		)
 		self.assertEqual(code, 2)
 		decision = json.loads(output)
@@ -88,10 +88,10 @@ class TestRegistryOverride(HookTestCase):
 
 	def test_registry_opt_in_unblocks_shortened_path(self):
 		"""A registry file mapping basename→branch unblocks the shortened path."""
-		self._seed_registry("short-name", "challenge/very-long-label-that-exceeds-comfort")
+		self._seed_registry("short-name", "challenge/combined-saga-label")
 		code, output = self._run(
 			"git worktree add .claude/worktrees/short-name "
-			"-b challenge/very-long-label-that-exceeds-comfort"
+			"-b challenge/combined-saga-label"
 		)
 		self.assertEqual(code, 0)
 		self.assertEqual(output.strip(), "{}")
@@ -101,7 +101,7 @@ class TestRegistryOverride(HookTestCase):
 		self._seed_registry("short-name", "challenge/some-other-label")
 		code, _output = self._run(
 			"git worktree add .claude/worktrees/short-name "
-			"-b challenge/very-long-label-that-exceeds-comfort"
+			"-b challenge/combined-saga-label"
 		)
 		self.assertEqual(code, 2)
 
@@ -157,6 +157,70 @@ class TestForceBranchFastForward(HookTestCase):
 			code, output = self._run("git branch -f challenge/x")
 		self.assertEqual(code, 0)
 		self.assertEqual(output.strip(), "{}")
+
+
+
+class TestNameLengthCap(HookTestCase):
+	"""Branch and worktree folder names stay within MAX_NAME_LENGTH so Windows
+	build paths stay under MAX_PATH."""
+
+	LONG = "challenge/open-anchored-popups-inside-dock-leaves-as-popup-roots"
+
+	def test_long_branch_blocked_with_suggestion(self):
+		"""A worktree add with an over-long branch is blocked and names a short one."""
+		folder = self.LONG.replace("/", "-")
+		code, output = self._run(f"git worktree add .claude/worktrees/{folder} -b {self.LONG}")
+		self.assertEqual(code, 2)
+		self.assertIn("challenge/open-anchored-popups-inside", output)
+
+	def test_branch_at_limit_allowed(self):
+		"""A branch exactly MAX_NAME_LENGTH long passes with its matching path."""
+		branch = "challenge/" + "a" * (hook.MAX_NAME_LENGTH - len("challenge/"))
+		folder = branch.replace("/", "-")
+		code, output = self._run(f"git worktree add .claude/worktrees/{folder} -b {branch} origin/main")
+		self.assertEqual(code, 0)
+		self.assertEqual(output.strip(), "{}")
+
+	def test_long_branch_blocked_on_checkout(self):
+		"""The length error wins over the use-a-worktree error on checkout -b."""
+		code, output = self._run(f"git checkout -b {self.LONG}")
+		self.assertEqual(code, 2)
+		self.assertIn("the limit is", output)
+
+	def test_long_folder_blocked_without_branch(self):
+		"""A worktree add of an existing branch into a long folder is blocked."""
+		code, _output = self._run(
+			"git worktree add .claude/worktrees/" + "x" * (hook.MAX_NAME_LENGTH + 1) + " challenge/x")
+		self.assertEqual(code, 2)
+
+	def test_long_folder_blocked_on_move(self):
+		"""Moving a worktree to a long folder is blocked; a short one passes."""
+		long_target = ".claude/worktrees/" + "x" * (hook.MAX_NAME_LENGTH + 1)
+		code, _output = self._run(f"git worktree move .claude/worktrees/a {long_target}")
+		self.assertEqual(code, 2)
+		code, _output = self._run("git worktree move .claude/worktrees/a .claude/worktrees/b")
+		self.assertEqual(code, 0)
+
+	def test_folder_outside_worktrees_unchecked(self):
+		"""Only folders under .claude/worktrees/ are capped."""
+		code, _output = self._run("git worktree add ../" + "x" * (hook.MAX_NAME_LENGTH + 1) + " main")
+		self.assertEqual(code, 0)
+
+	def test_short_branch_drops_trailing_filler(self):
+		"""The cut keeps whole words and drops a trailing filler word."""
+		self.assertEqual(
+			hook.short_branch("challenge/give-2d-recording-segments-a-band-and-each-band-a-top-slot"),
+			"challenge/give-2d-recording-segments")
+
+	def test_short_branch_leaves_short_names(self):
+		"""A name within the limit comes back unchanged."""
+		self.assertEqual(hook.short_branch("bug/fix-focus"), "bug/fix-focus")
+
+	def test_short_branch_cuts_one_long_word(self):
+		"""A single word longer than the budget is cut hard."""
+		result = hook.short_branch("bug/" + "y" * 60)
+		self.assertEqual(len(result), hook.MAX_NAME_LENGTH)
+		self.assertTrue(hook.BRANCH_RE.match(result))
 
 
 if __name__ == "__main__":

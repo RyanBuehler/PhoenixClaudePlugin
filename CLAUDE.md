@@ -150,12 +150,16 @@ If you find orphaned load generators, report them to the user with their PIDs an
 
 ## Branch & Worktree Workflow
 
-All work happens on a dedicated branch in a dedicated worktree. Branch names are `<type>/<label>` where both segments are lowercase kebab-case (`^[a-z0-9][a-z0-9-]*$`). Slash-less branch names are rejected.
+All work happens on a dedicated branch in a dedicated worktree. Branch names are `<type>/<label>` where both segments are lowercase kebab-case (`^[a-z0-9][a-z0-9-]*$`), at most **40 characters** in all. Slash-less branch names are rejected.
+
+The cap keeps worktree paths short. Forge on Windows is not long-path aware, and its deepest build files sit about 170 characters below the worktree root, so a long worktree folder pushes them past `MAX_PATH` (260) and the build fails to write them. `hooks/branch-worktree-check.py` enforces the cap on branch names and on folders under `.claude/worktrees/` (`worktree add` and `worktree move`).
+
+For Crucible work the label is the **branch label**, written `<branch-label>`: the Crucible label when `<type>/<label>` fits in 40 characters, else the label cut after its last whole word that fits, with trailing filler words (`a`, `and`, `of`, `the`, …) dropped. When a name is too long, the hook's refusal names the shortened one, so `challenge/open-anchored-popups-inside-dock-leaves-as-popup-roots` becomes `challenge/open-anchored-popups-inside`. Keep the full Crucible label in `--label=` arguments and the PR body's `Crucible:` line; only the branch and worktree use the branch label.
 
 Common types:
 
-- `challenge/<label>` — Crucible challenge work
-- `bug/<label>` — Crucible bug fixes
+- `challenge/<branch-label>` — Crucible challenge work
+- `bug/<branch-label>` — Crucible bug fixes
 - `doc/<label>` — documentation-only changes
 - `ci/<label>` — CI and tooling changes
 - `misc/<label>` — one-off work that doesn't fit the above
@@ -312,8 +316,9 @@ The full valid set is identical for challenges and bugs: `backlog`, `todo`, `act
 `crucible bug move --label=<L> <status>`. When writing a workflow that accepts either, branch on
 type early and use the type-correct verbs throughout; do not paper over the difference.
 
-Branch naming follows the same split: `challenge/<label>` for challenges, `bug/<label>` for bugs.
-Worktrees follow at `.claude/worktrees/<type>-<label>` (slashes converted to dashes).
+Branch naming follows the same split: `challenge/<branch-label>` for challenges, `bug/<branch-label>` for bugs.
+Worktrees follow at `.claude/worktrees/<type>-<branch-label>` (slashes converted to dashes). The
+branch label is the Crucible label cut to the 40-character cap (see Branch & Worktree Workflow).
 
 ## Build Commands
 

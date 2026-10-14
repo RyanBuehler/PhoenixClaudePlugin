@@ -196,13 +196,13 @@ challenges diverge as follows (step numbers still map to 4a-4h):
 
 Worktrees are mandatory for every challenge — the plugin's `branch-worktree-check.py` hook blocks bare `git checkout -b` / `git switch -c` / `git branch <name>` at tool-use time (by design, to enforce one-worktree-per-branch). `git worktree add -b <name>` is the only supported way to create a challenge branch.
 
-Every worktree is an independent checkout with its own Forge output tree (`.forge-out/`), so each worktree pays a first-time cold build (~3–4 min). That cost is inherent to the isolation, not avoidable by branching on main — so the implementer subagent runs `/phoe:build` as its first concrete action (see 4b, step 1 of the subagent prompt).
+Every worktree is an independent checkout with its own Forge output tree (`Applications/Forge/.forge/`), so each worktree pays a first-time cold build (~3–4 min). That cost is inherent to the isolation, not avoidable by branching on main — so the implementer subagent runs `/phoe:build` as its first concrete action (see 4b, step 1 of the subagent prompt).
 
 #### Branch strategy decision (per wave)
 
 Before creating worktrees, decide how challenges in the wave map onto branches. Two patterns:
 
-- **Branch-per-challenge** (default) — every challenge gets its own `challenge/<label>` branch
+- **Branch-per-challenge** (default) — every challenge gets its own `challenge/<branch-label>` branch
   and worktree, so parallel units run simultaneously without colliding. Each challenge ends up as
   its own PR.
 - **Combined branch** — multiple challenges share one branch and one worktree and ship as one PR.
@@ -219,11 +219,11 @@ Apply this rule to each wave:
    *and* both belong to the same saga *and* the prior challenge has not yet been merged to
    `main`, prefer **combined branch** — extend the prior challenge's branch in the same
    worktree rather than branching from main. The combined branch **keeps the first challenge's
-   `challenge/<first-label>` name and its `.claude/worktrees/challenge-<first-label>` worktree** —
+   `challenge/<first-branch-label>` name and its `.claude/worktrees/challenge-<first-branch-label>` worktree** —
    that path↔branch pair is exactly what `branch-worktree-check.py` validated when the worktree was
    first created. Do **not** rename the combined branch to a saga label (`challenge/saga-...`): the
    worktree path would no longer match the branch, and the hook enforces `.claude/worktrees/<branch
-   with slashes as dashes>`. The chain's shared identity is the first challenge's label; the combined
+   with slashes as dashes>`. The chain's shared identity is the first challenge's branch label; the combined
    PR body lists every challenge it carries.
 3. Cap any combined branch at 4 challenges. After 4, start a fresh branch for the next chunk.
 
@@ -254,15 +254,18 @@ For each challenge in the wave:
      Step 1), else local `main`.
    - **Stacked dependency:** if this challenge depends on an earlier challenge *in this run* whose
      work is not yet on `origin/main` -- a cross-wave dependency that is not already on a shared
-     combined branch -- base it on that predecessor's branch tip (`challenge/<predecessor-label>`)
+     combined branch -- base it on that predecessor's branch tip (`challenge/<predecessor-branch-label>`)
      instead, so the dependency is present locally without merging anything into `main`.
    ```bash
-   git worktree add .claude/worktrees/challenge-<label> -b challenge/<label> <base-ref>
+   git worktree add .claude/worktrees/challenge-<branch-label> -b challenge/<branch-label> <base-ref>
    ```
-   where `<base-ref>` is `origin/main`, `main`, or `challenge/<predecessor-label>` per the rule above.
-   This exact `git worktree add` form is mandatory: it is the only shape the plugin's
-   `branch-worktree-check.py` hook permits, and only it can base the branch on `origin/main` or a
-   predecessor tip. Do **not** substitute `EnterWorktree(name=...)` — that mints its own branch/path
+   where `<base-ref>` is `origin/main`, `main`, or `challenge/<predecessor-branch-label>` per the rule above.
+   `<branch-label>` is the challenge label cut so `challenge/<branch-label>` fits the hook's
+   40-character cap (see the plugin CLAUDE.md, Branch & Worktree Workflow); a long Crucible label
+   is refused, and the refusal names the shortened branch to use. Use `git worktree add -b`: the
+   `branch-worktree-check.py` hook blocks `git checkout -b`, `git switch -c` and `git branch
+   <name>`, and requires the folder to be the branch with `/` as `-` (or a name registered under
+   `.claude/worktrees/.branches/`). Do **not** substitute `EnterWorktree(name=...)` — that mints its own branch/path
    naming and cannot control the base ref. Isolation-guard recognition comes separately, via
    `EnterWorktree(path=...)` in 4b.
 5. **Bootstrap Forge in the new worktree.** A fresh worktree can lack its own
@@ -270,7 +273,7 @@ For each challenge in the wave:
    first `/phoe:build` (4b) bootstraps it, but doing it here as part of setup avoids a cold first
    build surprising the implementer:
    ```bash
-   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/forge_wait.py start --log .claude/worktrees/challenge-<label>/.forge-wait/bootstrap.log -- python3 .claude/worktrees/challenge-<label>/Applications/Forge/Scripts/bootstrap.py
+   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/forge_wait.py start --log .claude/worktrees/challenge-<branch-label>/.forge-wait/bootstrap.log -- python3 .claude/worktrees/challenge-<branch-label>/Applications/Forge/Scripts/bootstrap.py
    ```
    Run it in the **foreground** with `timeout: 600000`. It blocks until the bootstrap exits (or
    9.5 minutes pass, when it prints the `wait --log ...` call to repeat), so the binary exists when it
@@ -304,7 +307,7 @@ Dispatch one implementer subagent per challenge; each works in the worktree pre-
 
 **The Agent tool has no `cwd` parameter** — a subagent inherits the orchestrator's working
 directory. To place an implementer in its worktree, the orchestrator calls
-`EnterWorktree(path=".claude/worktrees/challenge-<label>")` (combined branch: the shared worktree)
+`EnterWorktree(path=".claude/worktrees/challenge-<branch-label>")` (combined branch: the shared worktree)
 *before* dispatching, so the subagent inherits that cwd.
 
 **Background-session write-guard.** When `/phoe:execute` runs as a background session, Claude
@@ -347,7 +350,7 @@ time.
 
 **Never pass `isolation: "worktree"` to implementer subagents.** The branch and worktree already
 exist (4a); `isolation: "worktree"` spawns a *fresh, auto-named* worktree off `main`, so the
-subagent ignores the prepared `challenge/<label>` branch and, on stacked/combined work, abandons
+subagent ignores the prepared `challenge/<branch-label>` branch and, on stacked/combined work, abandons
 its accumulated commits. Use the default **general-purpose** agent. (The specialist `phoe:invoke-*`
 agents carry `isolation: worktree` intrinsically and self-isolate off `main` — don't use them for
 stacked implementer work; if one was, recover the commit by fast-forwarding its `agent-<hash>`
@@ -395,7 +398,7 @@ Description: <description>
 
 ## Your Job
 
-1. **Populate the worktree's build tree, and wait for it.** Your `cwd` is a fresh git worktree with an empty `Applications/Forge/.forge-out/` tree. Build once as your first action — Forge configures and builds via the active profile. Do this before exploring: you'll want the built module artifacts present so `grep`/`Read`-based exploration works correctly on modules that use C++23 modules, and so your later `/phoe:verify` run is an incremental build, not a cold one.
+1. **Populate the worktree's build tree, and wait for it.** Your `cwd` is a fresh git worktree with an empty `Applications/Forge/.forge/` tree. Build once as your first action — Forge configures and builds via the active profile. Do this before exploring: you'll want the built module artifacts present so `grep`/`Read`-based exploration works correctly on modules that use C++23 modules, and so your later `/phoe:verify` run is an incremental build, not a cold one.
 
    A cold build here can exceed the ten-minute command timeout, so run it — and every later
    `forge verify` — through the wait script, as a **foreground** Bash call with `timeout: 600000`:
@@ -461,7 +464,7 @@ Description: <description>
 - Follow the project's coding conventions (CLAUDE.md) — **and before writing any C++, read `Docs/StyleGuide.md` and `${CLAUDE_PLUGIN_ROOT}/references/tooling.md`** so the implementation conforms to enforced conventions (formatting, naming, comments, namespaces, return-value handling, `auto`, scope spacing, tooling). `${CLAUDE_PLUGIN_ROOT}` is the plugin install path (fall back to `~/phoenixclaudeplugin/references/` if it is unset)
 - Use plain ASCII only -- no unicode characters
 - **Do not yield your turn until committed + reported.** Ending your turn with edits unverified or uncommitted strands the work and the orchestrator cannot resume you mid-task. A build that outruns the command timeout is waited out with the wait script in step 1, not by yielding.
-- **Use worktree-absolute paths.** The paths in your prompt/context use the main-repo form (`/home/ryan/phoenix/...`), but the files you must edit live under the worktree prefix (`.claude/worktrees/challenge-<label>/...`). Reading the main-repo path can serve stale content, and a later `Edit` then fails "File has not been read yet" — read and edit the worktree copy.
+- **Use worktree-absolute paths.** The paths in your prompt/context use the main-repo form (`/home/ryan/phoenix/...`), but the files you must edit live under the worktree prefix (`.claude/worktrees/challenge-<branch-label>/...`). Reading the main-repo path can serve stale content, and a later `Edit` then fails "File has not been read yet" — read and edit the worktree copy.
 - **This shell is zsh.** Quote `grep --include` globs (`'*.cpp'`, not `*.cpp`) and do not rely on unquoted `$VAR` word-splitting — pass file lists literally or use arrays. An unquoted multi-file variable collapses to a single argument and silently checks nothing.
 - **Numeric safety.** Any clamp / `min` / `max` over a caller-supplied float must guard with `isfinite`/`isnan` FIRST — `std::clamp`/`min`/`max` pass NaN straight through into casts and persisted state. This is a recurring CRITICAL class the adversarial reviewer keeps catching.
 - **Byte/format-parser safety.** Bound every allocation and element count by the actual payload/blob size BEFORE any `reserve`/`resize`/multiply; a hostile count field otherwise drives a multi-GB reserve or a `length_error`/terminate (Phoenix bans exceptions). Add an adversarial regression trial with inflated counts — the happy-path round-trip cannot catch this.
@@ -551,13 +554,13 @@ PR (and the old "merge to main, fix on main, push the branch" flow silently left
 the pushed branch entirely). The PR *is* the challenge branch; `main` only moves when a PR merges
 on the remote.
 
-For each completed challenge, working inside its worktree (`.claude/worktrees/challenge-<label>`):
+For each completed challenge, working inside its worktree (`.claude/worktrees/challenge-<branch-label>`):
 
 1. Rebase the branch onto the freshest upstream so the PR diff is minimal. When the remote is
    reachable (`REMOTE_REACHABLE=1` from Step 1):
    ```bash
-   git -C .claude/worktrees/challenge-<label> fetch origin main
-   git -C .claude/worktrees/challenge-<label> rebase origin/main
+   git -C .claude/worktrees/challenge-<branch-label> fetch origin main
+   git -C .claude/worktrees/challenge-<branch-label> rebase origin/main
    ```
    When unreachable, skip the fetch and `git -C <worktree> rebase main` onto local `main`.
    Combined-branch chains rebase the shared branch once, not once per challenge.
@@ -646,8 +649,8 @@ short one by hand (see `dispatch-briefs.md` §2; a hash that shared only a nine-
 prefix with the real head read to two reviewers as a broken worktree):
 
 ```bash
-REVIEW_SHA=$(git -C .claude/worktrees/challenge-<label> rev-parse HEAD)
-REVIEW_BASE=$(git -C .claude/worktrees/challenge-<label> merge-base origin/main HEAD)
+REVIEW_SHA=$(git -C .claude/worktrees/challenge-<branch-label> rev-parse HEAD)
+REVIEW_BASE=$(git -C .claude/worktrees/challenge-<branch-label> merge-base origin/main HEAD)
 ```
 
 When origin is unreachable (`REMOTE_REACHABLE=0` from Step 1), there is no `origin/main` ref --
@@ -721,7 +724,7 @@ valid result.
 ### 4f. Handle Review Results
 
 **Where fixes land.** Every fix and triage subagent in this step commits to the **challenge
-branch in its own worktree** (cwd = `.claude/worktrees/challenge-<label>`) — never to local
+branch in its own worktree** (cwd = `.claude/worktrees/challenge-<branch-label>`) — never to local
 `main`, preserving the "no direct commits to main" rule. Because each challenge owns an isolated
 worktree, per-challenge fix subagents do not collide; but run multiple fix/triage passes for the
 *same* challenge sequentially (each must finish — commits landed, verify passed — before the next
@@ -808,7 +811,7 @@ If no match, rebase the branch once more onto the freshest origin/main so the pu
 fast-forward of the PR head (origin/main may have advanced since 4d):
 
 ```bash
-git -C .claude/worktrees/challenge-<label> rebase origin/main
+git -C .claude/worktrees/challenge-<branch-label> rebase origin/main
 ```
 
 If this rebase conflicts, abort it, mark the challenge blocked with the conflicting files, keep
@@ -830,8 +833,8 @@ in the final report, and skip to the next challenge:
 
 ```bash
 "$CRUCIBLE" challenge move --label=<LABEL> merged
-git worktree remove .claude/worktrees/challenge-<label>  # branch-per-challenge only
-git branch -D challenge/<label>
+git worktree remove .claude/worktrees/challenge-<branch-label>  # branch-per-challenge only
+git branch -D challenge/<branch-label>
 ```
 
 For every reviewed challenge that survives the pre-push check, push its branch and open a pull
@@ -843,9 +846,9 @@ request. Group by strategy:
 
 ```bash
 # branch-per-challenge
-git push -u origin challenge/<label>
+git push -u origin challenge/<branch-label>
 PR_URL=$(gh pr create \
-  --head challenge/<label> \
+  --head challenge/<branch-label> \
   --base main \
   --title "<challenge title>" \
   --body "$(cat <<'EOF'
@@ -863,9 +866,9 @@ echo "Opened PR #${PR_NUM}: ${PR_URL}"
 
 ```bash
 # combined-branch (named after the first challenge in the chain — see 4a's branch-strategy rule)
-git push -u origin challenge/<first-label>
+git push -u origin challenge/<first-branch-label>
 PR_URL=$(gh pr create \
-  --head challenge/<first-label> \
+  --head challenge/<first-branch-label> \
   --base main \
   --title "<chain title — summarizes the shipped-together challenges>" \
   --body "$(cat <<'EOF'
@@ -899,9 +902,9 @@ work*, by whichever later session observes the merge. If the orchestrator's cwd 
 checkout first — a raw `git worktree remove` on the worktree you are standing in dangles the pin.
 Removing a worktree you are not currently in is fine:
 
-- **branch-per-challenge:** `git worktree remove .claude/worktrees/challenge-<label>` after
+- **branch-per-challenge:** `git worktree remove .claude/worktrees/challenge-<branch-label>` after
   pushing.
-- **combined-branch:** only remove the shared worktree (`.claude/worktrees/challenge-<first-label>`)
+- **combined-branch:** only remove the shared worktree (`.claude/worktrees/challenge-<first-branch-label>`)
   after the chain's PR has been pushed.
 
 If a PR comment loop later requests fixes, check out the branch, apply the change, rebuild

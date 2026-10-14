@@ -62,8 +62,8 @@ recorded included-parent SHA; confirm that SHA is an ancestor. Save the exact ch
 
 ```bash
 git diff --binary <included-parent-sha> <child-sha> > /tmp/child-only.patch
-git worktree add .claude/worktrees/challenge-<replacement-label> \
-  -b challenge/<replacement-label> origin/main
+git worktree add .claude/worktrees/challenge-<replacement-branch-label> \
+  -b challenge/<replacement-branch-label> origin/main
 ```
 
 In the replacement worktree, `git apply --3way --index /tmp/child-only.patch` applies only child

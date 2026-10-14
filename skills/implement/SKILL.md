@@ -60,8 +60,8 @@ git log main --oneline -i --grep="<LABEL>"
 git log main --oneline --grep="#<ID>"
 
 # Signal B — merge-commit style, where the branch ref is still present locally
-git rev-parse --verify challenge/<LABEL> 2>/dev/null \
-  && git merge-base --is-ancestor challenge/<LABEL> main \
+git rev-parse --verify challenge/<branch-label> 2>/dev/null \
+  && git merge-base --is-ancestor challenge/<branch-label> main \
   && echo "branch tip is ancestor of main"
 ```
 
@@ -94,7 +94,7 @@ Then pick the next todo using saga-aware selection:
    - **Saga ordering first** — if a challenge belongs to a saga, only pick it if all earlier challenges in that saga are `merged` or `canceled`. Never skip ahead in a saga's ordering.
    - **Blocked check** — if a saga predecessor is in `review` or `active` (not yet merged), the next challenge cannot proceed. Move it to `blocked` and stop:
      ```bash
-     "$CRUCIBLE" challenge block <NEXT_ID> --blocked_by=<PREDECESSOR_ID> --reason="Awaiting merge of #<PREDECESSOR_ID> on branch challenge/<predecessor-label>"
+     "$CRUCIBLE" challenge block <NEXT_ID> --blocked_by=<PREDECESSOR_ID> --reason="Awaiting merge of #<PREDECESSOR_ID> on branch challenge/<predecessor-branch-label>"
      ```
      Tell the user which challenge is blocked and why, then try the next eligible challenge. If no unblocked challenges remain, stop.
    - **Priority second** — among eligible challenges, pick the highest priority (critical > high > medium > low).
@@ -182,13 +182,15 @@ git pull --ff-only origin main
 
 From the main repo root, create the worktree and branch (this exact `git worktree add` form is what
 the plugin's `branch-worktree-check.py` hook blesses — it enforces `<type>/<label>` naming at
-`.claude/worktrees/<type>-<label>`):
+`.claude/worktrees/<type>-<label>`, at most 40 characters). `<branch-label>` is the challenge label
+cut to fit that cap (see the plugin CLAUDE.md, Branch & Worktree Workflow); the hook's refusal of a
+long name names the shortened branch:
 
 ```bash
-git worktree add .claude/worktrees/challenge-<label> -b challenge/<label>
+git worktree add .claude/worktrees/challenge-<branch-label> -b challenge/<branch-label>
 ```
 
-Then **enter it with the `EnterWorktree` tool** — `EnterWorktree(path=".claude/worktrees/challenge-<label>")`.
+Then **enter it with the `EnterWorktree` tool** — `EnterWorktree(path=".claude/worktrees/challenge-<branch-label>")`.
 This is not cosmetic. In a background session, Claude Code's isolation guard refuses native
 `Write`/`Edit` in any worktree the session has not entered through the harness ("parent bg session
 hasn't isolated yet"), which forces slow, error-prone Bash/heredoc edits on you and every subagent
@@ -196,7 +198,7 @@ you dispatch. `EnterWorktree(path=...)` registers the worktree with the guard so
 keep working. It enters *by path* without taking removal ownership, so Step 17's `git worktree
 remove` cleanup still applies unchanged. (Do not create the worktree with `EnterWorktree(name=...)`
 instead — that mints its own branch/path naming and cannot base on a specific ref, breaking the
-`challenge/<label>` convention the rest of this workflow relies on.)
+`challenge/<branch-label>` convention the rest of this workflow relies on.)
 
 **Bootstrap Forge in the worktree.** A fresh worktree — even one branched from a warm checkout — can
 lack its own `Applications/Forge/.bootstrap-out/forge`. Bootstrap it now so the first `/phoe:verify`
@@ -286,7 +288,7 @@ Tests are NOT required for:
 > harness drops it in a *fresh* worktree branched from `main` — without this challenge's
 > still-uncommitted changes, so it cannot read the code under test and resorts to copying files in.
 > Every dispatch below therefore passes the absolute path of this challenge worktree
-> (`.claude/worktrees/challenge-<label>`). **The dispatch vehicle differs by job:** the test-writing
+> (`.claude/worktrees/challenge-<branch-label>`). **The dispatch vehicle differs by job:** the test-writing
 > dispatch here needs to write, so it goes as a **general-purpose** subagent; the review dispatches
 > in Steps 11 and 12 are **read-only** and go as `Explore`. Do not merge the two — and note that
 > `invoke-code-reviewer` is not a read-only vehicle despite the name: it carries `Bash`. See
@@ -573,9 +575,9 @@ Push the branch and open a pull request, after the credential check in CLAUDE.md
 Request Workflow.
 
 ```bash
-git push -u origin challenge/<label>
+git push -u origin challenge/<branch-label>
 PR_URL=$(gh pr create \
-  --head challenge/<label> \
+  --head challenge/<branch-label> \
   --base main \
   --title "<challenge title>" \
   --body "$(cat <<'EOF'
@@ -635,7 +637,7 @@ Tell the user:
 - What was implemented
 - Tests added (list test names) or why tests were not applicable
 - Verification results (all passing)
-- Branch name: `challenge/<label>`
+- Branch name: `challenge/<branch-label>`
 - Saga progress (if applicable)
 - Follow-on sibling updates, if any (which siblings were updated and what fields changed)
 - Reconciliation outcome (pre-merge pass, Step 15): siblings + `docs/` scanned against the committed diff — which were updated, or "none stale" (required — a present line makes a skipped reconciliation visible). The authoritative post-merge pass runs later when the PR lands and reports its own outcome then.
@@ -661,9 +663,9 @@ reconciliation), after the reconciliation pass above, clean up and report — th
 1. **Clean up the worktree, local branch, and remote branch** from the main repo
    root, per the plugin CLAUDE.md's *Concluding work* (skip any already gone):
    ```bash
-   git worktree remove .claude/worktrees/challenge-<label>
-   git branch -D challenge/<label>
-   git push origin --delete challenge/<label>
+   git worktree remove .claude/worktrees/challenge-<branch-label>
+   git branch -D challenge/<branch-label>
+   git push origin --delete challenge/<branch-label>
    git fetch --prune origin
    ```
    If this session entered the worktree via `EnterWorktree(path=...)` in Step 5, first

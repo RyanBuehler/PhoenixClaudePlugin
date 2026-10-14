@@ -13,6 +13,19 @@ BRANCH_RE = re.compile(r'^(' + KEBAB + r')/(' + KEBAB + r')$')
 SEPARATOR = re.compile(r'&&|\|\|?|;|\n')
 REDIRECT_RE = re.compile(r'^[0-9]*[<>]+&?[0-9-]*$|^&>+$')
 
+# Longest branch name, and so longest worktree folder name (the folder is the
+# branch with '/' as '-'). Forge on Windows is not long-path aware, and its
+# deepest build file sits about 170 characters below the worktree root, so a
+# root past ~90 characters breaks the build at MAX_PATH (260).
+MAX_NAME_LENGTH = 40
+WORKTREES_DIR = ".claude/worktrees/"
+
+# Words dropped from the end of a shortened label: they carry no meaning there.
+TRAILING_FILLER = {
+	"a", "an", "and", "as", "at", "by", "for", "from", "in", "into",
+	"of", "on", "or", "the", "to", "with",
+}
+
 # Registry of opt-in path-override mappings. A file at
 # .claude/worktrees/.branches/<basename> whose contents equal a target branch
 # tells the hook to permit `git worktree add .claude/worktrees/<basename> -b
@@ -51,6 +64,17 @@ MSG_INVALID_BRANCH = (
 	"bug/windows-liaison-fix-focus, doc/branch-workflow, ci/pin-clang-19."
 )
 
+MSG_TOO_LONG = (
+	"Branch name '{name}' is {length} characters; the limit is {limit}.\n"
+	"Long names push Windows build paths past MAX_PATH. Shorten the label,\n"
+	"e.g. {suggestion} (the label cut at a word, trailing filler dropped)."
+)
+
+MSG_FOLDER_TOO_LONG = (
+	"Worktree folder '{name}' is {length} characters; the limit is {limit}.\n"
+	"Long folders push Windows build paths past MAX_PATH. Use a shorter name."
+)
+
 MSG_MISMATCH = (
 	"Worktree path and branch do not match.\n"
 	"Branch {branch} must live at {expected}.\n"
@@ -58,6 +82,47 @@ MSG_MISMATCH = (
 	"  .claude/worktrees/.branches/<basename>\n"
 	"before running `git worktree add`."
 )
+
+
+def short_branch(branch):
+	"""Return `branch` cut to MAX_NAME_LENGTH at a word boundary of its label.
+
+	Keeps the type, keeps whole kebab words of the label while they fit, then
+	drops trailing filler words. A first word too long to fit is cut hard.
+	"""
+	if len(branch) <= MAX_NAME_LENGTH:
+		return branch
+	branch_type, _, label = branch.partition("/")
+	budget = MAX_NAME_LENGTH - len(branch_type) - 1
+	kept = []
+	for word in label.split("-"):
+		if len("-".join(kept + [word])) > budget:
+			break
+		kept.append(word)
+	while len(kept) > 1 and kept[-1] in TRAILING_FILLER:
+		kept.pop()
+	short_label = "-".join(kept) if kept else label[:budget].rstrip("-")
+	return branch_type + "/" + short_label
+
+
+def check_branch_name(branch):
+	"""Block a branch name that is malformed or longer than MAX_NAME_LENGTH."""
+	if not BRANCH_RE.match(branch):
+		block(MSG_INVALID_BRANCH.format(name=branch))
+	if len(branch) > MAX_NAME_LENGTH:
+		block(MSG_TOO_LONG.format(
+			name=branch, length=len(branch), limit=MAX_NAME_LENGTH,
+			suggestion=short_branch(branch)))
+
+
+def check_worktree_folder(path):
+	"""Block a worktree folder under .claude/worktrees/ past MAX_NAME_LENGTH."""
+	if path is None or WORKTREES_DIR not in path.replace("\\", "/") + "/":
+		return
+	name = os.path.basename(path.replace("\\", "/").rstrip("/"))
+	if len(name) > MAX_NAME_LENGTH:
+		block(MSG_FOLDER_TOO_LONG.format(
+			name=name, length=len(name), limit=MAX_NAME_LENGTH))
 
 
 def expected_path(branch):
@@ -104,13 +169,13 @@ def block(reason):
 
 def check_create(branch):
 	"""Block every branch creation outside of `git worktree add -b`."""
-	if not BRANCH_RE.match(branch):
-		block(MSG_INVALID_BRANCH.format(name=branch))
+	check_branch_name(branch)
 	block(MSG_USE_WORKTREE)
 
 
 def check_worktree_add(tokens):
-	"""Validate `git worktree add` — require matching path when -b is used."""
+	"""Validate `git worktree add` — cap the folder, and require a matching
+	path and a short valid branch when -b is used."""
 	path = None
 	branch = None
 	index = 0
@@ -128,10 +193,11 @@ def check_worktree_add(tokens):
 		if path is None:
 			path = token
 		index += 1
+	if branch is not None:
+		check_branch_name(branch)
+	check_worktree_folder(path)
 	if branch is None:
 		return
-	if not BRANCH_RE.match(branch):
-		block(MSG_INVALID_BRANCH.format(name=branch))
 	if path is None or not path_matches_branch(path, branch):
 		block(MSG_MISMATCH.format(branch=branch, expected=expected_path(branch)))
 
@@ -203,6 +269,11 @@ def inspect_git(tokens):
 		return
 	if subcommand == "worktree" and rest and rest[0] == "add":
 		check_worktree_add(rest[1:])
+		return
+	if subcommand == "worktree" and rest and rest[0] == "move":
+		positional = [token for token in rest[1:] if not token.startswith("-")]
+		if len(positional) >= 2:
+			check_worktree_folder(positional[1])
 		return
 
 
