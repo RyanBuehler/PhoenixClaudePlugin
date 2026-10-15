@@ -58,8 +58,7 @@ Before applying checks, read these files fresh (do not cache across invocations)
 - `Engine/Modules/Ledger/Source/Public/IEntry.h` — Entry interface
 - `Engine/Modules/Ledger/Source/Public/EntryCategory.h` — category definitions
 - `Engine/Modules/Ledger/Source/Public/IAccountState.h` — Account state interface
-- `${CLAUDE_PLUGIN_ROOT}/CLAUDE.md` §Codebase Rules
-- `~/.claude/projects/-home-ryan-Agents-Agent3/memory/MEMORY.md` — active conventions
+- `${CLAUDE_PLUGIN_ROOT}/references/core-rules.md` §Codebase rules
 
 ### 4. Apply checks
 

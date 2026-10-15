@@ -7,8 +7,8 @@ For code style and design rules, see `Docs/StyleGuide.md`.
 
 | Tool/Config | Path | Purpose |
 |-------------|------|---------|
-| `format.py` | `Tools/format.py` | clang-format wrapper (v20) |
-| `tidy.py` | `Tools/tidy.py` | clang-tidy wrapper (v20) |
+| `format.py` | `Tools/format.py` | clang-format wrapper (version pinned in `Tools/toolchain.lock.json`) |
+| `tidy.py` | `Tools/tidy.py` | clang-tidy wrapper (same pin) |
 | `clang_utils.py` | `Tools/clang_utils.py` | Shared utilities |
 | `.clang-format` | Root | Formatting rules |
 | `.clang-tidy` | Root | Static analysis rules |

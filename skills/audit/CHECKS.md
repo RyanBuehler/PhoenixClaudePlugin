@@ -7,7 +7,7 @@ in-scope file.
 **This catalog holds no rules of its own.** Every check names the document section that owns its
 rule, and that section is the source of truth. If a check and its **Rule** disagree, the rule
 wins and the fix belongs here. A recurring violation with no owning section is not a check yet —
-strengthen `Docs/StyleGuide.md` or the plugin `CLAUDE.md` §Codebase Rules first.
+strengthen `Docs/StyleGuide.md` or `references/core-rules.md` §Codebase rules first.
 
 ## Severity rubric
 
@@ -170,7 +170,7 @@ class, struct, or namespace at the same scope.
 A type or member named exactly `Sink`, `Source`, or `Drain`, unqualified. The bare noun names a
 direction of flow and nothing else.
 
-**Rule**: the plugin `CLAUDE.md` §Codebase Rules.
+**Rule**: `Docs/StyleGuide.md` §Naming a new symbol (a bare `Sink` names nothing); `Docs/Lexicon.md` §Drain.
 
 **Detection**: those three as a whole identifier. Qualified forms are correct and common —
 `ShaderSource`, `TrialBatchSource`, `ILocusSource` — as is `drain` the verb.
@@ -181,7 +181,7 @@ direction of flow and nothing else.
 `Old*` where `Previous*` is meant, `Last` for the one before this one, `Maybe*` for `Tentative*`,
 `Kind`/`*Kind` for `Type`/`*Type`.
 
-**Rule**: the plugin `CLAUDE.md` §Codebase Rules; `Docs/Lexicon.md` §Last, §Kind.
+**Rule**: `Docs/StyleGuide.md` §Form (`Previous`, not `Old`); `Docs/Lexicon.md` §Last, §Kind.
 
 **Detection**: those prefixes and suffixes. `Last` also means *final in a sequence*, and that
 meaning stays — the last element, `First`/`Last`, "declared last" — so read the referent before
@@ -212,7 +212,7 @@ its `b`/`a`/`p` type hint.
 ### `mixed-case-acronym` (Nit, mechanical)
 An acronym in mixed case in a module or type name — `Gltf` for `GLTF`.
 
-**Rule**: the plugin `CLAUDE.md` §Codebase Rules. `Json` is the lone exception.
+**Rule**: `references/core-rules.md` §Codebase rules. `Json` is the lone exception.
 
 **Detection**: a known acronym in CamelCase.
 
@@ -241,7 +241,7 @@ operator — so the class stops working in a `vector`, in a `sort`, or behind an
 assigns, and the error surfaces at the container rather than at the member. It cannot be null,
 which reads like a safety guarantee, but a dangling reference is not a checkable state.
 
-**Rule**: `Docs/StyleGuide.md` §Ownership & Pointers; the plugin `CLAUDE.md` §Codebase Rules.
+**Rule**: `Docs/StyleGuide.md` §Ownership & Pointers.
 
 **Detection**: an `&` between a type and an `m_` name at class scope. Roughly four dozen exist
 today and are debt, not precedent — one sitting next to a change is not a licence to add another.
@@ -258,8 +258,8 @@ function handing back the one instance of something. Every consumer's dependency
 invisible at its declaration, nothing can be constructed in a test without standing up the global
 first, and the lifetime is whatever the linker decided.
 
-**Rule**: `Docs/StyleGuide.md` §Singletons; the plugin `CLAUDE.md` §Codebase Rules,
-which is stricter and binds — no new global singletons and no static `Get()` accessors at all.
+**Rule**: `Docs/StyleGuide.md` §Singletons, which holds new code stricter — no new global singletons
+and no static `Get()` accessors at all.
 
 **Detection**: `static <T>& Get()` / `Instance()` on a type with a private or deleted
 constructor. A handful predate the rule; the §Singletons exception covers those, not something
@@ -302,7 +302,7 @@ mutating it, a `shared_ptr<const T>` snapshot resolves it instead.
 ### `public-accessor-to-owned-internal` (Warning, report)
 A public accessor returning a reference to an owned internal, short of the full round trip above.
 
-**Rule**: the plugin `CLAUDE.md` §Codebase Rules.
+**Rule**: `Docs/Patterns.md` §Pull-Mutate-Push Accessor; `Docs/StyleGuide.md` §Accessor naming.
 
 **Detection**: a public method returning `T&` or `T*` to a member.
 
@@ -342,7 +342,7 @@ returning something a caller is expected to consume. The cast is not a decision,
 silencing of one: `[[nodiscard]]` fired because the callee's author decided its result must be
 handled, and the cast overrules that from the call site, where the least context exists.
 
-**Rule**: `Docs/StyleGuide.md` §Error Handling; the plugin `CLAUDE.md` §Codebase Rules.
+**Rule**: `Docs/StyleGuide.md` §Error Handling.
 
 **Detection**: the three spellings over an error-bearing return (`expected`, `optional`, a status
 enum). Trials carry most of the tree's remaining discards; production source should return none.
@@ -496,7 +496,7 @@ example of a non-obvious *why* that belongs in a comment.
 ### `nullptr-comparison` (Nit, mechanical)
 A pointer or handle compared against `nullptr` rather than tested directly.
 
-**Rule**: the plugin `CLAUDE.md` §Codebase Rules.
+**Rule**: `references/core-rules.md` §Codebase rules.
 
 **Detection**: `!= nullptr` / `== nullptr`. Audit your own added lines; do not churn pre-existing
 comparisons.
@@ -507,7 +507,7 @@ comparisons.
 `std::isfinite` where `Math::IsFinite` is the rule — it constant-evaluates and needs no `<cmath>`,
 which the curated `Std` does not carry on the clang arm.
 
-**Rule**: the plugin `CLAUDE.md` §Codebase Rules.
+**Rule**: `references/core-rules.md` §Codebase rules.
 
 **Fix**: swap the spelling.
 
@@ -561,7 +561,7 @@ verb is `Gather`. Out-parameters carry the `Out` prefix; byte buffers are `vecto
 A concrete module type (`FooModule&`, `FooModule*`, `shared_ptr<FooModule>`) as a parameter
 outside `FooModule`'s own files.
 
-**Rule**: the plugin `CLAUDE.md` §Codebase Rules.
+**Rule**: `references/core-rules.md` §Codebase rules; `Docs/Patterns.md` §Ownership Tiers.
 
 **Fix**: route through the Tier-2 subsystem interface, which names no concrete type.
 
@@ -570,7 +570,7 @@ A component handing a system a reference to itself — concrete or interface —
 callbacks or be "made ready". If an owner hands a foreigner a capability the foreigner then calls
 back into, the dependency is inverted.
 
-**Rule**: the plugin `CLAUDE.md` §Codebase Rules.
+**Rule**: `references/core-rules.md` §Codebase rules; `Docs/Patterns.md` §Self-Subscribing Constructor.
 
 **Fix**: submit a self-contained description of the work; pass values, not closures over foreign
 mutable state. Prefer a declarative per-tick snapshot the owner consumes.
@@ -578,7 +578,7 @@ mutable state. Prefer a declarative per-tick snapshot the owner consumes.
 ### `void-star-in-public-signature` (Critical, report)
 `void*` in a public signature where a value-erasure boundary is meant.
 
-**Rule**: the plugin `CLAUDE.md` §Codebase Rules; `Docs/Patterns.md`
+**Rule**: `references/core-rules.md` §Codebase rules; `Docs/Patterns.md`
 §Value-Erasure Boundary.
 
 **Fix**: `byte*` behind a typed accessor, with the owner resolving the concrete storage.
@@ -587,7 +587,7 @@ mutable state. Prefer a declarative per-tick snapshot the owner consumes.
 A subsystem interface with a `GetX()` lazy accessor, a new type declared inside a subsystem
 header, or a subsystem method with no counterpart on the underlying module.
 
-**Rule**: the plugin `CLAUDE.md` §Codebase Rules.
+**Rule**: `Docs/Patterns.md` §Ownership Tiers, §Registry Mediation.
 
 **Fix**: narrow the interface to the operations foreign code is allowed.
 
@@ -617,7 +617,7 @@ dead branch is eliminated at compile time but still type-checked, catching refac
 ### `build-config-macro` (Critical, report)
 A `-D` macro carrying build configuration.
 
-**Rule**: the plugin `CLAUDE.md` §Codebase Rules — one resolver, all
+**Rule**: `references/core-rules.md` §Codebase rules; `Docs/StyleGuide.md` §Preprocessor Guards — one resolver, all
 consumers read the `Build::` constant.
 
 **Fix**: add the constant.
@@ -718,14 +718,14 @@ A `<Module>.h` re-exporting a module's entire public surface.
 ### `web-stack-in-ui` (Critical, report)
 An HTML, JS, CSS, or HTTP surface anywhere in the Editor UI.
 
-**Rule**: the plugin `CLAUDE.md` §Codebase Rules. All Editor UI is native (Mosaic).
+**Rule**: `references/core-rules.md` §Codebase rules. All Editor UI is native (Mosaic).
 
 **Fix**: native Mosaic.
 
 ### `third-party-dependency` (Critical, report)
 A third-party library that is not X11, ALSA, or Vulkan.
 
-**Rule**: the plugin `CLAUDE.md` §Codebase Rules.
+**Rule**: `references/core-rules.md` §Codebase rules.
 
 **Fix**: implement it, or make the case in the PR.
 
@@ -784,7 +784,7 @@ with no purpose comment.
 Correctness resting on when something happens in another module or on another thread, with
 nothing at the dependent site saying so.
 
-**Rule**: `Docs/StyleGuide.md` §Comments; the plugin `CLAUDE.md` §Codebase Rules.
+**Rule**: `Docs/StyleGuide.md` §Comments (state an ordering you depend on but do not control).
 
 **Fix**: state the assumed ordering and the failure it prevents, phrased as the guarantee — "the
 platform applies extents on the pump thread" — never as a file or line. Scoped to genuine
@@ -810,7 +810,7 @@ challenge or bug. If it describes something you would do now, do it now.
 ### `british-spelling` (Nit, mechanical)
 British spelling in code, comments, or a commit message.
 
-**Rule**: the plugin `CLAUDE.md` §Codebase Rules — color/center/behavior.
+**Rule**: `references/core-rules.md` §Codebase rules — color/center/behavior.
 
 **Detection**: audit your own added lines; do not churn pre-existing text.
 
@@ -849,7 +849,7 @@ debt — fix them when you touch the surrounding code, not in a standalone sweep
 Trial scaffolding, fixtures, or trial-scenario narration in a module's production sources. A
 production comment states the terse *why* of the code, never a specific trial's setup.
 
-**Rule**: the plugin `CLAUDE.md` §Codebase Rules. Trials live in the owning module's `Trials/`.
+**Rule**: `references/core-rules.md` §Codebase rules. Trials live in the owning module's `Trials/`.
 
 **Fix**: move it to the trial, or to the PR description for design rationale.
 

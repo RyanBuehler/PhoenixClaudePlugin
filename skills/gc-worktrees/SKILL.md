@@ -41,8 +41,7 @@ proofs, strongest first:
 
 **A deleted remote branch is not proof.** Closing a pull request unmerged deletes the branch too,
 and a branch pushed without an upstream never had one. Such a worktree is kept with
-`upstream gone but no merged PR — review by hand`. On the first real sweep this held back four
-worktrees carrying 1, 4, 9, and 9 unique commits — one of them PR #2689, closed unmerged.
+`upstream gone but no merged PR — review by hand`, because it may carry unmerged commits.
 
 `--trust-gone` downgrades that to `landed: upstream gone (unverified)` and makes it removable.
 Do not pass it to clear a backlog; it exists for a repository with no GitHub remote, and it
@@ -90,8 +89,9 @@ Afterwards the script runs `git worktree prune`. Report what was removed, what w
 every `review by hand` entry — those need a human.
 
 The script deletes local branches only; it never touches `origin`. For each removed branch whose
-remote head still exists (`git ls-remote --heads origin <branch>`), delete it per the plugin CLAUDE.md's *Concluding work* — the script's `landed` verdict
-is the proof that procedure requires.
+remote head still exists (`git ls-remote --heads origin <branch>`), delete it per
+`${CLAUDE_PLUGIN_ROOT}/references/concluding-work.md` — the script's `landed` verdict is the proof
+that procedure requires.
 
 ## 5. Refusals
 

@@ -36,10 +36,9 @@ across invocations — they change):
    name the pattern that replaces the shape.
 4. `Docs/Lexicon.md` — the blessed word per concept and the banned ones (§Anti-terms). Consult
    before proposing any rename.
-5. `CLAUDE.md` (plugin root) — Phoenix architecture: modules vs subsystems, subsystem
-   interface design, object-handoff rules, subsystem-creation guidance, build/test workflow,
-   color values, labels, and §Codebase Rules: ownership tiers, boundary data flow, dependencies,
-   and the code-style rules stricter than the style guide.
+5. `references/core-rules.md` §Codebase rules — the plugin's rules the repository docs do not
+   state: ownership tiers, boundary data flow, dependencies, and code-style rules such as
+   American spelling, `Math::IsFinite` and acronym case.
 6. `references/tooling.md` — formatter/linter configuration, command conventions.
 7. `references/modern-cpp.md` / `references/cpp-portability.md` — C++23 idioms, portability
    hazards. Only consult when the file under audit touches relevant territory.
@@ -266,8 +265,8 @@ For interactive one-off audits, drop the flags and run `/phoe:audit <target>`.
 - **UI / Mosaic / Ledger architecture review** — use `ui-design-review`. Audit covers
   engine-wide conventions; UI has its own rulebook.
 - **Gating commits** — use `/phoe:verify`. Audit findings are drift notes, not blockers.
-- **Inventing rules** — if a rule isn't in `Docs/StyleGuide.md`, `Docs/Patterns.md`, or the
-  plugin `CLAUDE.md`, audit does not enforce it, and `CHECKS.md` may not carry a check for it. A
+- **Inventing rules** — if a rule isn't in `Docs/StyleGuide.md`, `Docs/Patterns.md`,
+  `Docs/Lexicon.md`, or `references/core-rules.md`, audit does not enforce it, and `CHECKS.md` may not carry a check for it. A
   recurring violation with no owning section means strengthening the repository doc first, then
   adding the check.
 - **Running the build or tests** — audit is read-first, edit-light, never validates.
@@ -278,7 +277,7 @@ How this skill goes wrong.
 
 | Pitfall | Why it fails | Do instead |
 |---|---|---|
-| Encoding rules inside this SKILL file or `CHECKS.md` | Drift between skill and docs — two SSOTs is zero SSOTs | Rules go in `Docs/StyleGuide.md` / `Docs/Patterns.md` / the plugin `CLAUDE.md`; a check names the section and the smell, never the rule |
+| Encoding rules inside this SKILL file or `CHECKS.md` | Drift between skill and docs — two SSOTs is zero SSOTs | Rules go in `Docs/StyleGuide.md` / `Docs/Patterns.md` / `references/core-rules.md`; a check names the section and the smell, never the rule |
 | Auto-applying a **Requires approval** finding under `--fix-safe` | A rotation quietly authorizes a reference member or a singleton nobody signed off on | Report it with the approval requirement stated; never ask, never apply |
 | Reporting a focused run's out-of-group findings | The point of `--checks=<group>` is a report short enough to act on | Stay in the group; note nothing else |
 | Citing a check ID as the authority | The reader cannot confirm a rule they can't find | Cite the check's **Rule** — the doc section that owns it |

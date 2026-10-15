@@ -1,27 +1,25 @@
 ---
 name: crucible
-description: Use for ANY question or action involving Crucible, sagas, challenges, or bugs — including read-only status queries. Activates on phrases like "saga status", "what's in review", "create a challenge", "move challenge to review", or any mention of crucible/saga/challenge/bug.
+description: Use before any crucible CLI command — reading or changing Crucible sagas, challenges, or tracked bugs, including status queries like "what's in review".
 ---
 
 # Crucible CLI — How to Talk to the Project Tracker
 
 Crucible is the project's bespoke saga/challenge/bug tracker. A `crucible` CLI client speaks to `crucible-server`, which runs as a standing LAN service on **glacius** (192.168.68.50:9000) — not on the machine running this session. This skill is what you read before issuing any `crucible ...` command.
 
-## Hard rules
+## Rules
 
 - **The server is managed externally.** Never `start`, `kill`, `probe`, `curl`, `pkill`, or otherwise touch `crucible-server` yourself. If commands fail to connect, that means checking reachability to glacius (is the LAN up, is `~/.config/crucible/config.json` pointed at the right host — see **Connecting to the server** below), not looking for a local process to start — there generally isn't one on this machine. Administering the service itself (start/stop/status/logs/update) is out of scope for this skill; see `Applications/Crucible/README.md` in the Phoenix repo for that.
-- **The binary is project-local, not on PATH.** Forge builds it under a per-profile subtree whose name varies by host/build, so don't hardcode it. **Search the configured build tree (`.forge/`) as well as the bootstrap output (`.forge-out/`), newest first** — `.forge-out/` can hold a months-stale copy that still reports a plausible version number, and picking it up costs a round trip on every fresh session:
+- **The binary is project-local, not on PATH.** Forge builds it under a per-profile subtree whose name varies by host/build, so resolve it with the script, which picks the newest copy:
 
   ```bash
-  CRUCIBLE=$(find Applications/Forge/.forge Applications/Forge/.forge-out \
-      -type f -path '*/bin/crucible' -printf '%T@ %p\n' 2>/dev/null \
-    | sort -rn | head -1 | cut -d' ' -f2-)
+  CRUCIBLE=$(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/crucible_path.py) || exit 1
   ```
 
   Then call `"$CRUCIBLE" ...`. There is no system-wide `crucible`. Build via `/phoe:build crucible` if the binary is missing — this builds the `crucible` CLI client for *this* machine; it also produces a `crucible-server` binary, but that local copy is never the one serving real data (the one on glacius is).
 - **Storage lives at `~/.local/share/crucible-server/`** — on the server host (glacius), not this machine (`challenges/`, `sagas/`, `bugs/`, `archive/`, `bug-archive/`, `config.json`). Never edit those files by hand — go through the CLI so the server stays consistent.
 - **Connecting to the server.** A client's target is `~/.config/crucible/config.json` → `{"server": "192.168.68.50:9000"}`. `--port=<N>` (or `CRUCIBLE_SERVER_PORT`) only overrides the port — there's no flag to override the host for a single invocation, so a wrong host means fixing the config file.
-- **Use the CLI, not raw JSON.** This is reinforced by user feedback: do not hand-author challenge/saga/bug JSON files when a CLI subcommand exists.
+- **Use the CLI, not raw JSON.** Do not hand-author challenge/saga/bug JSON files when a CLI subcommand exists.
 - **The CLI is the source of truth for status.** Never grep the filesystem or pgrep the server to answer status questions — ask the CLI.
 
 ## Mental model
@@ -69,7 +67,22 @@ Two interchangeable forms accepted by every per-record subcommand:
 
 ## Status vocabulary
 
-`backlog`, `todo`, `active`, `review`, `blocked`, `merged`, `canceled`. (There is **no `in-progress`** — the CLI rejects it; use `active`.)
+`backlog`, `todo`, `active`, `review`, `blocked`, `merged`, `canceled` — the same set for challenges
+and bugs. Match the names exactly: the CLI rejects `in-progress` and `implementing` (use `active`)
+and `done` (use `merged`), and a wrong name breaks status reconciliation in `/phoe:implement`,
+`/phoe:execute` and `/phoe:bugfix`.
+
+| Type | Lifecycle | Terminal |
+|---|---|---|
+| Challenge | `todo` → `active` → `review` → `merged` (or `blocked`) | `merged` |
+| Bug | `todo` → `active` → `review` → `merged` (or `blocked`) | `merged` |
+| Saga | no status of its own — rolled up from its challenges | n/a |
+
+The verbs are parallel (`crucible challenge move --label=<L> <status>`, `crucible bug move
+--label=<L> <status>`). A workflow that accepts either type branches on the type early and uses the
+type-correct verbs throughout. Branches follow the same split — `challenge/<branch-label>` and
+`bug/<branch-label>` — where the branch label is the Crucible label cut to the 40-character branch
+cap.
 
 Use `crucible challenge move <id> <status>` to move a challenge column. `unblock` defaults to `todo` if no target status is given.
 
@@ -334,7 +347,7 @@ If still in doubt, the source of truth is `Applications/Crucible/Source/Private/
 - **`Error: Unknown flag: --saga`** on `challenge list` — there is no `--saga` filter. Use `crucible saga show <id>` to enumerate a saga's challenges, or filter list by `--tag` if you tagged consistently.
 - **`saga create --challenges=a|b|c` succeeded but saga is empty** — known quirk; `--challenges` is silently dropped on create. Use `crucible saga add` after creation.
 - **`Failed to load challenge N: Failed to read file: .../N.json`** — challenge IDs are sparse. The number you tried is unallocated or archived. Use `crucible challenge list` / `list-archive` to find real IDs.
-- **`crucible: command not found`** — the binary is not on PATH. Discover it with the newest-first search in **Hard rules** above, which covers both `.forge/` and `.forge-out/`; or build it via `/phoe:build crucible`.
+- **`crucible: command not found`** — the binary is not on PATH. Resolve it with the script in **Hard rules** above, or build it via `/phoe:build crucible`.
 - **`bug list --tag=<X>` returns every bug** — the tag filter is silently ignored on bugs (a nonsense tag returns the full list too, while `--status`/`--priority`/`--severity` do filter). Do not read the unfiltered result as "every bug carries this tag". Filter client-side instead: `crucible --json bug list > bugs.json`, then select on `tags` — and redirect it, the JSON runs to ~145 KB for a few dozen bugs.
 - **`Error: Unknown flag: --append-tags` on `bug update`** — the incremental list verbs are challenge-only. Restate the whole list with the pipe-separated form.
 - **A second record appears after `import`** — the upsert missed an archived label. See **Importing JSON**.

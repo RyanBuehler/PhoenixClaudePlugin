@@ -1,391 +1,154 @@
 ---
 name: bugfix
-description: Pick up a Crucible Bug by label (or "next" for highest-severity todo) and fix it end-to-end with verification, stopping at review status.
+description: Fixes one Crucible bug end-to-end, by label or "next" (highest severity), through reproduction, diagnosis, verify, review and a PR, stopping at review status. Use when the user asks to fix or pick up a bug.
 ---
 
-Fix a Crucible Bug end-to-end. Accepts a label or `next` to auto-pick the highest-severity todo bug.
+Fix one Crucible bug with the user supervising. `<kind>` in the shared steps is `bug`.
+
+Load each reference at the step that needs it:
+
+- [Challenge workflow](../../references/challenge-workflow.md): bootstrap, claim and worktree,
+  acceptance criteria, publish, landing, feedback log.
+- [Dispatch briefs](../../references/dispatch-briefs.md): reviewer dispatch and prompts, acting on
+  findings, the review gate.
+
+At most **3** subagents run at once.
 
 ## Arguments
 
-- **`<label>`** — the bug label to fix
-- **`next`** — automatically pick the highest-severity `todo` bug
+- **`<label>`**: the bug to fix.
+- **`next`**: the highest-severity `todo` bug.
 
 ## 1. Bootstrap
 
-Run `/phoe:build crucible` so both `crucible` and `crucible-server` exist and match the expected version. The first build is a clean build; subsequent invocations are no-ops. If `/phoe:build crucible` stops with a version mismatch, stop here and report it to the user.
+Follow [challenge workflow](../../references/challenge-workflow.md) §1.
 
-**Locate the Crucible CLI — discover it, don't hardcode a path.** Forge places the binary in a per-profile subtree whose name varies with host and build config, under both the configured build tree (`Applications/Forge/.forge/`) and the bootstrap output (`Applications/Forge/.forge-out/`) — take the **newest**, since a stale `.forge-out/` copy still reports a plausible version, so resolve it into `$CRUCIBLE` and use `"$CRUCIBLE"` in every crucible call below. Each Bash block is a fresh shell, so the variable will not carry across the separate blocks — re-run this `find` (or substitute the path it resolved) in each block that calls the CLI:
+## 2. Resolve the bug
 
-```bash
-CRUCIBLE=$(find Applications/Forge/.forge Applications/Forge/.forge-out -type f \
-    -path '*/bin/crucible' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
-[ -x "$CRUCIBLE" ] || { echo "crucible not found — run /phoe:build crucible first"; exit 1; }
+**For `next`:** detect landed bugs in `review` ([challenge
+workflow](../../references/challenge-workflow.md) §2), then pick from
+`"$CRUCIBLE" --json bug list --status=todo` by severity (crash > major > moderate > minor), then
+priority (critical > high > medium > low), then lowest ID. If none is eligible, tell the user and
+stop.
+
+**For a label:** `"$CRUCIBLE" bug show --label=<LABEL>`.
+
+**Resuming.** If `.claude/handoffs/bug-<LABEL>-checkpoint.md` exists, say "Resuming from
+checkpoint" with its summary. The bug is already `active` and its worktree exists, so enter that
+worktree instead of claiming and creating one in Step 3; skip Steps 4 and 5 and start Step 6 from
+its Remaining Work. Delete the checkpoint once the fix passes verification.
+
+## 3. Claim, context and worktree
+
+Claim the bug and create and enter its worktree, based on `origin/main`, per
+[challenge workflow](../../references/challenge-workflow.md) §3; run everything after this from the
+worktree. Show the title, description, severity, reproduction steps, acceptance criteria and
+verification steps.
+
+## 4. Reproduce
+
+Follow the reproduction steps exactly, confirm the bug manifests, and record what happens: errors,
+stack traces, log output. If it cannot be reproduced, tell the user, move the bug back to `todo`
+and stop; never ship a speculative fix.
+
+## 5. Diagnose
+
+Use the `superpowers:systematic-debugging` skill. Trace from the reproduction evidence to the root
+cause, and state what code is wrong and why it produces the observed behavior.
+
+**Context checkpoint.** If diagnosis is consuming significant context, write the checkpoint below,
+tell the user "I've written a checkpoint; start a new session and run `/phoe:bugfix <LABEL>` to
+continue", and stop.
+
+```markdown
+# Checkpoint: bug-<LABEL>
+## Bug
+<title and one-line description>
+## Reproduction
+<what was observed>
+## Root Cause
+<root cause with file:line references>
+## Proposed Fix
+<approach>
+## Remaining Work
+<concrete steps>
 ```
 
-The Crucible server is a user-managed process outside the plugin's scope — do not start it. If the CLI can't reach a server, the first `"$CRUCIBLE"` call below will fail with a clear error; surface that to the user and stop.
-
-Confirm Crucible is reachable and initialized for this project:
-
-```bash
-"$CRUCIBLE" status
-```
-
-## 2. Resolve the Bug
-
-**When argument is `next`, first reconcile any bugs currently in `review`.** The user may have merged them since the last session; Crucible does not auto-detect this.
-
-1. List review bugs:
-
-```bash
-"$CRUCIBLE" --json bug list --status=review
-```
-
-2. For each review bug, probe the local git history for merge evidence (both signals are read-only):
-
-```bash
-# Signal A — squash-merge commit on main referencing the label or ID
-git log main --oneline -i --grep="<LABEL>"
-git log main --oneline --grep="#<ID>"
-
-# Signal B — merge-commit style, where the branch ref is still present locally
-git rev-parse --verify bug/<branch-label> 2>/dev/null \
-  && git merge-base --is-ancestor bug/<branch-label> main \
-  && echo "branch tip is ancestor of main"
-```
-
-3. If either signal fires, show the user the matching commit(s) and ask whether to mark the bug merged. **Never auto-mark.** On confirmation:
-
-```bash
-"$CRUCIBLE" bug move --label=<LABEL> merged
-```
-
-   Then clean up its worktree and branches per Step 15's cleanup block, once the landing check
-   there passes.
-
-4. If a review bug shows no merge evidence, leave it in `review`.
-
-Then pick the next todo using severity-aware selection:
-
-1. List all todo bugs:
-
-```bash
-"$CRUCIBLE" --json bug list --status=todo
-```
-
-2. Pick the best bug using this priority order:
-   - **Severity first** — crash > major > moderate > minor
-   - **Priority second** — critical > high > medium > low
-   - **Lowest ID breaks ties**
-
-3. If no eligible todo bugs exist, tell the user and stop.
-
-**If argument is a label**, fetch by label:
-
-```bash
-"$CRUCIBLE" bug show --label=<LABEL>
-```
-
-**Check for existing checkpoint:** Look for `.claude/handoffs/bug-<LABEL>-checkpoint.md`. If found:
-
-1. Read the checkpoint document.
-2. Display: "Resuming from checkpoint — here's where we left off:" followed by the checkpoint summary.
-3. Skip Step 6 (Reproduce) and Step 7 (Diagnose) — the checkpoint already contains the diagnosis.
-4. Proceed to Step 8 (Fix), using the checkpoint's "remaining work" as the starting point.
-5. Delete the checkpoint file once the fix is complete and all verification passes.
-
-### Claim the bug immediately
-
-The moment you've resolved *which* bug to work — before showing context or branching — **move it to
-`active`** so a parallel session cannot pick up the same work:
-
-```bash
-"$CRUCIBLE" bug move --label=<LABEL> active
-```
-
-This is a claim, not a commitment: if reproduction fails (Step 6) or you decide not to proceed, move
-it back with `... bug move --label=<LABEL> todo`.
-
-## 3. Show Context
-
-Display the bug details: title, description, severity, reproduction steps, acceptance criteria, and verification steps.
-
-## 4. Create a Dedicated Worktree
-
-From the main repo root, create the worktree and branch (this exact `git worktree add` form is what
-the plugin's `branch-worktree-check.py` hook blesses). `<branch-label>` is the bug label cut so
-`bug/<branch-label>` fits the hook's 40-character cap (see the plugin CLAUDE.md, Branch & Worktree
-Workflow); the hook's refusal of a long name names the shortened branch:
-
-```bash
-git worktree add .claude/worktrees/bug-<branch-label> -b bug/<branch-label>
-```
-
-Then **enter it with the `EnterWorktree` tool** — `EnterWorktree(path=".claude/worktrees/bug-<branch-label>")`.
-In a background session, Claude Code's isolation guard refuses native `Write`/`Edit` in any worktree
-the session has not entered through the harness, forcing slow Bash/heredoc edits; `EnterWorktree(path=...)`
-registers the worktree with the guard so native file tools keep working. It enters *by path* without
-taking removal ownership, so a later `git worktree remove .claude/worktrees/bug-<branch-label>` (after the
-PR merges) still works normally; if this session entered via `EnterWorktree`, `ExitWorktree(keep)`
-first. (Do not create the worktree with `EnterWorktree(name=...)` — that mints its own branch/path
-naming and breaks the `bug/<branch-label>` convention.)
-
-**Bootstrap Forge in the worktree** so the first `/phoe:verify` is incremental, not a cold failure —
-a fresh worktree can lack its own `Applications/Forge/.bootstrap-out/forge`:
-
-```bash
-python3 Applications/Forge/Scripts/bootstrap.py
-```
-
-Run all subsequent steps from inside the worktree directory.
-
-**Crucible CLI in the worktree.** The Crucible CLI was built into the *main* repo's Forge output, not the worktree's — a worktree's own `.forge-out/` is empty until it builds. So re-resolve `$CRUCIBLE` against the main repo root (discovered via the git common dir, never hardcoded):
-
-```bash
-MAIN_ROOT=$(git rev-parse --path-format=absolute --git-common-dir | xargs dirname)
-CRUCIBLE=$(find "$MAIN_ROOT/Applications/Forge/.forge" "$MAIN_ROOT/Applications/Forge/.forge-out" \
-    -type f -path '*/bin/crucible' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
-"$CRUCIBLE" bug show --label=<LABEL>   # or any crucible subcommand
-```
-
-Every `"$CRUCIBLE" <args>` snippet below assumes you've derived `$CRUCIBLE` this way first.
-
-## 5. Confirm Active
-
-The bug was claimed as `active` back in Step 2 (before branching), so there is nothing to move here.
-If reproduction (Step 6) fails or you abandon the bug, revert the claim:
-
-```bash
-# only if abandoning — otherwise the bug is already active
-"$CRUCIBLE" bug move --label=<LABEL> todo
-```
-
-## 6. Reproduce
-
-Follow the bug's reproduction steps exactly:
-
-1. Execute each reproduction step as described.
-2. Confirm the bug manifests as described.
-3. Document the exact observed behavior — what happens, any error messages, stack traces, or log output.
-
-If the bug **cannot be reproduced**, tell the user and stop. Do not proceed with a speculative fix.
-
-## 7. Diagnose
-
-Invoke the `superpowers:systematic-debugging` skill to trace the root cause:
-
-1. Start from the reproduction evidence (crash location, error message, observed behavior).
-2. Trace through the code to identify the root cause.
-3. Document the root cause clearly — what code is wrong and why it produces the observed behavior.
-
-### Context Checkpoint
-
-If diagnosis is consuming significant context, write a checkpoint before implementing the fix:
-
-1. Write `.claude/handoffs/bug-<LABEL>-checkpoint.md`:
-   ```markdown
-   # Checkpoint: bug-<LABEL>
-   ## Bug
-   <title and one-line description>
-   ## Reproduction
-   <what was observed when reproducing>
-   ## Root Cause
-   <identified root cause with file:line references>
-   ## Proposed Fix
-   <approach to fix the bug>
-   ## Remaining Work
-   <concrete steps to implement the fix>
-   ```
-2. Tell the user: "This bug diagnosis is consuming significant context. I've written a checkpoint. Start a new session and run `/phoe:bugfix <LABEL>` to continue."
-3. Stop.
-
-## 8. Fix
-
-Implement the fix. Follow the project's normal development workflow — write code, follow conventions from CLAUDE.md. **Before writing any C++**, read `Docs/StyleGuide.md` and `${CLAUDE_PLUGIN_ROOT}/references/tooling.md` so the fix conforms to the enforced conventions (formatting, naming, comments, namespaces, return-value handling, `auto`, scope spacing, tooling).
-
-Comments: default to none. Prefer one line; two or three for the genuinely complex. *Why*, not *what*. Paragraphs belong in the commit message. Full rules in `Docs/StyleGuide.md` §Comments.
-
-When emplacing TODO comments during the fix, follow the discipline in `Docs/StyleGuide.md` (TODO Comments section): keep them to one line, describe the work itself, never embed file paths, line numbers, bug labels, PR numbers, branch names, or dates (anything that can go stale), and never leave a TODO that narrates the change you just made.
-
-### Regression Test Evaluation
-
-After implementing the fix, evaluate whether a regression trial is warranted. The goal is to guard against the *class* of flaw recurring — not to mechanically add a test for every bug. Skip when:
-
-- The fix is obviously correct and self-contained (typo, missing null check on a one-off path, wrong literal).
-- The bug was in glue or wiring code that will be rewritten rather than maintained.
-- The reproduction is inherently unmechanizable (requires specific hardware, manual user interaction, or a platform-only path).
-
-Add a trial when the bug exposes a flaw that could plausibly recur:
-
-- The root cause is a pattern that exists elsewhere in the codebase (e.g., a missed lifetime check, an unhandled enum case, a race on a shared field) — cover the fixed site, and consider whether sibling sites warrant coverage too.
-- The fix is subtle enough that a future refactor could silently re-break it.
-- The bug stems from a contract or invariant that isn't otherwise enforced by the type system or asserts.
-- The repro is mechanizable and cheap to encode as a trial.
-
-When a trial is warranted, launch `invoke-test-engineer` as a subagent to write it. Provide the fix diff, the root cause, and the reproduction steps so the trial exercises the specific flaw — not just the surrounding happy path — and follows Trials conventions.
-
-`invoke-test-engineer` carries `isolation: worktree`, so the harness drops it in a *fresh* tree
-branched from `main`, without this bug's uncommitted fix. Pass it the absolute path of this bug
-worktree so it writes against the real code. This is the one dispatch in this workflow that is
-write-capable by design — the reviews in Step 11 are not
-(`${CLAUDE_PLUGIN_ROOT}/references/dispatch-briefs.md` §1).
-
-## 9. Verify
-
-All verification must pass before proceeding:
-
-**a. Reproduction steps no longer trigger the bug** — re-execute the reproduction steps and confirm the bug no longer manifests.
-
-**b. Bug verification steps** — run any commands from the bug's `verification` field.
-
-**c. Full project verification** — run `/phoe:verify` (configure → build → format-check → lint →
-policy audits → test). All must pass. It covers **one profile**: always `editor`, plus `forge` if
-the fix touched `Applications/Forge/`, plus the app profile whose own directory it changed, plus any
-build profile it edited — never CI's full lane set, and leave `minimal` to CI. Name the profiles you
-actually ran when you report. See `/phoe:verify` §2a, and §2b for why a run that
-aborts at the toolchain audit has tested nothing.
-
-**d. A cold build can outlive the command timeout.** Run it, and the verify, through
-`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/forge_wait.py start --log <worktree>/.forge-wait/<name>.log -- <forge command>` in the
-foreground with `timeout: 600000`, and repeat the `wait --log ...` call it prints until it reports an
-exit. Never watch the log in between — see `${CLAUDE_PLUGIN_ROOT}/references/dispatch-briefs.md` §4.
-
-**e. If any verification fails** — fix the issue and re-verify. Do not proceed until everything passes.
-
-## 10. Acceptance Criteria Evaluation
-
-Before committing, systematically evaluate each acceptance criterion from the bug JSON.
-
-1. Retrieve the bug's acceptance criteria: `"$CRUCIBLE" bug show --label=<LABEL>`
-2. For **each** criterion, answer explicitly:
-   - **Met?** Yes / No / Partially
-   - **Evidence:** What in the diff proves this? (file:line, test name, or command output)
-   - **Unverifiable?** If the criterion cannot be verified mechanically, flag it for human review.
-3. If any criterion is clearly **unmet**, fix and re-verify.
-
-## 11. Automated Code Review
-
-Invoke the code reviewer as a **separate agent** to evaluate the implementation diff.
-
-1. **Freeze the diff — commit first, then review a SHA.** Never hand a reviewer "the staged diff":
-   the index mutates as you keep working, so a finding filed against `--cached` can land on code a
-   later edit already superseded. Commit the fix on the bug branch now, then capture the frozen SHA
-   and the review base:
-   ```bash
-   git fetch origin main                          # so the merge-base below is current
-   git add -A
-   git commit -m "<descriptive message referencing the bug label>"
-   REVIEW_SHA=$(git rev-parse HEAD)
-   REVIEW_BASE=$(git merge-base origin/main HEAD)  # the branch's actual fork point — NOT hardcoded main
-   ```
-   Because the commit already lands here, Step 12 is a no-op unless the fix loop below adds commits.
-2. Capture the bug contract verbatim — the reviewer cannot reach Crucible from the worktree, and this gate blocks on CRITICAL/WARNING, so a reviewer without the criteria invents the contract and then blocks on it:
-
-```bash
-"$CRUCIBLE" bug show --label=<LABEL>
-```
-
-   Interpolate that whole output — title, description, reproduction steps, acceptance criteria, verification — into the prompt under a `## Bug Contract (verbatim from Crucible)` heading. Do not summarize. Resolve any `Docs/*.md §x` reference the bug cites: confirm it exists in this worktree, and say so explicitly in the prompt if it does not.
-
-3. **Dispatch the reviewer read-only, into this worktree.** Reviews are read-only work: dispatch as
-   `Explore` and pass the absolute path of this bug worktree so the reviewer can see the committed
-   fix without a fresh isolated tree of its own. Do **not** dispatch a write-capable agent here — see
-   `${CLAUDE_PLUGIN_ROOT}/references/dispatch-briefs.md` §1 for why (a write-capable reviewer
-   destroyed an orchestrator's uncommitted work and corrupted the shared build tree).
-
-   Assemble the brief per `dispatch-briefs.md` §2 — resolved hashes, a file list generated from the
-   range, and an accurate build-state block — then use this prompt:
-
-   > Review the change on this bug fix branch. Focus on correctness, safety, modern C++23 opportunities, performance, and project convention compliance. Verify the fix addresses the root cause and doesn't introduce regressions. Report findings using CRITICAL/WARNING/SUGGESTION/NOTE severity levels.
-   >
-   > [Include the **Bug Contract** captured above here, verbatim.]
-   >
-   > [Paste the **Review dispatch preamble** — `${CLAUDE_PLUGIN_ROOT}/references/dispatch-briefs.md` §3 — verbatim, substituting the resolved `REVIEW_BASE`/`REVIEW_SHA` for `<BASE>`/`<SHA>`.]
-4. **Gate on zero CRITICAL and zero WARNING findings.** If any CRITICAL or WARNING issues are found:
-   - Resolve every path and symbol the finding cites before acting on it, per
-     `${CLAUDE_PLUGIN_ROOT}/references/dispatch-briefs.md` §5 — findings routinely name paths that
-     do not exist while being otherwise correct. Say so when a citation does not resolve.
-   - Fix each CRITICAL and WARNING issue
-   - Commit the fix on the branch and **re-freeze**: `REVIEW_SHA=$(git rev-parse HEAD)` (refresh `REVIEW_BASE` too if `origin/main` moved)
-   - Re-run `/phoe:verify`
-   - Re-run acceptance criteria evaluation (Step 10)
-   - Re-invoke the code reviewer against the new SHA
-5. **WARNING is a blocking tier alongside CRITICAL** — fix each one as in step 4, or surface it to the user for an explicit waive if you judge it a false positive or out of scope. Never ship a WARNING unaddressed; record any waived WARNING in the final report.
-
-## 12. Finalize the Commit
-
-The fix was already committed in Step 11 (the freeze), and every review-fix pass added its own
-commit. So there is normally nothing to commit here — the branch already carries the work with a
-message referencing the bug label. Optionally squash review fixups into one for a tidy history; do
-**not** leave any change uncommitted going into Step 13.
-
-## 13. Move to Review — Required
-
-Immediately after the commit lands, move the bug to `review`. This is a mandatory, non-skippable final workflow step — the fix is not considered complete until the bug is in `review`:
+## 6. Fix
+
+Implement the fix. Before writing C++, read `Docs/StyleGuide.md` and
+`${CLAUDE_PLUGIN_ROOT}/references/tooling.md`. Comments default to none: one line, two or three for
+the genuinely complex, why rather than what (`Docs/StyleGuide.md` §Comments). A TODO is one line
+describing the work, with no path, line number, label, PR number, branch or date, and never
+narrates the change you just made (§TODO Comments).
+
+**Regression trial.** Guard against the class of flaw recurring, not every bug mechanically. Add a
+trial when the root cause is a pattern that exists elsewhere (a missed lifetime check, an unhandled
+enum case, a race on a shared field; consider the sibling sites too), the fix is subtle enough for
+a refactor to undo silently, the bug breaks an invariant nothing else enforces, or the repro is
+cheap to mechanize. Skip it for an obviously correct, self-contained fix (typo, one-off null check,
+wrong literal), glue code due to be rewritten, or a repro that needs specific hardware, manual
+interaction or one platform. Write it by dispatching the `invoke-test-engineer` prompt as a
+general-purpose agent with the absolute worktree path, the fix diff, the root cause and the
+reproduction steps, so the trial exercises the flaw itself
+([dispatch briefs](../../references/dispatch-briefs.md) §1).
+
+## 7. Verify
+
+First confirm new names ([challenge workflow](../../references/challenge-workflow.md) §9).
+
+1. Re-run the reproduction steps: the bug no longer manifests.
+2. Run the bug's verification commands.
+3. Run `/phoe:verify` for the profiles its §2a requires, and name them in the report; a run that
+   aborts at the toolchain audit has tested nothing (§2b).
+
+Fix and re-run until everything passes.
+
+## 8. Acceptance criteria
+
+Follow [challenge workflow](../../references/challenge-workflow.md) §4.
+
+## 9. Review
+
+1. Commit the fix on the branch (`git add -A`, then a message referencing the label) and freeze the
+   range ([dispatch briefs](../../references/dispatch-briefs.md) §2).
+2. Dispatch the quality reviewer (with the bug sentence), and once it passes, the adversarial
+   reviewer on the same SHA, per dispatch briefs §1-§4: `Explore`, read-only, with the verbatim
+   `## Bug Contract` from `"$CRUCIBLE" bug show --label=<LABEL>` and the preamble. No PR opens
+   without the adversarial pass.
+3. Gate on dispatch briefs §7. For each CRITICAL or WARNING, act per §6, commit, re-run
+   `/phoe:verify` and Step 8, re-freeze, and re-run both reviewers. A WARNING you judge a false
+   positive or out of scope goes to the user, with your reasoning, to waive; record each waiver in the
+   report. If the trend stalls, stop and show the user the round-by-round findings.
+
+Squashing review fixups is optional; leave nothing uncommitted.
+
+## 10. Move to review
 
 ```bash
 "$CRUCIBLE" bug move --label=<LABEL> review
 ```
 
-If this move fails (server down, label mismatch, Crucible not initialized), **stop and surface the error to the user**. Do not report the bug as fixed, and do not continue to the report step, until the move has succeeded.
+The fix is not done until this succeeds. If it fails, stop and surface the error; do not report the
+bug fixed.
 
-## 14. Publish
+## 11. Feedback log
 
-Push the branch and open a pull request, after the credential check in CLAUDE.md's Push & Pull
-Request Workflow.
+Follow [challenge workflow](../../references/challenge-workflow.md) §8 with
+`--run "/phoe:bugfix <label>"`. Do not mention the log in the report.
 
-```bash
-git push -u origin bug/<branch-label>
-PR_URL=$(gh pr create \
-  --head bug/<branch-label> \
-  --base main \
-  --title "<bug title>" \
-  --body "$(cat <<'EOF'
-## Summary
-<2-4 bullet points: the bug, the root cause, the fix>
+## 12. Publish
 
-Crucible: <label>
-EOF
-)")
-```
+Follow [challenge workflow](../../references/challenge-workflow.md) §5. The summary covers the bug,
+its root cause and the fix; the trailer is `Crucible: #<id> <label>`, with no `Saga:` line.
 
-After a successful `gh pr create`, record the review link on the bug so future sessions
-and `crucible bug show` surface the PR URL without grepping comments. The flag name is
-intentionally source-neutral — `--replace-review-link` accepts any URL string, so a
-non-GitHub review system fits without rewording this step:
+## 13. Report
 
-```bash
-"$CRUCIBLE" bug update --label=<LABEL> --replace-review-link="${PR_URL}"
-```
+Tell the user what was fixed and its root cause, the verification results (profiles named, and that
+the reproduction no longer triggers), the branch `bug/<branch-label>`, **PR #<N>** and its URL (or
+"branch left local; not pushed"), any waived WARNING, and that the bug is in `review` for the user
+to inspect.
 
-If PR review comments come back later, check out the branch, apply fixes, rebuild to confirm
-they compile, commit with a brief "Address review: …" message, and push.
-
-## 15. Report
-
-Tell the user:
-- What was fixed and the root cause
-- Verification results (all passing, reproduction steps no longer trigger)
-- Branch name: `bug/<branch-label>`
-- Pull request URL (if pushed) or "branch left local; not pushed"
-- The bug is now in `review` status — user inspects before it lands
-
-**Do not merge the PR yourself, and do not mark the bug `merged` before the merge has landed.** The user decides whether to merge, request changes, or close. The `review` → `merged` transition tracks reality; it must not run ahead of it.
-
-But once the PR is confirmed merged into remote `main`, reconciling the tracking status *is* expected — a merged PR left in `review` is stale bookkeeping. Verify the landing first (PR `state` is `MERGED` **and** its merge commit is reachable from `origin/main`), then move it without waiting to be asked again:
-
-```bash
-"$CRUCIBLE" bug move --label=<LABEL> merged
-```
-
-Then clean up the worktree, local branch, and remote branch from the main repo root, per the plugin
-CLAUDE.md's *Concluding work* (skip any already gone; `ExitWorktree(keep)` first if this session
-entered the worktree in Step 4):
-
-```bash
-git worktree remove .claude/worktrees/bug-<branch-label>
-git branch -D bug/<branch-label>
-git push origin --delete bug/<branch-label>
-git fetch --prune origin
-```
-
-> **Note:** When the user moves a bug to `merged`, it is automatically archived in the server's data dir. If work needs to be revisited, use `"$CRUCIBLE" bug unarchive --label=<LABEL>` to restore it to `todo` status.
+Do not merge the PR. The bug moves to `merged` only once landing is proven; then run
+[challenge workflow](../../references/challenge-workflow.md) §7 steps 1 and 4 (move it to `merged`,
+clean up).

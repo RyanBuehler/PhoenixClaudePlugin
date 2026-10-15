@@ -1,685 +1,186 @@
 ---
 name: implement
-description: Pick up a Crucible Challenge by label (or "next" for highest-priority saga-aware todo) and implement it end-to-end with verification, stopping at review status.
+description: Implements one Crucible challenge end-to-end under user supervision, by label or "next", through verify, review and a PR, stopping at review status. Use when the user asks to implement or pick up a challenge.
 ---
 
-Implement a Crucible Challenge end-to-end with human supervision. Accepts a label or `next` to auto-pick the highest-priority todo respecting saga ordering.
+Implement one Crucible challenge with the user supervising. To run several autonomously, use
+`/phoe:execute`.
 
-> **This is the human-supervised workflow.** For fully autonomous execution of multiple challenges, use `/phoe:execute`.
+Load each reference at the step that needs it:
 
-> **At most 3 subagents in flight at once.** Count every running dispatch — test-writer, reviewers,
-> fix passes, background agents until their notification arrives. A fourth waits for one to return.
-> Unbounded fan-out has exhausted Ryan's usage in a single run.
+- [Challenge workflow](../../references/challenge-workflow.md): bootstrap, claim and worktree,
+  acceptance criteria, publish, sibling reconciliation, landing, feedback log.
+- [Dispatch briefs](../../references/dispatch-briefs.md): reviewer dispatch and prompts, acting on
+  findings, the review gate.
+- [Parallel integration](../../references/parallel-integration.md): dependent PRs and semantic
+  sibling overlap. Its recorded-parent and replacement-branch gates supersede ordinary rebase
+  guidance.
+- [Targeted compilation](../../references/targeted-compilation.md): early diagnostics for one TU.
 
-For dependent PRs and semantic sibling overlap, use
-[parallel integration](../../references/parallel-integration.md). Its recorded-parent and
-replacement-branch gates supersede ordinary follower-rebase guidance below. For early TU
-diagnostics, use [targeted compilation](../../references/targeted-compilation.md).
+At most **3** subagents run at once (test writer, reviewers, fix passes; a background agent counts
+until its notification arrives). A fourth waits for one to return.
 
 ## Arguments
 
-- **`<label>`** — the challenge label to implement
-- **`next`** — automatically pick the highest-priority `todo` challenge, respecting saga ordering
-- *(no argument)* — if no todo challenges exist, prompt the user to run `/phoe:plan` first
+- **`<label>`**: the challenge to implement.
+- **`next`**: the highest-priority eligible `todo` challenge.
+- *(none)*: if there are no todo challenges, ask the user to run `/phoe:plan` first.
 
 ## 1. Bootstrap
 
-Run `/phoe:build crucible` so both `crucible` and `crucible-server` exist and match the expected version. The first build is a clean build; subsequent invocations are no-ops. If `/phoe:build crucible` stops with a version mismatch, stop here and report it to the user.
+Follow [challenge workflow](../../references/challenge-workflow.md) §1.
 
-**Locate the Crucible CLI — discover it, don't hardcode a path.** Forge places the binary in a per-profile subtree whose name varies with host and build config, under both the configured build tree (`Applications/Forge/.forge/`) and the bootstrap output (`Applications/Forge/.forge-out/`) — take the **newest**, since a stale `.forge-out/` copy still reports a plausible version, so resolve it into `$CRUCIBLE` and use `"$CRUCIBLE"` in every crucible call below. Each Bash block is a fresh shell, so the variable will not carry across the separate blocks — re-run this `find` (or substitute the path it resolved) in each block that calls the CLI:
+## 2. Resolve the challenge
 
-```bash
-CRUCIBLE=$(find Applications/Forge/.forge Applications/Forge/.forge-out -type f \
-    -path '*/bin/crucible' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
-[ -x "$CRUCIBLE" ] || { echo "crucible not found — run /phoe:build crucible first"; exit 1; }
+**For `next`:**
+
+1. Detect landed challenges in `review` ([challenge workflow](../../references/challenge-workflow.md)
+   §2).
+2. List sagas and todo challenges: `"$CRUCIBLE" --json saga list` and
+   `"$CRUCIBLE" --json challenge list --status=todo`. For each `--status=blocked` challenge whose
+   blocker is now `merged`, `"$CRUCIBLE" challenge unblock <ID> todo` and add it to the pool.
+3. A saga challenge is eligible only when every earlier challenge in its saga is `merged` or
+   `canceled`; orphans always are. One whose predecessor is still `active` or in `review` waits; do
+   not block it, since saga order already encodes that dependency.
+4. Pick the highest priority (critical > high > medium > low), then the lowest ID. If nothing is
+   eligible, tell the user and stop.
+
+**For a label:** `"$CRUCIBLE" challenge show --label=<LABEL>`.
+
+**Resuming.** If `.claude/handoffs/<LABEL>-checkpoint.md` exists, say "Resuming from checkpoint"
+with its summary. The challenge is already `active` and its worktree exists, so enter that worktree
+instead of claiming and creating one in Step 3; skip Step 4's exploration and start Step 5 from its
+Remaining Work. Delete the checkpoint once the implementation passes verification.
+
+## 3. Claim, context and worktree
+
+1. Claim the challenge and create and enter its worktree, based on `origin/main`, per
+   [challenge workflow](../../references/challenge-workflow.md) §3. Run everything after this from
+   the worktree.
+2. Show the title, description, acceptance criteria and verification steps.
+3. Read the comments: `"$CRUCIBLE" challenge comments --label=<LABEL>`. They are newer than the
+   description and win where the two disagree; name the stale description text and what you
+   followed instead.
+4. If the challenge is in a saga, `"$CRUCIBLE" saga show --label=<SAGA_LABEL>` and show its position
+   and the saga's progress.
+
+## 4. Explore
+
+Read the affected files, references and tags, and explore what has to change. In a saga, read the
+completed siblings for patterns.
+
+**Context checkpoint.** On a large challenge (several modules, many files, long exploration), write
+a checkpoint at a natural break (after exploration, or halfway through with much left), tell the
+user "I've written a checkpoint to `.claude/handoffs/<LABEL>-checkpoint.md`; start a new session
+and run `/phoe:implement <LABEL>` to continue with fresh context", and stop.
+
+```markdown
+# Checkpoint: <LABEL>
+## Challenge
+<title and one-line description>
+## Understanding
+<what code does what, dependencies, patterns found>
+## Decisions
+<design choices and why>
+## Implemented So Far
+<files changed and what was done; empty before implementation>
+## Remaining Work
+<concrete steps still needed>
+## Open Questions
+<anything needing user input>
 ```
 
-The Crucible server is a user-managed process outside the plugin's scope — do not start it. If the CLI can't reach a server, the first `"$CRUCIBLE"` call below will fail with a clear error; surface that to the user and stop.
+## 5. Plan and implement
 
-Confirm Crucible is reachable and initialized for this project:
+Enter plan mode, plan (starting from the `strategy` field when there is one), then implement.
+Before writing C++, read `Docs/StyleGuide.md` and `${CLAUDE_PLUGIN_ROOT}/references/tooling.md`.
+Comments default to none: one line, two or three for the genuinely complex, why rather than what
+(`Docs/StyleGuide.md` §Comments). A TODO is one line describing the work, with no path, line
+number, label, PR number, branch or date, and never narrates the change you just made
+(§TODO Comments).
 
-```bash
-"$CRUCIBLE" status
-```
+**Trials** are required for new public interfaces, non-trivial logic (algorithms, state machines,
+parsing, validation, calculations) and changed observable behavior. They are not required for
+build-system, profile or config-only changes, pure wiring to already-tested code, or platform code
+only that platform's CI can exercise. Write them by dispatching the `invoke-test-engineer` prompt
+as a general-purpose agent with the absolute worktree path, the diff and the module context
+([dispatch briefs](../../references/dispatch-briefs.md) §1), and ask it to end with a
+`## Workflow Friction` section or `none`.
 
-## 2. Resolve the Challenge
+## 6. Verify
 
-**When argument is `next`, first reconcile any challenges currently in `review`.** The user may have merged them since the last session; Crucible does not auto-detect this.
+First confirm new names ([challenge workflow](../../references/challenge-workflow.md) §9).
 
-1. List review challenges:
+1. Run the challenge's verification commands.
+2. Run `/phoe:verify` for the profiles its §2a requires.
 
-```bash
-"$CRUCIBLE" --json challenge list --status=review
-```
+Fix and re-run until everything passes.
 
-2. For each review challenge, probe the local git history for merge evidence (both signals are read-only):
+## 7. Acceptance criteria
 
-```bash
-# Signal A — squash-merge commit on main referencing the label or ID
-git log main --oneline -i --grep="<LABEL>"
-git log main --oneline --grep="#<ID>"
+Follow [challenge workflow](../../references/challenge-workflow.md) §4. Do not start review until
+every mechanically verifiable criterion is met.
 
-# Signal B — merge-commit style, where the branch ref is still present locally
-git rev-parse --verify challenge/<branch-label> 2>/dev/null \
-  && git merge-base --is-ancestor challenge/<branch-label> main \
-  && echo "branch tip is ancestor of main"
-```
+## 8. Review
 
-3. If either signal fires, show the user the matching commit(s) and ask whether to mark the challenge merged. **Never auto-mark.** On confirmation:
+1. Commit the work on the branch (`git add -A`, then a message referencing the label) and freeze the
+   range ([dispatch briefs](../../references/dispatch-briefs.md) §2).
+2. Dispatch the quality reviewer, and once it passes, the adversarial reviewer on the same SHA, per
+   dispatch briefs §1-§4: `Explore`, read-only, with the verbatim contract and the preamble. No PR
+   opens without the adversarial pass.
+3. Gate on dispatch briefs §7. For each CRITICAL or WARNING, act per §6, commit, re-run
+   `/phoe:verify` and Step 7, re-freeze, and re-run both reviewers. A WARNING you judge a false
+   positive or out of scope goes to the user, with your reasoning, to waive; never drop one silently,
+   and record each waiver in the report. If the trend stalls, stop and show the user the
+   round-by-round findings.
+4. Leave SUGGESTION and NOTE findings out of the report unless one is particularly insightful.
 
-```bash
-"$CRUCIBLE" challenge move --label=<LABEL> merged
-```
+Squashing review fixups into one commit is optional; leave nothing uncommitted.
 
-   Then clean up the stale worktree and branch per Step 17's "On merge" note; the
-   saga-aware selection below surfaces the next ready challenge.
-
-4. If a review challenge shows no merge evidence, leave it in `review` — it is still under human review.
-
-Then pick the next todo using saga-aware selection:
-
-1. List all sagas and their progress:
-
-```bash
-"$CRUCIBLE" --json saga list
-```
-
-2. List all todo challenges:
-
-```bash
-"$CRUCIBLE" --json challenge list --status=todo
-```
-
-3. Pick the best challenge using this priority order:
-   - **Saga ordering first** — if a challenge belongs to a saga, only pick it if all earlier challenges in that saga are `merged` or `canceled`. Never skip ahead in a saga's ordering.
-   - **Blocked check** — if a saga predecessor is in `review` or `active` (not yet merged), the next challenge cannot proceed. Move it to `blocked` and stop:
-     ```bash
-     "$CRUCIBLE" challenge block <NEXT_ID> --blocked_by=<PREDECESSOR_ID> --reason="Awaiting merge of #<PREDECESSOR_ID> on branch challenge/<predecessor-branch-label>"
-     ```
-     Tell the user which challenge is blocked and why, then try the next eligible challenge. If no unblocked challenges remain, stop.
-   - **Priority second** — among eligible challenges, pick the highest priority (critical > high > medium > low).
-   - **Lowest ID breaks ties** — if still tied, pick the lowest ID.
-
-4. Also check `blocked` challenges: for each, verify if the blocker is now `merged`. If so, auto-unblock:
-   ```bash
-   "$CRUCIBLE" challenge unblock <ID> todo
-   ```
-   Then include the unblocked challenge in the candidate pool.
-
-5. If no eligible todo challenges exist, tell the user and stop.
-
-**If argument is a label**, fetch by label:
-
-```bash
-"$CRUCIBLE" challenge show --label=<LABEL>
-```
-
-**Check for existing checkpoint:** Look for `.claude/handoffs/<LABEL>-checkpoint.md`. If found:
-
-1. Read the checkpoint document.
-2. Display: "Resuming from checkpoint — here's where we left off:" followed by the checkpoint summary.
-3. Skip Step 7 (Explore and Understand) — the checkpoint already contains the exploration results.
-4. Proceed to Step 8 (Plan and Implement), using the checkpoint's "remaining work" as the starting point.
-5. Delete the checkpoint file once implementation is complete and all verification passes.
-
-### Claim the challenge immediately
-
-The moment you've resolved *which* challenge to work — before showing context, syncing, or
-branching — **move it to `active`** so a parallel session cannot pick up the same work:
-
-```bash
-"$CRUCIBLE" challenge move --label=<LABEL> active
-```
-
-This is a claim, not a commitment: if you decide during exploration (Steps 3–5) not to proceed, move
-it back with `... challenge move --label=<LABEL> todo`. Everything below runs against the now-active
-challenge.
-
-## 3. Show Context
-
-Display the challenge details: title, description, acceptance criteria, and verification steps.
-
-**Read the challenge's comments — they outrank the description:**
-
-```bash
-"$CRUCIBLE" challenge comments --label=<LABEL>
-```
-
-A challenge sits in the backlog while the tree moves under it, so a comment recording an intervening
-rename or a behavior that landed since is newer than the description and wins wherever the two
-disagree. Where they do, say so — name the stale description text and what you followed instead —
-rather than reconciling it silently.
-
-**Check for saga membership** — search the saga list for the resolved challenge ID. If it belongs to a saga:
-
-```bash
-"$CRUCIBLE" saga show --label=<SAGA_LABEL>
-```
-
-Show the saga name, where this challenge sits in the ordering, and overall saga progress. This gives full feature context for the implementation.
-
-## 4. Conditional Remote Sync
-
-Fetch remote main to check for recent changes:
-
-```bash
-git fetch origin main
-git log main..origin/main --oneline
-```
-
-If there are new commits on remote main, review the changed files and commit messages. Evaluate whether the changes overlap with the current challenge's affected files, tags, or description.
-
-- **If relevant** — fast-forward main before branching:
-
-```bash
-git checkout main
-git pull --ff-only origin main
-```
-
-- **If unrelated** — skip the pull and branch from current local main. No sync needed.
-
-## 5. Create a Dedicated Worktree
-
-From the main repo root, create the worktree and branch (this exact `git worktree add` form is what
-the plugin's `branch-worktree-check.py` hook blesses — it enforces `<type>/<label>` naming at
-`.claude/worktrees/<type>-<label>`, at most 40 characters). `<branch-label>` is the challenge label
-cut to fit that cap (see the plugin CLAUDE.md, Branch & Worktree Workflow); the hook's refusal of a
-long name names the shortened branch:
-
-```bash
-git worktree add .claude/worktrees/challenge-<branch-label> -b challenge/<branch-label>
-```
-
-Then **enter it with the `EnterWorktree` tool** — `EnterWorktree(path=".claude/worktrees/challenge-<branch-label>")`.
-This is not cosmetic. In a background session, Claude Code's isolation guard refuses native
-`Write`/`Edit` in any worktree the session has not entered through the harness ("parent bg session
-hasn't isolated yet"), which forces slow, error-prone Bash/heredoc edits on you and every subagent
-you dispatch. `EnterWorktree(path=...)` registers the worktree with the guard so native file tools
-keep working. It enters *by path* without taking removal ownership, so Step 17's `git worktree
-remove` cleanup still applies unchanged. (Do not create the worktree with `EnterWorktree(name=...)`
-instead — that mints its own branch/path naming and cannot base on a specific ref, breaking the
-`challenge/<branch-label>` convention the rest of this workflow relies on.)
-
-**Bootstrap Forge in the worktree.** A fresh worktree — even one branched from a warm checkout — can
-lack its own `Applications/Forge/.bootstrap-out/forge`. Bootstrap it now so the first `/phoe:verify`
-is an incremental build, not a cold failure:
-
-```bash
-python3 Applications/Forge/Scripts/bootstrap.py
-```
-
-Run all subsequent steps from inside the worktree directory.
-
-**Crucible CLI in the worktree.** The Crucible CLI was built into the *main* repo's Forge output, not the worktree's — a worktree's own `.forge-out/` is empty until it builds. So re-resolve `$CRUCIBLE` against the main repo root (discovered via the git common dir, never hardcoded):
-
-```bash
-MAIN_ROOT=$(git rev-parse --path-format=absolute --git-common-dir | xargs dirname)
-CRUCIBLE=$(find "$MAIN_ROOT/Applications/Forge/.forge" "$MAIN_ROOT/Applications/Forge/.forge-out" \
-    -type f -path '*/bin/crucible' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
-"$CRUCIBLE" challenge show --label=<LABEL>   # or any crucible subcommand
-```
-
-Every `"$CRUCIBLE" <args>` snippet below assumes you've derived `$CRUCIBLE` this way first.
-
-## 6. Confirm Active
-
-The challenge was claimed as `active` back in Step 2 (before branching), so there is nothing to move
-here — this is just the checkpoint where, if exploration or the worktree setup made you abandon the
-challenge, you revert the claim:
-
-```bash
-# only if abandoning — otherwise the challenge is already active
-"$CRUCIBLE" challenge move --label=<LABEL> todo
-```
-
-## 7. Explore and Understand
-
-Read the challenge's affected files, references, and tags. Explore the codebase to understand what needs to change. If the challenge belongs to a saga, review completed sibling challenges for patterns and context.
-
-### Context Checkpoint
-
-If this challenge is complex (multiple modules, many affected files, or extensive exploration required), consider writing a checkpoint after exploration and before implementation:
-
-1. Write `.claude/handoffs/<LABEL>-checkpoint.md`:
-   ```markdown
-   # Checkpoint: <LABEL>
-   ## Challenge
-   <title and one-line description>
-   ## Understanding
-   <key findings from exploration — what code does what, dependencies, patterns found>
-   ## Decisions
-   <design choices made and why>
-   ## Implemented So Far
-   <files changed, what was done — empty if checkpointing before implementation>
-   ## Remaining Work
-   <concrete steps still needed>
-   ## Open Questions
-   <anything needing user input>
-   ```
-2. Tell the user: "This challenge is consuming significant context. I've written a checkpoint to `.claude/handoffs/<LABEL>-checkpoint.md`. Start a new session and run `/phoe:implement <LABEL>` to continue with fresh context."
-3. Stop. Do not continue implementation in the current session.
-
-**When to checkpoint:** Use judgment. Natural breakpoints include: after exploration but before implementation, or after implementing half the changes when the remaining work is still substantial. The goal is to avoid coherence loss on large tasks.
-
-## 8. Plan and Implement
-
-Enter plan mode, create an implementation plan, then execute it. Follow the project's normal development workflow — write code, follow conventions from CLAUDE.md. **Before writing any C++**, read `Docs/StyleGuide.md` and `${CLAUDE_PLUGIN_ROOT}/references/tooling.md` so the implementation conforms to the enforced conventions (formatting, naming, comments, namespaces, return-value handling, `auto`, scope spacing, tooling). `${CLAUDE_PLUGIN_ROOT}` is the plugin install path (fall back to `~/phoenixclaudeplugin/references/` if it is unset). If the challenge has a `strategy` field, use it as a starting point for the implementation plan.
-
-Comments: default to none. Prefer one line; two or three for the genuinely complex. *Why*, not *what*. Paragraphs belong in the commit message. Full rules in `Docs/StyleGuide.md` §Comments.
-
-When emplacing TODO comments during implementation, follow the discipline in `Docs/StyleGuide.md` (TODO Comments section): keep them to one line, describe the work itself, never embed file paths, line numbers, challenge labels, PR numbers, branch names, or dates (anything that can go stale), and never leave a TODO that narrates the refactor or rename you just performed.
-
-### Unit Test Coverage
-
-After implementing the feature code, evaluate whether unit tests are needed. Tests are required when the implementation introduces:
-
-- New public interfaces (classes, functions, or API surface that other code will call)
-- Non-trivial logic (algorithms, state machines, parsing, validation, calculations)
-- Behavior changes to existing logic that alter observable outcomes
-
-Tests are NOT required for:
-
-- Build-system or profile/config-only changes
-- Configuration file changes (JSON, cfg)
-- Pure wiring or delegation (forwarding calls to already-tested functions)
-- Platform-specific code that can only be tested on the target platform's CI
-
-> **Subagent worktree isolation.** `invoke-test-engineer` carries `isolation: worktree`, so the
-> harness drops it in a *fresh* worktree branched from `main` — without this challenge's
-> still-uncommitted changes, so it cannot read the code under test and resorts to copying files in.
-> Every dispatch below therefore passes the absolute path of this challenge worktree
-> (`.claude/worktrees/challenge-<branch-label>`). **The dispatch vehicle differs by job:** the test-writing
-> dispatch here needs to write, so it goes as a **general-purpose** subagent; the review dispatches
-> in Steps 11 and 12 are **read-only** and go as `Explore`. Do not merge the two — and note that
-> `invoke-code-reviewer` is not a read-only vehicle despite the name: it carries `Bash`. See
-> `${CLAUDE_PLUGIN_ROOT}/references/dispatch-briefs.md` §1. Keep the specialist prompts below
-> verbatim; only the vehicle changes.
-
-When tests are applicable, launch `invoke-test-engineer` as a subagent to write them. Provide it with the implementation diff and the module context so it can place tests correctly and follow Trials conventions. **Ask it to end its report with a `## Workflow Friction` section** listing anything that made the task harder than it should have been — missing context, ambiguous spec, undocumented convention, tooling gaps — or the single word `none` if nothing applied. These notes are aggregated in Step 14.5.
-
-## 9. Verification Gate
-
-All verification must pass before proceeding:
-
-**a. Challenge verification steps** — run any commands from the challenge's `verification` field (shown in the challenge JSON).
-
-**b. Full project verification** — run `/phoe:verify` (configure → build → format-check → lint →
-policy audits → test). All must pass. `/phoe:verify` covers **one profile**: always `editor`, plus
-`forge` if this challenge touched `Applications/Forge/` — a green editor verify does not run Forge's
-own trials and has twice hidden a broken one — plus the app profile whose own directory it changed
-and any build profile it edited. Never CI's full lane set; `minimal` stays with CI.
-
-**c. A cold build can outlive the command timeout.** Run it, and the verify, through
-`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/forge_wait.py start --log <worktree>/.forge-wait/<name>.log -- <forge command>` in the
-foreground with `timeout: 600000`, and repeat the `wait --log ...` call it prints until it reports an
-exit. Never watch the log in between — see `${CLAUDE_PLUGIN_ROOT}/references/dispatch-briefs.md` §4.
-
-**d. If any verification fails** — fix the issue and re-verify. Do not proceed until everything passes.
-
-## 10. Acceptance Criteria Evaluation
-
-Before committing, systematically evaluate each acceptance criterion from the challenge JSON. The model that wrote the code must not self-approve without structured evaluation.
-
-1. Retrieve the challenge's acceptance criteria: `"$CRUCIBLE" challenge show --label=<LABEL>`
-2. For **each** criterion, answer explicitly:
-   - **Met?** Yes / No / Partially
-   - **Evidence:** What in the diff proves this? (file:line, test name, or command output)
-   - **Unverifiable?** If the criterion cannot be verified mechanically (e.g., "feels responsive"), flag it for human review.
-3. If any criterion is clearly **unmet**, fix the implementation and re-run `/phoe:verify` before continuing.
-4. List any criteria flagged as **unverifiable** — these will be included in the report for the user.
-4a. **Ask a fourth question of each criterion: is this still the right thing to ask for, given what
-   the code actually looks like?** A challenge written before the code was read is a hypothesis, not
-   a contract — one passed every gate, reached `review`, and was then re-cut from scratch on the
-   owner's first question. The steps above turn skepticism on the implementation and none on the
-   criterion. Three shapes recur, each a signal to stop rather than design around:
-   - **Unimplementable as worded** — it names state a placeholder type cannot carry. Encoding the
-     absence is always the larger diff, and it is thrown away when the placeholder is filled in.
-   - **Names a consumer that does not exist yet** — a later challenge in the same saga. Say so
-     rather than quietly claiming the criterion met against a stand-in.
-   - **Satisfiable by something obviously wrong** — a criterion an implementation can meet while
-     freezing, hiding, or disabling the thing it is about.
-
-   When the answer is no, report it to the user as a re-cut candidate with the specific wording at
-   fault. Do not silently pick the stronger of two readings of an ambiguous design doc: a genuine
-   ambiguity is a question for the owner, especially when one branch justifies materially more code
-   than the other.
-
-5. **Test coverage check** — if the implementation introduced testable logic (per the criteria in Step 8), verify that corresponding tests exist and pass. If tests were expected but missing, go back and add them before continuing.
-
-Do not proceed to code review until all mechanically-verifiable criteria are met.
-
-## 10.5. Review Dispatch Preamble — include in every reviewer prompt
-
-Steps 11 and 12 both dispatch reviewer subagents, and both gate on zero CRITICAL and zero WARNING
-findings. The brief they receive is assembled per
-`${CLAUDE_PLUGIN_ROOT}/references/dispatch-briefs.md`, which is the single source for these blocks —
-read it before dispatching. Every failure mode it prevents **fails in the direction of a false
-clean**: a reviewer that cannot find something reports it as absent, and that conclusion reaches the
-PR body.
-
-### 10.5a. Ship the contract — never a paraphrase
-
-The challenge body lives server-side in Crucible and is not reachable from the worktree, so a
-reviewer that cannot read the acceptance criteria **invents the contract from the code and fixtures,
-then blocks on it**. Capture the challenge verbatim before dispatching:
-
-```bash
-"$CRUCIBLE" challenge show <ID>
-```
-
-Interpolate that **whole output** into the reviewer prompt under a
-`## Challenge Contract (verbatim from Crucible)` heading — do not summarize, and do not re-word the
-acceptance criteria. Then resolve the design-doc references and assemble the build-state block per
-`dispatch-briefs.md` §2, which also covers the two brief-assembly rules this workflow must follow:
-**resolve `REVIEW_BASE`/`REVIEW_SHA` with `git rev-parse` / `git merge-base` at dispatch time**
-(never transcribe or hand-extend a hash), and **generate the reviewer's file list from the range**
-with `git diff --name-only`, never from the challenge's `Files` field.
-
-### 10.5b. The preamble itself
-
-Paste `dispatch-briefs.md` §3 — **Review dispatch preamble** — verbatim into each reviewer prompt,
-substituting the resolved `REVIEW_BASE`/`REVIEW_SHA` for its `<BASE>`/`<SHA>` placeholders. It
-covers reading the frozen commit rather than the working tree, the path and pathspec hazards, the
-zsh traps, and the requirement that every cited path and symbol be resolved
-before it is reported.
-
-### 10.5c. Dispatch read-only
-
-Both review dispatches go as `Explore` with the absolute path of this challenge worktree — never as
-a write-capable agent. `dispatch-briefs.md` §1 has the rationale and the read-only clause to include
-in the prompt.
-
-## 11. Automated Code Review
-
-Invoke the code reviewer as a **separate agent** to evaluate the implementation diff. The agent that wrote the code must not be the only judge.
-
-1. **Freeze the diff — commit first, then review a SHA.** Never hand a reviewer "the staged diff":
-   the index mutates as you keep working, so a finding filed against `--cached` can land on code a
-   later edit already superseded (one saga had 3 of 6 review passes report on stale code this way).
-   Commit the work on the challenge branch now, then capture the frozen SHA and the review base:
-   ```bash
-   git fetch origin main                          # so the merge-base below is current
-   git add -A
-   git commit -m "<descriptive message referencing the challenge label>"
-   REVIEW_SHA=$(git rev-parse HEAD)
-   REVIEW_BASE=$(git merge-base origin/main HEAD)  # the branch's actual fork point — NOT hardcoded
-                                                   # main; a stacked/diverged branch reviewed against
-                                                   # main shows a predecessor's merged work as noise
-   ```
-   Because the commit already lands here, Step 13 is a no-op unless the fix loop below adds commits.
-2. Dispatch the reviewer **read-only** (`Explore`, Step 10.5c) with the absolute path of this
-   challenge worktree, using the prompt:
-   > Review the change on this challenge branch. Focus on correctness, safety, modern C++23 opportunities, performance, and project convention compliance. Report findings using CRITICAL/WARNING/SUGGESTION/NOTE severity levels.
-   >
-   > [Include the **Challenge Contract** (Step 10.5a), the **review dispatch preamble** (Step 10.5b) and the **read-only clause** (Step 10.5c) here, verbatim — substituting the resolved `REVIEW_BASE` and `REVIEW_SHA` values for the `<BASE>..<SHA>` placeholders so the reviewer diffs the frozen range.]
-   >
-   > End your report with a `## Workflow Friction` section listing anything that made this review harder than it should have been — missing context, ambiguous spec, undocumented convention, tooling gaps — or the single word `none` if nothing applied.
-3. **Gate on zero CRITICAL and zero WARNING findings.** If any CRITICAL or WARNING issues are found:
-   - Resolve every path and symbol each finding cites before acting on it
-     (`${CLAUDE_PLUGIN_ROOT}/references/dispatch-briefs.md` §5) — findings routinely name paths that
-     do not exist while being otherwise correct. Say so when a citation does not resolve, and
-     re-locate the real target rather than fixing the nearest plausible thing.
-   - Fix each CRITICAL and WARNING issue
-   - Commit the fix on the branch and **re-freeze**: `REVIEW_SHA=$(git rev-parse HEAD)` (refresh `REVIEW_BASE` too if `origin/main` moved)
-   - Re-run `/phoe:verify`
-   - Re-run acceptance criteria evaluation (Step 10)
-   - Re-invoke the code reviewer against the new SHA (repeat this step)
-4. **WARNING is a blocking tier alongside CRITICAL.** If you judge a WARNING to be a false positive or genuinely out of scope, do not silently proceed — surface it to the user with your reasoning and let them waive it. Record any waived WARNING in the final report; never ship one unaddressed.
-5. **SUGGESTION and NOTE findings** are omitted from the report unless particularly insightful.
-
-## 12. Adversarial Review — Required Before PR
-
-After the standard review passes, dispatch an **adversarial** reviewer subagent. The standard review asks "is this code well-formed?"; the adversarial review asks "how does this break?". A PR cannot be opened until this gate has run and any CRITICAL findings are resolved.
-
-Dispatch a fresh **read-only** subagent (`Explore`, Step 10.5c) with the absolute path of this
-challenge worktree and the prompt:
-
-> Adversarially review the change on challenge `<LABEL>`. Your job is to attack this implementation, not validate it. Assume the standard review already passed — do not duplicate it.
->
-> [Include the **Challenge Contract** (Step 10.5a), the **review dispatch preamble** (Step 10.5b) and the **read-only clause** (Step 10.5c) here, verbatim — substituting the resolved `REVIEW_BASE` and `REVIEW_SHA` values for the `<BASE>..<SHA>` placeholders. Use the same frozen SHA the standard review ran against.]
->
-> Hunt for:
->
-> - **Edge cases the implementation does not handle** — empty input, max-size input, unicode, negative values, NaN, integer overflow, signed/unsigned mismatches, off-by-one at boundaries.
-> - **Concurrency hazards** — races, reentrancy, ordering assumptions across threads or subsystems, lifetime invariants not enforced by the type system.
-> - **Silent failure modes** — code paths that swallow errors, no-op on the unexpected branch, or fail to log via Scribe (violates the no-silent-failures rule).
-> - **Hidden coupling** — state shared across modules, ownership confusion, assumptions about call order or initialization sequence.
-> - **Performance pathologies under realistic load** — allocation in hot paths, O(n²) under expected n, lock contention, cache-hostile access patterns.
-> - **Spec gaps** — acceptance criteria that pass for the easy case but fail in plausible variations the spec did not enumerate. If the spec itself is the weak link, say so.
-> - **Trials that cannot fail.** For each invariant the change claims, name the production mutation
->   that would leave every trial green — the highest-yield question in these reviews, and the source
->   of six of eight CRITICALs in one saga. Where a case has no such mutation, call it unpinned; where
->   two cases die to the same mutation, one is redundant. Ask too whether the fixtures share the
->   shape of what the code actually runs on: six trials once agreed with each other while every
->   shipped row would have been wrong.
->
-> Report only findings that represent real failure modes, not stylistic concerns. Use CRITICAL/WARNING/SUGGESTION/NOTE severity. If you find nothing actionable, say so explicitly — a clean adversarial pass is a valid result.
->
-> End your report with a `## Workflow Friction` section listing anything that made this review harder than it should have been — missing context, ambiguous spec, undocumented convention, tooling gaps — or the single word `none` if nothing applied.
-
-**If review dispatch is unavailable, the gate is unmet — not passed.** Session instructions
-sometimes forbid the Agent tool, and four consecutive rounds once shipped on self-review alone with
-nothing recording that the blocking gate had not run. When you cannot dispatch: say so in the report
-and the PR body, name the gate, substitute mutation testing with armed and reverted negative
-controls as a stated stand-in, and do not move the challenge to `review`. A dispatch that dies
-mid-analysis (529 overload, 429 rate limit) leaves a plausible fragment that reads like a reviewer
-which found little — that is a failed dispatch, so re-dispatch it.
-
-**Gate on zero CRITICAL and zero WARNING adversarial findings.** Treat them the same as Step 11: fix every CRITICAL and WARNING, commit the fix and re-freeze (`REVIEW_SHA=$(git rev-parse HEAD)`), re-run `/phoe:verify`, re-run acceptance criteria evaluation, then re-run **both** the standard and adversarial reviews against the new SHA until both pass. As in Step 11, a WARNING you judge a false positive or out of scope must be surfaced to the user for an explicit waive — never silently dropped — and any waived WARNING recorded in the final report.
-
-## 13. Finalize the Commit
-
-The implementation was already committed in Step 11 (the freeze), and every review-fix pass added
-its own commit. So there is normally nothing to commit here — the branch already carries the work
-with a message referencing the challenge label. If review produced a string of small fixup commits
-and you want a tidy history, optionally squash them into one before moving on; do **not** leave any
-change uncommitted going into Step 14.
-
-## 14. Move to Review — Required
-
-Immediately after the commit lands, move the challenge to `review`. This is a mandatory, non-skippable final workflow step — implementation is not considered complete until the challenge is in `review`:
+## 9. Move to review
 
 ```bash
 "$CRUCIBLE" challenge move --label=<LABEL> review
 ```
 
-If this move fails (server down, label mismatch, Crucible not initialized), **stop and surface the error to the user**. Do not report the challenge as done, and do not continue to the report step, until the move has succeeded.
+The work is not done until this succeeds. If it fails, stop and surface the error; do not report
+the challenge done.
 
-## 14.5. Agent Feedback Log
+## 10. Feedback log
 
-Collect the `## Workflow Friction` sections from each subagent report dispatched during this run
-(test engineer from Step 8, standard reviewer from Step 11, adversarial reviewer from Step 12, and
-any fix pass), and add your own as the implementing agent: what slowed *you* down — missing
-context, ambiguous spec, undocumented convention, tooling or guard trouble, context bloat. If every
-section is `none` or empty, skip this step entirely — write nothing.
+Follow [challenge workflow](../../references/challenge-workflow.md) §8 with
+`--run "/phoe:implement <label>"`, collecting the test writer's, reviewers' and fix passes' friction
+plus your own as Implementer. Do not mention the log in the report.
 
-Otherwise, append to `.claude/AGENT_FEEDBACK.md` in the **main checkout** (same file
-`/phoe:execute` writes to). You are standing in the Step 5 worktree, so resolve the main root's
-absolute path from the first entry of `git worktree list` — a relative `.claude/` lands in the
-worktree and is deleted with it.
+## 11. Reconcile siblings and docs
 
-**Append with Bash, never `Write`/`Edit` on the log.** In a background session the isolation guard
-refuses the native file tools for repo paths the parent has not entered, and gitignored `.claude/`
-is covered. That guard is **tool-scoped, not path-scoped**: Bash redirection is not intercepted.
-The command guard does refuse heredocs, though, so stage the entry in a scratch file outside the
-repo (`$CLAUDE_JOB_DIR/tmp/` in a background session) and append it with one plain command:
+Run the pre-merge pass of [challenge workflow](../../references/challenge-workflow.md) §6. A real
+scope problem in a later challenge goes in the report for the user to decide on re-planning.
 
-```bash
-cat <scratch>/feedback-entry.md >> <main-root>/.claude/AGENT_FEEDBACK.md
-```
+## 12. Publish
 
-The same `>>` creates the log when it does not exist. Never write the log itself whole: it reaches
-hundreds of KB and a whole-file write discards every prior entry. A refused command means try the
-other form; it never means the step is impossible.
+Follow [challenge workflow](../../references/challenge-workflow.md) §5, writing the summary from the
+title and the key changes; Crucible holds the detail. A dependent PR follows
+[parallel integration](../../references/parallel-integration.md): confirm native stack identity, or
+recover the child-only work onto main, before presenting it as ready.
 
-Entry format — start with a blank line and omit any agent whose section was `none`:
+## 13. Report
 
-```markdown
+Show saga progress (`"$CRUCIBLE" saga show --label=<SAGA_LABEL>`) when in a saga, and tell the user:
 
-## <YYYY-MM-DD> - /phoe:implement <label>
+- what was implemented;
+- trials added (by name), or why none were needed;
+- verification results, naming the profiles;
+- the branch, `challenge/<branch-label>`;
+- sibling and doc reconciliation (the required line from §6), and any waived WARNING or re-cut
+  candidate;
+- **PR #<N>** and its URL, or "branch left local; not pushed";
+- that the challenge is in `review` for the user to inspect.
 
-### Implementer
-- <friction item>
+Do not merge the PR. The challenge moves to `merged` only once landing is proven
+([challenge workflow](../../references/challenge-workflow.md) §2).
 
-### Challenge: <label> (test-engineer)
-- <friction item 1>
-- <friction item 2>
-
-### Challenge: <label> (code-reviewer)
-- <friction item>
-
-### Challenge: <label> (adversarial-reviewer)
-- <friction item>
-```
-
-Do not summarize, paraphrase, or filter the friction items — copy them verbatim. The user reviews this log on their own schedule to evolve CLAUDE.md, challenge specs, and the plugin.
-
-Do not mention this log in the Step 17 report.
-
-## 15. Propagate Changes to Follow-on Challenges and Docs
-
-Reconcile anything this implementation may have invalidated — later saga-sibling specs (if this challenge is in a saga) **and** `docs/` design/spec files (always, even for orphans): a renamed type, moved file, changed signature, or replaced concept that a later sibling's `description` / `strategy` / `acceptance_criteria` / `affected_files`, or a doc, still references by its old name.
-
-1. If in a saga, list remaining siblings (todo + blocked) after this challenge's position:
-   ```bash
-   "$CRUCIBLE" --json saga show --label=<SAGA_LABEL>
-   ```
-2. For each later sibling, fetch its full spec:
-   ```bash
-   "$CRUCIBLE" --json challenge show --label=<SIBLING_LABEL>
-   ```
-3. Scan each sibling's text — and grep `docs/` design/spec files — for stale references against the diff this challenge produced. Things to look for:
-   - Type / class / function / method names that were renamed
-   - File paths that moved or were split
-   - API signatures or parameter names that changed
-   - Module or layer boundaries that shifted
-   - Concepts the sibling depends on that no longer exist or have been replaced
-4. Fix each surgically — `"$CRUCIBLE" challenge update --label=<SIBLING_LABEL> [--description=... --strategy=... --affected_files=...]` (run `--help` for flags) for challenge text; an in-place edit on this challenge's branch (rides the same PR) for docs. Update only the references that are actually stale; do not rewrite specs or scope.
-5. **Comment on every open challenge whose ground this work moved** — sibling or orphan, and in
-   addition to any `challenge update`. The trigger is landing work that renames, moves, or supersedes
-   something the challenge points at. Record what moved to what name, and which behaviors introduced
-   since must not be dropped by the eventual rewrite. Editing the words fixes the text; the comment is
-   what tells the implementer the ground moved at all, and what a rewrite would otherwise silently
-   drop.
-   ```bash
-   "$CRUCIBLE" challenge comment --label=<OTHER_LABEL> --body="<what moved; what must not be dropped>"
-   ```
-6. If a sibling or doc has no stale references, leave it alone.
-7. Record which siblings + docs were updated (and what fields/files changed) for the report.
-
-This is the pre-merge pass; the authoritative pass re-runs post-merge in Step 17. Do not edit the implementation itself from this step — metadata + docs reconciliation only. If the implementation surfaced a real scope problem in a later challenge (not a rename), note it in the report and let the user decide whether to re-plan.
-
-## 16. Publish
-
-Push the branch and open a pull request, after the credential check in CLAUDE.md's Push & Pull
-Request Workflow.
-
-```bash
-git push -u origin challenge/<branch-label>
-PR_URL=$(gh pr create \
-  --head challenge/<branch-label> \
-  --base main \
-  --title "<challenge title>" \
-  --body "$(cat <<'EOF'
-## Summary
-<2-4 bullet points describing what the branch accomplishes>
-
-Crucible: #<id> <label>
-Saga: #<saga-id> <saga-label>
-EOF
-)")
-PR_NUM="${PR_URL##*/}"
-echo "Opened PR #${PR_NUM}: ${PR_URL}"
-```
-
-**Trust the output, not the exit code, on both halves of this step.**
-
-- `gh pr create` has returned `HTTP 503` for minutes at a time, including at its own "checking for
-  existing pull request" stage — the dangerous one, since a retry after a partly-succeeded create
-  duplicates the PR. Grep the output for a PR URL rather than trusting the exit status, and check
-  `gh pr list --head <branch>` before a second attempt.
-- `git log origin/<branch>` reads a possibly stale tracking ref and has reported a successful push as
-  failed, inviting a pointless force-push. `git ls-remote origin <branch>` is authoritative.
-- **For stacked PRs, follow [parallel integration](../../references/parallel-integration.md).**
-  Confirm native stack identity or recover child-only work onto main through that recipe before
-  presenting a dependent PR as ready.
-
-After a successful `gh pr create`, record the review link on the challenge so future
-sessions and `crucible challenge show` surface the PR URL without grepping comments.
-The flag name is intentionally source-neutral — `--replace-review-link` accepts any
-URL string, so a non-GitHub review system (Gitea, Phabricator, internal mirror) fits
-without rewording this step:
-
-```bash
-"$CRUCIBLE" challenge update --label=<LABEL> --replace-review-link="${PR_URL}"
-```
-
-`Crucible:` and `Saga:` trailers are mandatory; pull IDs from the JSON already fetched in Step 2/3. Drop the `Saga:` line for orphans.
-
-Refer to the PR as **PR #<N>** (the trailing `/pull/<N>` segment) in all subsequent narration and the report — never URL alone.
-
-Compose the summary from the challenge title and the key changes — keep it concise; the
-challenge spec in Crucible is the detailed record.
-
-If PR review comments come back later, check out the branch, apply fixes, rebuild to confirm
-they compile (full `/phoe:verify` only when changes are significant — new logic, API changes,
-new files), commit with a brief "Address review: …" message, and push.
-
-## 17. Report
-
-If the challenge belongs to a saga, show updated saga progress:
-
-```bash
-"$CRUCIBLE" saga show --label=<SAGA_LABEL>
-```
-
-Tell the user:
-- What was implemented
-- Tests added (list test names) or why tests were not applicable
-- Verification results (all passing)
-- Branch name: `challenge/<branch-label>`
-- Saga progress (if applicable)
-- Follow-on sibling updates, if any (which siblings were updated and what fields changed)
-- Reconciliation outcome (pre-merge pass, Step 15): siblings + `docs/` scanned against the committed diff — which were updated, or "none stale" (required — a present line makes a skipped reconciliation visible). The authoritative post-merge pass runs later when the PR lands and reports its own outcome then.
-- Pull request: **PR #<N>** + URL (or "branch left local; not pushed"). Always lead with `PR #<N>`.
-- The challenge is now in `review` status — user inspects before it lands
-
-**Do not merge the PR yourself, and do not mark the challenge `merged` before the merge has landed.** The user decides whether to merge, request changes, or close. The `review` → `merged` transition tracks reality; it must not run ahead of it.
-
-But once the PR is confirmed merged into remote `main` — typically observed on a later `/phoe:implement next` (Step 2) — reconciling the tracking status *is* expected; a merged PR left in `review` is stale bookkeeping (and saga progress only counts `merged`). Verify the landing first (PR `state` is `MERGED` **and** its merge commit is reachable from `origin/main` — a retarget-miss can show `MERGED` without reaching main), then move it to `merged` and run the **end-of-cycle reconciliation** (the authoritative pass) against the merged diff:
-
-```bash
-"$CRUCIBLE" challenge move --label=<LABEL> merged
-```
-
-Re-scan the merged diff against remaining todo/blocked siblings **and** `docs/` design/spec files for stale references the Step 15 pass missed. Fix challenge text in place with `crucible challenge update`, and comment (Step 15, item 5) on any challenge whose ground the merged diff moved. For stale docs, file a tracked docs-reconcile challenge (`/phoe:plan`) so the edit flows through the normal implement path rather than an untracked side PR — this challenge's branch is gone post-merge. Flag genuinely scope-broken siblings as blocked rather than rewriting them. Report this pass's outcome when it runs.
-
-### On merge — clean up and surface the next challenge
-
-Whenever this challenge's PR is confirmed merged (here or in Step 2's
-reconciliation), after the reconciliation pass above, clean up and report — then
-**stop**; do not begin the next challenge:
-
-1. **Clean up the worktree, local branch, and remote branch** from the main repo
-   root, per the plugin CLAUDE.md's *Concluding work* (skip any already gone):
-   ```bash
-   git worktree remove .claude/worktrees/challenge-<branch-label>
-   git branch -D challenge/<branch-label>
-   git push origin --delete challenge/<branch-label>
-   git fetch --prune origin
-   ```
-   If this session entered the worktree via `EnterWorktree(path=...)` in Step 5, first
-   `ExitWorktree(keep)` to return to the main checkout — then the `git worktree
-   remove` above is safe. (Entering by path takes no removal ownership, so
-   `ExitWorktree` will not remove it for you.)
-
-2. **Report the next ready challenge — do not implement it.** If the merged
-   challenge was in a saga, use Step 2's saga-aware selection (ordering satisfied,
-   no unmerged predecessor, auto-unblock whatever the merge unblocked) to find the
-   next pickup, and report its label, title, priority, and `/phoe:implement
-   <label>`. Present it for the user to pick up; do not start it. If the saga is
-   done or nothing is unblocked, say so.
-
-Use `/phoe:plan` to create new challenges or extend an existing saga.
-
-> **Note:** When the user moves a challenge to `merged`, it is automatically archived in the server's data dir. If work needs to be revisited, use `"$CRUCIBLE" challenge unarchive --label=<LABEL>` to restore it to `todo` status.
+**On landing**, here or in a later run's Step 2: run challenge workflow §7, then report the next
+ready challenge from Step 2's selection (label, title, priority, `/phoe:implement <label>`), or say
+the saga is done or nothing is unblocked. Do not start it. `/phoe:plan` creates challenges or
+extends a saga.

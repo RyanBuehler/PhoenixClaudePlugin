@@ -1,28 +1,32 @@
 ---
 name: pr-fixup
-description: Use when addressing review feedback on an open PR — pulls main, resolves any merge conflicts, triages and addresses review comments, reconciles resolved threads, then verifies via local build before pushing. Auto-activates on phrases like "address PR feedback", "fix the review comments", "handle PR review", "respond to reviewers".
+description: Use when fixing an open PR — review feedback, merge conflicts or CI failures. Merges main, addresses comments, pushes, resolves threads, then builds locally while CI runs. Auto-activates on phrases like "address PR feedback", "fix the review comments", "handle PR review", "respond to reviewers".
 ---
 
-# PR Fixup — Address Review Feedback
+# PR Fixup
 
-A linear workflow for the common case: a PR has new review comments, possibly drifted from main, and needs another revision pushed.
+A PR has new review comments, may have drifted from main, and needs another revision. The order is
+fix, commit, push, resolve threads, then build while CI runs. A PR with only a merge conflict or a
+CI failure runs steps 1, 4, 5 and 7 (read a CI failure with `gh run view <run-id> --log-failed`).
 
-## Workflow
+Work in the PR branch's worktree. If it was removed after publishing, add a fresh one on the
+existing branch: `git worktree add .claude/worktrees/<type>-<label> <type>/<label>`.
 
-### 1. Sync with main
-
-From the PR branch:
+## 1. Sync with main
 
 ```bash
 git fetch origin main
-git merge origin/main          # or rebase, if the branch's convention is rebase
+git merge origin/main
 ```
 
-If conflicts arise, resolve them before doing anything else. Investigate each conflict — never blindly take one side. If a conflict touches code a review comment also references, resolve the conflict first so subsequent comment fixes apply to the merged state.
+A stacked PR (its base is another PR's branch) merges `origin/<base-branch>` instead. Never rebase
+or force-push: published history is not rewritten here; if a rebase seems required, ask the user.
 
-If no conflicts, continue.
+Resolve conflicts before anything else, investigating each rather than taking a side. Where a
+conflict touches code a comment also cites, resolve the conflict first so the fix applies to the
+merged state.
 
-### 2. Pull review comments
+## 2. Pull review comments
 
 ```bash
 gh pr view --comments
@@ -30,34 +34,45 @@ gh api repos/{owner}/{repo}/pulls/{number}/comments    # inline review comments
 gh api repos/{owner}/{repo}/pulls/{number}/reviews     # review summaries
 ```
 
-Collect every unresolved comment. Include both top-level PR comments and inline code comments. Note thread IDs so you can resolve them later.
+Collect every unresolved top-level and inline comment, with its thread ID (GraphQL
+`pullRequest.reviewThreads`). Leave alone a thread the user reopened, unless told to re-resolve it.
 
-### 3. Triage
+## 3. Triage
 
-Group comments into:
+- **Actionable:** a clear code change is requested.
+- **Question:** needs an answer, not a change.
+- **Disagreement:** conflicts with intent or another constraint; raise it with the user before
+  acting.
+- **Out of scope:** file a Crucible follow-up instead of growing the PR.
 
-- **Actionable** — clear code change requested.
-- **Question** — needs an answer, not a code change.
-- **Disagreement** — the reviewer's request conflicts with intent or another constraint; surface to the user before acting.
-- **Out of scope** — file a Crucible follow-up rather than expanding the PR.
+Every comment ends in one of two states: **fixed and resolved**, or **reply drafted and thread left
+open** (questions, disagreements, out of scope, deferred actionables). Anything else is unfinished.
 
-**No comment falls through the cracks.** Every comment must end in one of two terminal states:
-1. **Fix landed + thread resolved** (Actionable that was addressed).
-2. **Reply drafted, thread left unresolved** (Question, Disagreement, Out-of-scope, or Actionable-but-deferred).
+Before acting on an actionable comment, verify its code claim per the core rules (§Conduct,
+review comments): line numbers drift across PR updates. If the cited
+construct is not on or near that line, ask the reviewer instead of guessing.
 
-A resolved thread without a fix, or an unaddressed comment without a drafted reply, is a bug in this workflow.
+## 4. Fix and commit
 
-For each actionable comment, **verify the cited code claim** per the plugin CLAUDE.md "Verify review-comment code claims before acting" rule — line numbers drift across PR updates. If the cited construct isn't on the referenced line or nearby, stop and ask the reviewer instead of guessing.
+Make the requested changes one comment at a time, scoped to the ask; a fixup is not a refactor.
+Commit them. Draft a reply for every other comment (the answer, the rationale, or the follow-up's
+label); drafts stay local for the user to post.
 
-### 4. Address actionable items
+## 5. Push
 
-Make the requested changes, one comment at a time. Keep edits scoped — a fixup commit isn't a refactor opportunity.
+Push as soon as the fixes are committed, so CI starts now:
 
-For every non-actionable comment (Question, Disagreement, Out-of-scope, or Actionable-but-deferred), **draft a reply** explaining the answer, the disagreement rationale, or the Crucible follow-up label. Drafts stay local; the user posts. A non-actionable comment with no drafted reply is incomplete work.
+```bash
+git diff --check origin/main...HEAD   # catches leftover conflict markers
+git push
+```
 
-### 5. Reconcile threads
+Do not batch unrelated work into the push; each extra commit delays CI.
 
-Once a comment's fix is in, resolve the thread on GitHub:
+## 6. Resolve threads
+
+Resolve a thread only once a pushed commit addresses its ask; check the diff first, never resolve
+speculatively, and never resolve a question, disagreement or out-of-scope thread.
 
 ```bash
 gh api graphql -f query='
@@ -68,41 +83,22 @@ gh api graphql -f query='
   }' -f threadId="<thread-id>"
 ```
 
-Look up `threadId` values via the GraphQL `pullRequest.reviewThreads` query.
+Then audit: every actionable thread resolved with a fix, every other thread open with a drafted
+reply.
 
-**Resolution invariants:**
-- Resolve a thread only if a commit in this fixup actually addresses the ask. Verify the diff before resolving — never resolve speculatively.
-- Never resolve Question, Disagreement, or Out-of-scope threads. Those carry drafted replies and stay open for the user.
-- Before finishing this step, audit: every Actionable thread → resolved with a fix; every other thread → unresolved with a drafted reply.
+## 7. Build while CI runs
 
-### 6. Build to verify
+Check load first: this box is also a CI runner, so if a CI job or another build is running here,
+skip the build and let CI be the build. Otherwise run `/phoe:build` for the relevant profile. Do
+not run `/phoe:verify`; that gate is the user's. If the build fails, fix, commit and push again.
 
-Run `/phoe:build` for the relevant application profile. Do **not** run `/phoe:verify` here — that gate is for the user. The goal is a sanity check: does the code at least compile after the merge plus the fixes?
+## 8. Backfill the review link
 
-### 7. Push
-
-If the build passes, push immediately:
+An entry created before review links existed may lack one:
 
 ```bash
-git push
-```
-
-Pushing the PR branch fires GitHub's `pull_request.synchronize` webhook, which is what re-triggers CI. Push as soon as the local build is green so that webhook fires early and CI runs in parallel with the user's review. Don't batch with other unrelated work — every extra commit before the push delays `synchronize` by that much.
-
-If the build fails, fix the failure, rebuild, and push once it's green. Repeat until clean. **Never push a known-broken build** — pushing failures wastes a CI cycle and signals false progress.
-
-### 7.5. Backfill the review link on the Crucible entry
-
-`pr-fixup` runs against an already-open PR, so this skill never calls `gh pr create` itself.
-But the Crucible entry may predate `--review-link` and still have an empty `review_link`
-field. Before reporting, check and backfill so subsequent sessions and `crucible <entity>
-show` carry the PR URL:
-
-```bash
-# Discover the Crucible CLI (Forge builds it under a per-profile subtree — don't hardcode the path)
-CRUCIBLE=$(find Applications/Forge/.forge Applications/Forge/.forge-out -type f \
-    -path '*/bin/crucible' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
-ENTITY=challenge   # or bug, depending on which workflow opened the PR
+CRUCIBLE=$(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/crucible_path.py) || exit 1
+ENTITY=challenge   # or bug
 LABEL=<label>
 PR_URL=$(gh pr view --json url --jq .url)
 EXISTING=$("$CRUCIBLE" --json "${ENTITY}" show --label="${LABEL}" | jq -r '.review_link // ""')
@@ -111,24 +107,12 @@ if [ -z "${EXISTING}" ]; then
 fi
 ```
 
-The `--replace-review-link` flag is source-neutral by design — it accepts any URL string,
-so a non-GitHub review system fits without rewording this step. No-op when the link is
-already present.
+## 9. Report
 
-### 8. Report
+- Comments addressed and resolved (thread IDs or file:line).
+- Drafted replies awaiting the user, with the text inline.
+- Confirmation that every comment is fixed and resolved, or drafted and open.
+- The pushed commit and the build result (or that CI was left to build).
+- Whether the review link was backfilled, and any Crucible follow-ups filed.
 
-Tell the user:
-- Which comments were addressed and resolved (thread IDs / file:line).
-- Which have drafted replies awaiting the user (questions, disagreements, deferred, out-of-scope) — include the draft text inline.
-- Confirmation that every comment is in one terminal state — fixed+resolved or drafted+unresolved.
-- Build status and the pushed commit.
-- Whether the Crucible `review_link` was backfilled this run, if applicable.
-- Any out-of-scope items filed as Crucible follow-ups.
-
-## What this skill does NOT do
-
-- **Post comment replies.** Drafted replies stay drafted; the user posts.
-- **Approve or merge the PR.** Out of scope.
-- **Run `/phoe:verify`.** That's the user's commit gate, not a fixup gate.
-- **Force-push or rewrite published history.** Use plain `git push`. If a rebase is required, surface that to the user first.
-- **Resolve threads the user marked unresolved.** If a thread was reopened, leave it alone unless explicitly told to re-resolve.
+This skill does not post replies, approve or merge the PR, or run `/phoe:verify`.

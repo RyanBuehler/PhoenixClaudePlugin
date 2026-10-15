@@ -4,13 +4,17 @@ A comprehensive Claude Code plugin for developing the Phoenix Engine — a cross
 
 ## Installation
 
-```bash
-# Clone the plugin
-git clone git@github.com:RyanBuehler/PhoenixClaudePlugin.git
-
-# Add to Claude Code
-claude plugin add ./PhoenixClaudePlugin
 ```
+/plugin install phoe --marketplace RyanBuehler/PhoenixClaudePlugin
+```
+
+## Always-on rules
+
+`references/core-rules.md` holds the rules every session needs — conduct, branches and worktrees,
+searching, the verification gate, and the codebase rules the repository docs do not state.
+`hooks/core-rules.py` loads it into every session (on startup, resume, `/clear` and compaction) and
+into every subagent except the built-in Explore and Plan, because Claude Code does not load a
+`CLAUDE.md` from a plugin root. Rules used by one workflow live in that skill or in `references/`.
 
 ## Agents (14)
 
@@ -34,7 +38,7 @@ Specialized subagents for different aspects of engine development.
 | Agent | Description |
 |-------|-------------|
 | `invoke-vulkan-agent` | Vulkan API, synchronization, descriptors |
-| `invoke-shader-expert` | GLSL/SPIR-V compilation and debugging |
+| `invoke-shader-expert` | Slang/SPIR-V shaders — compile errors, validation, performance |
 
 ### Platform
 | Agent | Description |
@@ -97,32 +101,23 @@ These set `disable-model-invocation: true`, so they cost no context until you ty
 
 | Hook | Event | Description |
 |------|-------|-------------|
-| Commit guard | PreToolUse (git commit) | Runs format and lint checks before allowing a commit |
+| `core-rules.py` | SessionStart, SubagentStart | Loads `references/core-rules.md` into context |
+| `branch-worktree-check.py` | PreToolUse (Bash) | Branches are `<type>/<label>`, within 40 characters, created through a worktree |
+| `bash-guard.py` | PreToolUse (Bash) | Denies `cd` + `git`, root-wide sweeps, risky `git grep` forms, and load generators |
+| `push-gate.py` | PreToolUse (Bash) | Checks git identity and push credentials before `git push` and `gh pr create` |
+| `attribution-check.py` | PreToolUse (Bash) | Refuses AI attribution trailers and banners in published text |
+| `agent-registry-tracker.py` | PostToolUse (Bash) | Records which session or job created or edited each PR, for the `agents` skill |
 
-## References (6)
+## References
 
-Quick-reference documents for agents to consult.
+Documents agents consult while working, in `references/`: C++, Python and Vulkan guides
+(`modern-cpp.md`, `modern-python.md`, `modern-vulkan.md`), portability (`cpp-portability.md`),
+formatter and linter mechanics (`tooling.md`), machine load (`machine-load.md`), the shared
+challenge steps (`challenge-workflow.md`, `implementer-brief.md`, `dispatch-briefs.md`,
+`parallel-integration.md`, `concluding-work.md`), and the always-on `core-rules.md`.
 
-| Reference | Description |
-|-----------|-------------|
-| `modern-cpp.md` | C++20/23/26 features and migration patterns |
-| `modern-python.md` | Python 3.12+ features for build tooling |
-| `modern-vulkan.md` | Dynamic rendering, descriptor buffers, sync2 |
-| `cpp-portability.md` | Cross-platform pitfalls and portable solutions |
-| `tooling.md` | Formatter/linter configuration and command reference |
-| `dispatch-briefs.md` | Dispatch brief format |
-
-Code style is **not** here: `Docs/StyleGuide.md` lives in the repository, since it is agent-agnostic.
-
-## Project Conventions
-
-- **No exceptions** — `try`, `catch`, `throw`, `noexcept` are forbidden
-- **Tab indentation** — C++ and Python use tabs
-- **PascalCase** — types, functions, and variables
-- **`m_` prefix** — private members
-- **`#pragma once`** — all headers
-- **Platform isolation** — no `#ifdef` guards; platform code in liaison modules
-- **Named namespaces only** — anonymous namespaces break unity builds
+Code style is **not** here: `Docs/StyleGuide.md` lives in the Phoenix repository, since it is
+agent-agnostic, alongside `Docs/Patterns.md` and `Docs/Lexicon.md`.
 
 ## License
 

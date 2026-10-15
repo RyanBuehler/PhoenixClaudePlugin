@@ -1,11 +1,11 @@
 ---
 name: verify
-description: Full CI-mirror verification sequence — configure, build, format check, lint, policy audits, and test through Forge. The mandatory pre-commit check.
+description: Full CI-mirror verification sequence — configure, build, format check, lint, policy audits, and test through Forge. The mandatory check before a PR opens.
 ---
 
 Run the full CI-mirror verification sequence. Stop on the first failure.
 
-Run this **before committing**. A commit made without passing verification is incomplete work.
+Run this before a PR opens. One run may cover several commits, such as a stack's layers.
 
 `forge verify <profile>` *is* the CI mirror. The phases run **audits → tool-tests → configure →
 build → format-check → lint → test**, and the audits lead deliberately: none of them reads build
@@ -19,8 +19,7 @@ and an abort prints `verify stopped at <phase>, so these phases did not run: …
 authoritative statement of what was and was not checked. A run whose output carries no `test` tally
 has tested nothing, however it exited.
 
-**It verifies one profile, not the project** — the failure mode that has most often convinced an
-agent it verified work it had not. See §2a.
+**It verifies one profile, not the project** — see §2a for which profiles a change needs.
 
 ## 1. Locate the Builder
 
@@ -74,15 +73,14 @@ the binary-staleness check and requires rebuilding.
 ### 2a. Scope — one verify covers one profile
 
 `forge verify editor` proves nothing about any other profile. Most importantly it **does not run
-Forge's own trials**: a change under `Applications/Forge/` can be green here and broken in CI. That
-has happened twice, and a human caught it, not this workflow.
+Forge's own trials**, so a change under `Applications/Forge/` can be green here and broken in CI.
 
 - **The local set is `editor`, plus what the change owns.** Always `editor` — it is the coverage
   hub for engine trials. Add the app profile whose own directory you changed (`vigil`,
   `crucible`, `forgegui`), and `forge` when the builder changed.
-  **Do not mirror CI's lane set.** CI runs every lane on any `Applications/Forge/` change; copying
-  that locally once cost one agent seven profiles. `minimal` stays CI's: it is a cold build in its
-  own tree, and it fails only for a missing dependency declaration.
+  **Do not mirror CI's lane set** — CI runs every lane on any `Applications/Forge/` change, and
+  repeating that locally costs a cold build per profile. `minimal` stays CI's: it is a cold build
+  in its own tree, and it fails only for a missing dependency declaration.
 - A change touching the builder needs `"$FORGE" verify forge` explicitly, in addition to `editor`.
 - **Adding a module manifest, or an application `requires_module` entry, invalidates Forge's
   module-metadata fixtures** (`Applications/Forge/Trials/CodeGen/Fixtures/expected_modulemetadata_forge_*.cpp`).
@@ -90,15 +88,13 @@ has happened twice, and a human caught it, not this workflow.
   Regenerate them with `"$FORGE" regenerate-fixtures`, which renders the same scan the fixture trial
   does, then review the diff — it should show only your change. Build-free pre-check: grep both
   fixtures for the new module name.
-- **A change that edits a build profile must verify that profile.** Do not report a set of profiles
-  as verified unless each one was actually run — a dispatch brief once listed six verified profiles
-  while the commit under review edited six *others*, none of which any listed run touched.
+- **A change that edits a build profile must verify that profile.** Report a profile as verified
+  only when you ran it.
 - When reporting verification to a user, a reviewer, or a PR body, name the profiles you ran. "Verify
   passed" without a profile is not a claim anyone can check.
-- **`editor-debug` compiles no trials** (`tests_enabled: false`), as does `editor-release`, so a
-  green debug build says nothing about trial code — one run reached a `REQUIRES` compile error only
-  under `verify editor`. When a challenge says "the editor profile in debug", it still means
-  `editor` for anything a trial must prove.
+- **`editor-debug` compiles no trials** (`tests_enabled: false`), nor does `editor-release`, so a
+  green debug build says nothing about trial code. When a challenge says "the editor profile in
+  debug", it still means `editor` for anything a trial must prove.
 
 ### 2b. Flags, and the failures that are not yours
 
@@ -154,5 +150,5 @@ has an empty C++ set — that is the no-C++ signal, not a real failure.
 
 ## 4. Report
 
-Tell the user whether all phases passed or which phase failed (with its inline output). If all
-passed, the work is cleared to commit.
+Tell the user whether all phases passed or which phase failed (with its inline output), and name
+each profile you ran. If all passed, the work is cleared for a PR.

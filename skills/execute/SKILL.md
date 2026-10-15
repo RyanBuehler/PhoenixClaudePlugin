@@ -1,987 +1,371 @@
 ---
 name: execute
-description: Autonomously execute N Crucible challenges via subagents (at most 3 at once) with zero user interaction. Runs independent challenges in parallel, sagas in order, and groups related small challenges into one PR.
+description: Autonomously execute N Crucible challenges via subagents (at most 3 at once) with zero user interaction. Runs independent challenges in parallel, dependent ones as stacked PRs, and groups related small challenges into one PR.
 disable-model-invocation: true
 allowed-tools: Read, Edit, Write, Bash, Glob, Grep, Agent
 ---
 
-Autonomously execute Crucible challenges using subagents. No user interaction required -- the challenge JSON is the complete spec. Report results at the end.
+Execute Crucible challenges autonomously through subagents and report at the end. The challenge
+JSON is the whole spec; nothing waits on the user.
 
-Integration follows [parallel integration](../../references/parallel-integration.md): check
-sibling contracts before dispatch and after rebases; dependent stacks use its native-stack or
-replacement-branch lifecycle instead of the ordinary main-rebase steps below. Negative controls
-follow [the witness protocol](../../references/negative-controls.md); include its witness rows
-in test-writing briefs and the verification report.
+Load each reference at the step that needs it:
+
+- [Challenge workflow](../../references/challenge-workflow.md): bootstrap, claim and worktree,
+  publish, sibling reconciliation, landing, feedback log.
+- [Dispatch briefs](../../references/dispatch-briefs.md): reviewer dispatch and prompts, fix
+  passes, the review gate, waiting on builds.
+- [Implementer brief](../../references/implementer-brief.md): the implementer prompt.
+- [Parallel integration](../../references/parallel-integration.md): sibling contracts before
+  dispatch and after rebases, and the stack lifecycle.
+- [Negative controls](../../references/negative-controls.md): witness rows for test-writing briefs
+  and the verification report.
 
 ## Arguments
 
-- **`<N>`** -- execute the next N eligible challenges (saga-aware priority selection)
-- **`<saga-label>`** -- execute all remaining todo challenges in a specific saga
-- **`next`** -- shorthand for executing the next 1 eligible challenge
+- **`<N>`**: the next N eligible challenges (saga-aware selection).
+- **`<saga-label>`**: every remaining todo challenge in that saga.
+- **`next`**: the next one eligible challenge.
 
-Determine which mode by checking if the argument is a number, "next", or a string label.
+## Stacks and verification points
+
+Terms, used only in these senses: a **stack** is a chain of dependent work; a **layer** is one link
+of it; a **group** is several challenges combined onto one branch and PR (Step 3), which counts as
+one layer; **wave** N is every stack's Nth layer; **verification point** and **checkpoint** are
+defined below.
+
+**Dependent work is a stack.** A challenge that depends on unmerged work in this run (a saga
+successor, or the later of two challenges with overlapping `affected_files`) is a **layer**: its own
+branch and worktree off the parent layer's tip, and its own PR based on the parent's branch. A layer
+starts once its parent has committed, not after the parent's review or verify. Independent stacks
+(a lone challenge is a stack of one) run in parallel. Stack lifecycle follows [parallel
+integration](../../references/parallel-integration.md) §Native stack lifecycle; Ryan merges
+bottom-up with "Create a merge commit", never "Update branch".
+
+**Verify once per stack, at its top.** Builds are the bottleneck: each worktree's first build is
+cold, and all builds share a box that is also a CI runner.
+
+- The **verification point** is the top layer, verified after review fixes and main integration
+  (4d), so one `/phoe:verify` covers every layer. Its implementer only builds; lower layers do not
+  bootstrap or build, and their build-dependent Verification Commands run at the verification point.
+- Add a **checkpoint** (verify a lower layer in its own worktree) only when the layer edits a build
+  profile, Forge, the toolchain or CI; changes a module interface the layers above build against;
+  reports correctness concerns; or sits about five layers above the last checkpoint.
+- Fix and triage passes run an incremental `forge build` where the layer already builds, nothing
+  where it defers. Verify after the last review round, not every round, and never re-verify a tree
+  nothing changed.
+- No PR opens without a green verify at or above its layer. Each PR's CI proves its layer builds
+  alone.
+
+**Carrying a lower-layer fix up.** Bottom-to-top, from each child's worktree. Unpushed: `git -C
+<child-worktree> rebase --onto challenge/<parent-branch-label> <old-parent-tip>`. Pushed: never
+rebase; `git -C <child-worktree> merge challenge/<parent-branch-label>`, then push.
+
+## Concurrency cap
+
+At most **3** subagents run at once across the whole run: implementers, fix and triage passes and
+reviewers all count, and a background agent counts until its notification arrives. A wave with more
+than 3 layers runs in batches, dispatching the next as one returns. One layer's three reviewers fill
+the cap on their own. Unbounded fan-out has exhausted Ryan's usage in a single run; grouping
+(Step 3) is the other lever.
 
 ## 1. Bootstrap
 
-Run `/phoe:build crucible` so both `crucible` and `crucible-server` exist and match the expected version. The first build is a clean build; subsequent invocations are no-ops. If `/phoe:build crucible` stops with a version mismatch, stop here and report it to the user.
+Follow [challenge workflow](../../references/challenge-workflow.md) §1. Then check the main
+checkout is clean (`git status --porcelain`); if not, stop and tell the user to commit or stash.
 
-**Locate the Crucible CLI — discover it, don't hardcode a path.** Forge places the binary in a per-profile subtree whose name varies with host and build config, under both the configured build tree (`Applications/Forge/.forge/`) and the bootstrap output (`Applications/Forge/.forge-out/`) — take the **newest**, since a stale `.forge-out/` copy still reports a plausible version, so resolve it into `$CRUCIBLE`. Every crucible call in this document runs from the main repo root. Each Bash block is a fresh shell, so the variable will not carry across the separate blocks — re-run this `find` (or substitute the path it resolved) in each block that calls the CLI:
+## 2. Resolve challenges
 
-```bash
-CRUCIBLE=$(find Applications/Forge/.forge Applications/Forge/.forge-out -type f \
-    -path '*/bin/crucible' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
-[ -x "$CRUCIBLE" ] || { echo "crucible not found — run /phoe:build crucible first"; exit 1; }
-```
+**For `<N>` or `next`:** the pool is every `todo` challenge, in a saga or an **orphan** (in none);
+both compete equally.
 
-The Crucible server is a user-managed process outside the plugin's scope — do not start it. If the CLI can't reach a server, the first `"$CRUCIBLE"` call below will fail with a clear error; surface that to the user and stop.
+1. Detect landed challenges in `review` ([challenge workflow](../../references/challenge-workflow.md)
+   §2).
+2. List the pool: `"$CRUCIBLE" --json saga list`, `"$CRUCIBLE" --json challenge list --status=todo`,
+   and the orphans with `... --status=todo --no-saga`.
+3. Unblock: for each `"$CRUCIBLE" --json challenge list --status=blocked` entry whose `blocked_by`
+   challenge is now merged, `"$CRUCIBLE" challenge unblock <ID> todo`.
+4. Saga order: keep only challenges whose saga predecessors are all `merged` or `canceled`. Orphans
+   pass.
+5. Implicit cross-saga blockers, precision first. Prose can tie a challenge to unmerged work in
+   another saga. A false skip strands an eligible challenge while a missed blocker costs one later
+   verify failure, so skip only when all three hold against the same unmerged challenge (orphans
+   included, both ways):
+   - **A.** The candidate's description, strategy or criteria contain a qualified token:
+     `Namespace::Identifier`, `Module.Type` or a file path. Bare PascalCase names do not count.
+   - **B.** The unmerged challenge has the token in its prose and its `affected_files`, so it
+     introduces or modifies it rather than mentioning it.
+   - **C.** The two challenges' `affected_files` overlap.
 
-Confirm Crucible is reachable and initialized for this project:
+   Record the skip as `blocked by <other-label> (saga #<id> or orphan) via <Token> in <file>`. It is
+   a scheduling hint, not a Crucible block: the user may judge the dependency stale.
+6. Pick by priority (critical > high > medium > low), then lowest ID, until N are selected. Skip a
+   candidate another candidate blocks.
+7. Screen out owner-gated challenges before any setup: a description or strategy whose first
+   sentence opens with a gate ("DESIGN FORK FOR RYAN", "Do not implement as written", "Ryan picks
+   before implementation") is not autonomously executable.
+8. Audit each selected challenge against `origin/main`. Unrelated PRs do deliver challenges; where
+   the work is done, say so and move the challenge rather than producing an empty diff.
 
-```bash
-"$CRUCIBLE" status
-```
+**For `<saga-label>`:** `"$CRUCIBLE" --json saga show --label=<SAGA_LABEL>`. Its todo challenges,
+in saga order, form one stack. Orphans are not included.
 
-Verify workspace is clean:
+Report every skip (owner-gated, already delivered, implicit blocker, wave full) in the final
+report. If nothing is eligible, report that and stop.
 
-```bash
-git status --porcelain
-```
+## 3. Plan stacks and groups
 
-If there are uncommitted changes, stop and tell the user to commit or stash first.
+Build the dependency graph:
 
-Probe remote reachability before attempting a fetch — sandboxed agent containers often have no SSH agent or credentials and would otherwise fail noisily with `Host key verification failed` / `Could not read from remote repository`:
+- **Same-saga edge:** the lower saga position goes first.
+- **File-overlap edge:** of two challenges with overlapping `affected_files`, the lower ID goes
+  first.
 
-```bash
-if git ls-remote --exit-code origin HEAD >/dev/null 2>&1; then
-    REMOTE_REACHABLE=1
-else
-    REMOTE_REACHABLE=0
-fi
-```
+The edges form stacks. A layer has one parent, so a challenge with predecessors in two stacks joins
+them into one, ordered by ID. Mark each stack's verification point and checkpoints.
 
-If **reachable** (`REMOTE_REACHABLE=1`), fetch and fast-forward when appropriate:
+**Then group where it makes sense.** Challenges that ship better as one PR share one branch, one
+implementer, one verify, one review round and one PR. Group when they share a surface (a module or
+overlapping `affected_files`; a file-overlap edge between two small challenges is usually better
+grouped than stacked) or are each a few lines or prose. Never group a large or risky challenge,
+challenges in unrelated modules, or more than 4. When unsure, don't: a failed member blocks its
+whole group.
 
-```bash
-git fetch origin main
-git log main..origin/main --oneline
-```
-
-If there are new commits, fast-forward: `git checkout main && git pull --ff-only origin main`.
-
-If **unreachable** (`REMOTE_REACHABLE=0`), emit a single warning line to the user — e.g., `"origin unreachable, skipping fetch; working from local main"` — and proceed from local main without fetching. Do not abort; do not retry. In autonomous runs the user isn't available to supply credentials, and the work is still valuable against local main.
-
-## 2. Resolve Challenges
-
-**If argument is a number N or "next":**
-
-Use saga-aware priority logic to select N eligible challenges. The candidate pool is the union of saga-attached `todo` challenges and orphan `todo` challenges (challenges that belong to no saga). Both are first-class — orphans have no themed-saga lineage but participate in priority/dependency selection just like saga members.
-
-1. List all sagas: `"$CRUCIBLE" --json saga list`
-2. List all todo challenges: `"$CRUCIBLE" --json challenge list --status=todo`
-3. Note which of those are orphans for downstream filters: `"$CRUCIBLE" --json challenge list --status=todo --no-saga`. Orphans are challenges with no saga membership; they trivially pass the same-saga ordering check (no predecessors) but still participate in the cross-saga blocker scan and priority selection.
-4. Auto-unblock any blocked challenges whose blockers are now merged:
-   ```bash
-   "$CRUCIBLE" --json challenge list --status=blocked
-   ```
-   For each, check if the `blocked_by` challenge is now merged. If so: `"$CRUCIBLE" challenge unblock <ID> todo`
-5. For each candidate, check saga ordering -- only pick challenges whose saga predecessors are all `merged` or `canceled`. Orphans skip this check (no saga, no predecessors).
-6. **Scan for implicit cross-saga blockers (precision-first).** Same-saga ordering only catches explicit dependencies; a challenge may reference a symbol or file from an *unmerged* challenge in a *different* saga via prose. The goal here is to catch the obvious cases (A says "Loads via `Canvas::LoadLayout`" where `Canvas::LoadLayout` is introduced by an unmerged B), **not** to out-smart the implementer. A false-positive skip strands an eligible challenge; a missed implicit blocker becomes one verification failure later — so lean heavily toward letting candidates through. This filter applies to orphans too — they can implicitly block on saga work and vice-versa.
-
-   For each remaining candidate, apply these three filters in order and skip only when **all three** match against the same unmerged challenge:
-
-   **A. Qualified token present.** Extract only qualified tokens from the candidate's `description` / `strategy` / `acceptance_criteria` — `Namespace::Identifier`, `Module.Type`, file paths (`Engine/Modules/Rendering/Mosaic/Canvas.cpp`). Bare PascalCase names (`Config`, `Canvas`, `RenderPass`) are too common; ignore them.
-
-   **B. Unmerged challenge introduces the token.** For each unmerged challenge in any saga, the token must appear in both its prose AND its `affected_files` (i.e., the unmerged challenge is where the symbol is being *introduced* or *modified*, not just mentioned for context). If the token only shows up in the unmerged challenge's prose — as a reference, analogy, or completed API mention — do NOT skip.
-
-   **C. File overlap.** The candidate's `affected_files` must also overlap with the unmerged challenge's `affected_files`. Two challenges that discuss the same symbol but touch disjoint files are not actually coupled.
-
-   Only when A, B, and C all match the same unmerged challenge should the candidate be skipped. Record the skip as: `"blocked by <other-label> (saga #<id> or orphan) via <Token> in <file>"`. Do not auto-mark as blocked in Crucible — this is a scheduling hint, not a state change, and the user may judge the dependency is stale. Include the full skip reason in the final report so the user can override if the heuristic was wrong.
-7. Among the candidates that pass both explicit and implicit blocker checks, pick by: priority (critical > high > medium > low), then lowest ID.
-8. Repeat until N challenges are selected. Skip challenges that would be blocked by other challenges in the candidate list.
-
-9. **Screen out owner-gated candidates before any setup.** A challenge whose `description` or
-   `strategy` opens with a gate — "DESIGN FORK FOR RYAN", "Do not implement as written", "Ryan picks
-   before implementation" — is not autonomously executable. Scan the first sentence of each for
-   those markers and short-circuit to the report; otherwise a run bootstraps, fetches and selects
-   before discovering every candidate is un-runnable.
-10. **Audit each selected challenge against `main` before implementing it.** Challenges do get
-   delivered by unrelated PRs — one had five of six criteria already met. Where the work is done, say
-   so and move the challenge rather than producing an empty diff.
-
-Report skipped candidates (owner-gated, already-delivered, implicit-blocker, and
-priority/wave-already-full reasons alike) in the final execute summary so the user can see the
-selection trail.
-
-**If argument is a saga label:**
-
-```bash
-"$CRUCIBLE" --json saga show --label=<SAGA_LABEL>
-```
-
-Collect all todo challenges in saga order. These will be executed sequentially. Saga-scoped mode is explicitly bounded — orphans are NOT included even when otherwise eligible.
-
-If no eligible challenges exist, report this and stop.
-
-## 3. Classify Parallelism
-
-Build a dependency graph among the resolved challenges:
-
-- **Same-saga edge:** If challenges A and B are in the same saga and A has a lower position, A must complete before B.
-- **File-overlap edge:** If challenges A and B have overlapping `affected_files`, the lower-ID challenge goes first.
-
-Partition into execution **waves** via topological levels:
-- **Wave 0:** All challenges with no incoming dependency edges (can run in parallel).
-- **Wave 1:** Challenges whose only predecessors are in wave 0.
-- Continue until all challenges are assigned.
-
-**Then group where it makes sense.** Challenges that would ship better as one PR go onto one
-combined branch (4a), handled by one implementer, one verify, one review round, and one PR. Group
-when the challenges share a surface (same module or overlapping `affected_files` — a file-overlap
-edge between two small challenges is usually better grouped than serialized across waves), or are
-each only a few lines or prose. Do not group a large or risky challenge with anything, challenges in
-unrelated modules, or more than 4. A group is one **dispatch unit**; an ungrouped challenge is its
-own unit. When unsure, don't group — a failed member blocks its whole group.
-
-Print the execution plan:
+Print the plan:
 
 ```
 Execution Plan:
-  Wave 0 (parallel): #42 add-viewport-resize, #54 forge-compiler-launcher
-  Wave 1 (sequential): #43 wire-canvas-events (depends on #42)
-  Wave 1 (group, one PR): #57 rename-tessera-padding + #58 tessera-padding-docs (shared surface)
+  Stack A: #42 add-viewport-resize -> #43 wire-canvas-events -> #44 canvas-resize-trials [verify]
+  Stack B: #54 forge-compiler-launcher [checkpoint: edits Forge] -> #55 forge-launcher-docs [verify]
+  Stack C (group, one PR): #57 rename-tessera-padding + #58 tessera-padding-docs [verify]
+  Wave 0 (parallel): #42, #54, #57+#58    Wave 1: #43, #55    Wave 2: #44
 ```
 
-## 4. Execute Waves
+## 4. Execute waves
 
-For each wave, execute the following steps:
-
-### Concurrency cap — at most 3 subagents in flight
-
-Never have more than **3** subagents running at once, across the whole run: implementers, fix and
-triage passes, and reviewers all count, and a background agent counts until its notification
-arrives. A wave with more than 3 dispatch units runs in batches — dispatch the next unit as one
-returns. 4e's three reviewers for one unit fill the cap on their own, so nothing else runs beside
-them. Unbounded fan-out (3 reviewers × rounds × parallel challenges) has exhausted Ryan's usage in
-a single run; grouping (Step 3) is the other lever, since a group costs one unit.
+4a-4c and 4e-4g run per layer; 4d and 4h run per verification point or checkpoint, covering every
+reviewed layer beneath it.
 
 ### Docs-only fast path
 
-Classify each challenge before running its steps. A challenge is **docs-only** when its
-`affected_files` and acceptance criteria touch no C++, build, or test code -- the deliverable is
-a design document, spec, or other Markdown/prose artifact. Everything else is a **code**
-challenge and runs the full 4a-4h cycle below unchanged.
+A challenge is **docs-only** when its `affected_files` and criteria touch no C++, build or test
+code (a design doc, spec or other prose). Everything else runs 4a-4h unchanged. For docs-only:
 
-The full 4d/4e/4f cycle is calibrated for code, where CRITICAL means "may crash production". For
-a design doc, CRITICAL means "this number is wrong" or "this assumes infrastructure that does not
-exist" -- both reviewable on the PR rather than requiring a second verification pass. So docs-only
-challenges diverge as follows (step numbers still map to 4a-4h):
-
-- **No build, no `/phoe:verify`.** Skip `/phoe:build` and `/phoe:verify` -- there is nothing to
-  compile or test. Drop steps 1 (populate build dir) and 6 (run `/phoe:verify`) from the
-  implementer subagent prompt and tell it the change is prose-only.
-- **4d becomes a prose-ground check.** In place of build+verify, scan the draft for grounding
-  defects: path references that do not resolve (`Engine/<X>/`, `Project/<X>/`, nonexistent
-  helpers / toolchains / inspector pages -- see the Grounding constraint) and determinism claims
-  with no stated posture. Fix what you find before review.
-- **Single-round review (4e/4f).** Run ONE adversarial review pass and ONE fix pass, then advance
-  to PR. The fix pass must resolve every CRITICAL and WARNING (WARNING is a blocking tier here too);
-  log only suggestions/notes and advance. Re-enter a second review+fix round ONLY if the first-round
-  CRITICAL count is >= 3. The spec and quality reviewers remain optional adds; the adversarial pass
-  plus the grounding check is the gate.
-- **Suppress task-tool reminders in the subagent.** Tell the docs-only implementer subagent to
-  ignore any "task tools haven't been used recently" harness reminders -- the orchestrator owns
-  wave-level task tracking, and a single-file design doc does not benefit from a local task list.
+- **No build and no `/phoe:verify`.** Skip the Forge bootstrap; drop Your Job steps 1 and 6 from
+  the implementer brief, say the change is prose-only, and tell it to ignore "task tools haven't
+  been used recently" reminders (the orchestrator tracks the wave).
+- **4d becomes a grounding check.** Scan the draft for path references that do not resolve
+  (`Engine/<X>/`, `Project/<X>/`, nonexistent helpers, toolchains or inspector pages) and
+  determinism claims with no stated posture, and fix them before review.
+- **One review round.** Run the adversarial reviewer (spec and quality are optional adds) and one
+  fix pass, which must clear every CRITICAL and WARNING; then advance to the PR, logging suggestions
+  and notes. Run a second round only if the first found 3 or more CRITICALs. A CRITICAL in a doc
+  means a wrong number or assumed infrastructure, which the PR's review can weigh.
 
 ### 4a. Setup
 
-Worktrees are mandatory for every challenge — the plugin's `branch-worktree-check.py` hook blocks bare `git checkout -b` / `git switch -c` / `git branch <name>` at tool-use time (by design, to enforce one-worktree-per-branch). `git worktree add -b <name>` is the only supported way to create a challenge branch.
+Each layer gets a branch by one strategy, fixed for the wave:
 
-Every worktree is an independent checkout with its own Forge output tree (`Applications/Forge/.forge/`), so each worktree pays a first-time cold build (~3–4 min). That cost is inherent to the isolation, not avoidable by branching on main — so the implementer subagent runs `/phoe:build` as its first concrete action (see 4b, step 1 of the subagent prompt).
+- **Branch-per-challenge:** independent; its own branch and worktree off main, its own PR.
+- **Stack layer:** dependent; its own branch and worktree off the parent layer's tip, its own PR
+  based on the parent's branch. Never extend the parent's branch instead.
+- **Combined branch:** one Step 3 group; one branch and worktree named after its lowest-ID member,
+  one PR. Never rename it (the hook requires the folder to match the branch). It sits in its latest
+  member's wave and can be a stack layer.
 
-#### Branch strategy decision (per wave)
+For each challenge, run [challenge workflow](../../references/challenge-workflow.md) §3 from the
+main repo root, with these differences:
 
-Before creating worktrees, decide how challenges in the wave map onto branches. Two patterns:
+- A challenge no longer `todo` was claimed by a parallel run: drop it and log "Pre-empted by
+  parallel agent". A claim to undo (pre-empted, blocked, base-ref conflict) moves back to `todo`.
+- `<base-ref>` is `origin/main` for an independent challenge or a stack's bottom, and
+  `challenge/<parent-branch-label>` for a layer above it. Record that tip as the layer's **parent
+  SHA**: its review base, restack point and PR range start.
+- A group member after the first reuses the group's worktree; claim it as normal.
+- Skip §3 step 4 (entering); 4b places implementers.
+- Bootstrap Forge (§3 step 5) only in a worktree that will build: a verification point or
+  checkpoint. A deferred layer or docs-only challenge never builds. Each building worktree pays a
+  cold first build of a few minutes.
 
-- **Branch-per-challenge** (default) — every challenge gets its own `challenge/<branch-label>` branch
-  and worktree, so parallel units run simultaneously without colliding. Each challenge ends up as
-  its own PR.
-- **Combined branch** — multiple challenges share one branch and one worktree and ship as one PR.
-  Used for a group chosen in Step 3, or for a short dependent chain (rule 2), and capped at 4
-  challenges. Long chains are still better as branch-per-challenge so an early failure does not
-  block the whole batch.
+### 4b. Implement
 
-Apply this rule to each wave:
+Dispatch one implementer per layer into its worktree, with the
+[implementer brief](../../references/implementer-brief.md). Its Verification Role is BUILD at a
+verification point or checkpoint and DEFER elsewhere.
 
-1. A group from Step 3 uses a **combined branch** named after its lowest-ID member. Its members
-   may come from different waves; place the group in the latest of them. Every other challenge in
-   a parallel wave uses **branch-per-challenge**.
-2. If the wave is a single challenge whose predecessor was the prior wave's only challenge
-   *and* both belong to the same saga *and* the prior challenge has not yet been merged to
-   `main`, prefer **combined branch** — extend the prior challenge's branch in the same
-   worktree rather than branching from main. The combined branch **keeps the first challenge's
-   `challenge/<first-branch-label>` name and its `.claude/worktrees/challenge-<first-branch-label>` worktree** —
-   that path↔branch pair is exactly what `branch-worktree-check.py` validated when the worktree was
-   first created. Do **not** rename the combined branch to a saga label (`challenge/saga-...`): the
-   worktree path would no longer match the branch, and the hook enforces `.claude/worktrees/<branch
-   with slashes as dashes>`. The chain's shared identity is the first challenge's branch label; the combined
-   PR body lists every challenge it carries.
-3. Cap any combined branch at 4 challenges. After 4, start a fresh branch for the next chunk.
+**Placing an implementer.** The Agent tool has no `cwd`: a subagent inherits the orchestrator's. In
+a background session a subagent gets native `Write`/`Edit` and `git` only in the one worktree the
+orchestrator has entered with `EnterWorktree(path=<absolute path>)`; entering another revokes the
+previous one.
 
-Record the chosen strategy per challenge — it determines whether each challenge becomes its
-own PR or whether the wave shares a single combined PR (see step 4g). Do not change strategy
-mid-wave.
+- **Serial (default):** enter A, dispatch A, await it, enter B, and so on. A stack's layers are
+  serial anyway; parallelism comes from independent stacks.
+- **Parallel:** dispatch up to 3 at once and tell each to author files through Bash (single-quoted
+  heredocs for new files, a `python` exact-string replace with `assert count == 1` for edits).
+  Their `git` is refused, so the orchestrator enters each worktree in turn to commit for it.
+- Use the general-purpose agent. Never pass `isolation: "worktree"`: it creates a fresh worktree
+  off main and ignores the prepared branch. The `phoe:invoke-*` specialists carry it, so they are not
+  implementers. Never let a subagent call `EnterWorktree`; it reports success and then breaks Bash.
+- Forge bounds build load itself (`/phoe:verify` §2b); only cold bootstraps need serializing.
 
-For each challenge in the wave:
-
-1. Read the full challenge JSON (run from the main repo root):
-   ```bash
-   "$CRUCIBLE" --json challenge show --label=<LABEL>
-   ```
-2. Re-confirm status is still `todo` (parse from the JSON above). Another agent's parallel
-   `/phoe:execute` may have claimed it since Step 2. If status is anything else, drop the
-   challenge, log "Pre-empted by parallel agent" in the final report, and continue.
-3. **Claim it immediately** — move to `active` *before* creating the worktree, so the window in
-   which a parallel `/phoe:execute` could grab the same challenge is as small as possible. Run from
-   the main repo root so the crucible binary resolves:
-   ```bash
-   "$CRUCIBLE" challenge move --label=<LABEL> active
-   ```
-   The claim is revertable: if the challenge is later dropped (pre-empted, blocked, base-ref
-   conflict), move it back with `... challenge move --label=<LABEL> todo`.
-4. Create the worktree and branch from the main repo root, basing it on the right ref so the PR
-   diff is clean and dependencies are visible without ever writing local `main`:
-   - **Default:** base on `origin/main` when the remote is reachable (`REMOTE_REACHABLE=1` from
-     Step 1), else local `main`.
-   - **Stacked dependency:** if this challenge depends on an earlier challenge *in this run* whose
-     work is not yet on `origin/main` -- a cross-wave dependency that is not already on a shared
-     combined branch -- base it on that predecessor's branch tip (`challenge/<predecessor-branch-label>`)
-     instead, so the dependency is present locally without merging anything into `main`.
-   ```bash
-   git worktree add .claude/worktrees/challenge-<branch-label> -b challenge/<branch-label> <base-ref>
-   ```
-   where `<base-ref>` is `origin/main`, `main`, or `challenge/<predecessor-branch-label>` per the rule above.
-   `<branch-label>` is the challenge label cut so `challenge/<branch-label>` fits the hook's
-   40-character cap (see the plugin CLAUDE.md, Branch & Worktree Workflow); a long Crucible label
-   is refused, and the refusal names the shortened branch to use. Use `git worktree add -b`: the
-   `branch-worktree-check.py` hook blocks `git checkout -b`, `git switch -c` and `git branch
-   <name>`, and requires the folder to be the branch with `/` as `-` (or a name registered under
-   `.claude/worktrees/.branches/`). Do **not** substitute `EnterWorktree(name=...)` — that mints its own branch/path
-   naming and cannot control the base ref. Isolation-guard recognition comes separately, via
-   `EnterWorktree(path=...)` in 4b.
-5. **Bootstrap Forge in the new worktree.** A fresh worktree can lack its own
-   `Applications/Forge/.bootstrap-out/forge` even when the main checkout is warm — the implementer's
-   first `/phoe:build` (4b) bootstraps it, but doing it here as part of setup avoids a cold first
-   build surprising the implementer:
-   ```bash
-   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/forge_wait.py start --log .claude/worktrees/challenge-<branch-label>/.forge-wait/bootstrap.log -- python3 .claude/worktrees/challenge-<branch-label>/Applications/Forge/Scripts/bootstrap.py
-   ```
-   Run it in the **foreground** with `timeout: 600000`. It blocks until the bootstrap exits (or
-   9.5 minutes pass, when it prints the `wait --log ...` call to repeat), so the binary exists when it
-   returns `exited 0`. Do not watch the bootstrap's log or poll for the binary: each look is a
-   full-context request. 4b has the implementer build first, and against a bootstrap still in flight
-   that build dies with `No such file or directory`, which reads like a broken tree. Tell the
-   implementer not to edit during the bootstrap — it bakes the on-disk tree into the binary.
-
-**Two worktree-navigation traps, both of which silently point work at the wrong branch:**
-
-- `EnterWorktree(path=…)` resolves a **relative** path against the current directory, so every entry
-  after the first is made from inside the previous worktree and `.claude/worktrees/<name>` targets a
-  *nested* one. Pass an absolute path — the opposite of `git worktree add`, whose hook demands a
-  relative one.
-- **Nothing stops you editing the previous challenge's worktree.** Exiting the worktree is part of
-  finishing a challenge, not an afterthought (see 4h).
-
-For challenges using the **combined branch** strategy (per the rule above), do NOT create a
-new worktree — reuse the existing combined worktree. Skip the `git worktree add` step and
-instead `cd` into the existing worktree. Move the challenge to `active` as normal.
-
-Each fresh worktree is an independent checkout; local `main` is never written by `/phoe:execute` —
-all work stays on the challenge branch through 4h (see 4d).
-
-**Parallel-build caching note (bug 8 follow-on).** When a wave has multiple challenges running in parallel, each worktree does a cold build. Configuring ccache project-wide so shared objects are cache hits (~30s vs ~4min rebuild) is a separate optimization tracked outside this command — not part of /phoe:execute's responsibility. See CLAUDE.md "Build Commands" for the worktree build constraint.
-
-### 4b. Implement (parallel within wave)
-
-Dispatch one implementer subagent per challenge; each works in the worktree pre-created for it in
-4a. Its prompt's Step 1 commands run there.
-
-**The Agent tool has no `cwd` parameter** — a subagent inherits the orchestrator's working
-directory. To place an implementer in its worktree, the orchestrator calls
-`EnterWorktree(path=".claude/worktrees/challenge-<branch-label>")` (combined branch: the shared worktree)
-*before* dispatching, so the subagent inherits that cwd.
-
-**Background-session write-guard.** When `/phoe:execute` runs as a background session, Claude
-Code's isolation guard rejects `Write`/`Edit` in any worktree the parent session has not entered
-through the harness ("parent bg session hasn't isolated yet") — a subagent there can `cd` and build
-via Bash but cannot use the native file tools. `EnterWorktree(path=...)` clears the guard **for the
-one worktree currently entered** — and only that one. Entering another worktree makes the previous
-one non-writable again (a single parent session holds one active cwd). This is why a parallel wave
-that entered only the first worktree left later implementers blocked. Two ways to run a wave:
-
-- **Serial-native (keeps native Write/Edit):** `EnterWorktree(path=<A>)` → dispatch A → **await A** →
-  `EnterWorktree(path=<B>)` → dispatch B → … Each implementer runs while its worktree is the active
-  one, so native file tools work — at the cost of running the wave one challenge at a time.
-- **Parallel-Bash (keeps concurrency):** dispatch every implementer in the wave at once, and tell
-  each in its prompt to author files **via Bash** — single-quoted heredocs for new files, `python`
-  exact-string replace with an `assert count == 1` for edits — which the guard does not intercept.
-  Native Write/Edit will be unavailable for all but the one entered worktree; the Bash path is the
-  supported fallback.
-
-Default to **serial-native** for small waves (≤3) where native tooling matters, and **parallel-Bash**
-for larger waves where concurrency is the point — still at most 3 implementers at once (see the
-concurrency cap). Do not claim native tools for a parallel wave — they will silently fail for every
-worktree but one.
-
-**Losing `git` is the half that bites.** A subagent in a worktree the parent has not entered has
-*every* `git` form refused, not just the file tools — so an implementer can finish and verify a
-change and then be unable to commit it. Either commit on each agent's behalf from the entered
-worktree, or dispatch with `isolation: "worktree"`, which lifts both guards (stack such work by
-pushing the base branch and having the next agent `git fetch` + `git reset --hard` onto it). Never
-let a dispatched agent call `EnterWorktree` itself — under an isolated parent it reports success and
-then bricks Bash. The parent's own access proves nothing about the subagent's: the orchestrator can
-`Write` into the entered worktree while its subagents there are refused.
-
-**Serialize the builds even when you parallelize the edits.** Eight concurrent Forge builds on a
-16-core box drove load to 98–116 and stretched bootstraps to 12–26 minutes and builds to 50–75, with
-no `--jobs` on `forge verify` to cap anything. The same incremental build measured 2m13s and 20m45s
-in one session, so wall-clock estimates under contention are fiction and a rotating `timeout after
-300s` in lint is a load artifact, not a finding. Fan out the edits; hand out build turns one at a
-time.
-
-**Never pass `isolation: "worktree"` to implementer subagents.** The branch and worktree already
-exist (4a); `isolation: "worktree"` spawns a *fresh, auto-named* worktree off `main`, so the
-subagent ignores the prepared `challenge/<branch-label>` branch and, on stacked/combined work, abandons
-its accumulated commits. Use the default **general-purpose** agent. (The specialist `phoe:invoke-*`
-agents carry `isolation: worktree` intrinsically and self-isolate off `main` — don't use them for
-stacked implementer work; if one was, recover the commit by fast-forwarding its `agent-<hash>`
-branch.)
-
-For a parallel wave of independent worktrees, enter-and-dispatch one worktree at a time (the
-orchestrator occupies a single cwd); within each, the implementer addresses files by absolute
-worktree path. Each dispatch unit is one implementer: a group's implementer gets every member's
-Challenge through Saga Context sections in the template below, works them in ID order, and commits
-once per challenge so each stays reviewable on its own.
-
-**Implementer subagent prompt template:**
-
-Construct the prompt with ALL of these sections -- the subagent has no conversation context:
-
-```
-You are autonomously implementing a Crucible challenge for the Phoenix engine.
-Work directly -- no user interaction. If you get stuck, report BLOCKED.
-
-## Challenge
-Title: <title>
-Label: <label>
-Description: <description>
-
-## Comments (verbatim from `crucible challenge comments --label=<label>`; "none" if empty)
-<comments -- these are newer than the description and win wherever the two disagree>
-
-## Strategy
-<strategy items, numbered -- or "No strategy provided, use your judgment based on the codebase">
-
-## Acceptance Criteria
-<numbered acceptance criteria>
-
-## Verification Commands
-<verification steps with commands>
-
-## Affected Files
-<list of files expected to be modified>
-
-## Saga Context
-<if applicable: saga name, this challenge's position, what prior challenges accomplished>
-
-## Project Conventions
-<paste relevant CLAUDE.md sections -- especially coding standards, naming conventions, build system>
-
-## Your Job
-
-1. **Populate the worktree's build tree, and wait for it.** Your `cwd` is a fresh git worktree with an empty `Applications/Forge/.forge/` tree. Build once as your first action — Forge configures and builds via the active profile. Do this before exploring: you'll want the built module artifacts present so `grep`/`Read`-based exploration works correctly on modules that use C++23 modules, and so your later `/phoe:verify` run is an incremental build, not a cold one.
-
-   A cold build here can exceed the ten-minute command timeout, so run it — and every later
-   `forge verify` — through the wait script, as a **foreground** Bash call with `timeout: 600000`:
-
-   ```bash
-   Applications/Forge/.bootstrap-out/forge configure editor
-   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/forge_wait.py start --log <worktree>/.forge-wait/build.log -- Applications/Forge/.bootstrap-out/forge build editor --summary
-   ```
-
-   Two separate calls: a fresh tree must be configured first, or the build fails in 0.0s with no
-   cause. `.forge-wait/` is gitignored, so the logs never reach a commit.
-
-   It blocks until the command exits, then prints the result once. If it reports `still running`
-   (exit 124 — not a failure), call the `wait --log ...` command it prints, again in the foreground,
-   until it reports `exited`. Do not read, `tail`, or `wc` the log while the run is going, and do not
-   sleep between calls: each look costs a full-context request, and that watching once spent nearly
-   half of every subagent's tokens. Read the phase lines it prints, not the exit code alone.
-   Full detail is in `${CLAUDE_PLUGIN_ROOT}/references/dispatch-briefs.md` §4. Do not end your turn
-   with edits unverified or uncommitted.
-2. Read the affected files and explore related Phoenix code to understand the context. **Ground your approach in Phoenix's own patterns** — if the challenge touches UI, read Mosaic/Tessera/Emblema code; if it touches input, read Impulse; if it touches the renderer, read Aurora/Prism/Vulkan code. Do NOT generalize from external frameworks (ImGui, Qt, React, etc.) or from memory of how similar problems are solved elsewhere — that frequently ships wrong assumptions into the diff. When in doubt, grep for analogous existing features and mirror their shape.
-3. Follow the strategy steps (if provided) or plan your own approach based on what you read in step 2
-4. Implement the changes
-5. Write tests if your implementation introduces new public interfaces or non-trivial logic
-   - Tests are NOT needed for: build system changes, config changes, pure wiring/delegation
-6. Run `/phoe:verify` — this runs configure, build, format-check, lint, the five policy audits
-   (forbidden-token, toolchain, trial-friend, IO-seam, heap-seam), and test through Forge with the
-   project's configured profile. Any audit short-circuits the run before `test`, so a run that
-   stopped at one has tested nothing. Fix any failures before proceeding. Do
-   NOT drive the Forge phases by hand to verify; `/phoe:verify` is the single entry point.
-7. Run the challenge's own Verification Commands (from the section above). These are scoped to
-   this specific challenge and complement the project-wide `/phoe:verify` sweep. Fix any failures.
-8. Self-review against each acceptance criterion
-9. Commit your changes with a descriptive message referencing the challenge label
-10. Report back
-
-## Constraints
-- Do NOT enter plan mode
-- Do NOT ask the user questions -- if you need information, read the codebase
-- **Comments outrank the description.** This challenge may have sat in the backlog while the tree
-  moved under it; a comment recording an intervening rename, or a behavior that landed since and
-  must not be dropped, is newer than the description. Follow the comment where the two disagree,
-  and report which description text you found stale -- do not reconcile it silently.
-- **New names: use your recommendation, flag it for confirmation.** Where CLAUDE.md or the challenge
-  says a new name needs Ryan's confirmation, do not stall: pick it through `Docs/StyleGuide.md`
-  §Naming, declare it in exactly one place so a rename stays cheap, and list every such name under
-  a `## Names Pending Confirmation` heading in your report (name, what it names, the runner-up).
-- Do NOT modify files outside the challenge's scope unless absolutely necessary
-- **Grounding -- cite only what exists.** Before referencing any project helper, type,
-  toolchain, tool, inspector page, script, vendored dependency, or directory -- in code,
-  comments, commit messages, or design-doc prose -- confirm it exists with `grep` / `Glob` /
-  `Read`. If the search returns nothing, do NOT assert it exists: drop the reference, or (in a
-  design doc) mark it explicitly as an **Upstream Dependency** still to be built. This is the
-  inverse of CLAUDE.md "Search before claiming the codebase lacks something" -- the same
-  discipline applies to claiming something *does* exist. Phoenix's tools live at the top-level
-  `Tools/`, NOT `Engine/Tools/`; there is no `Engine/Tools/` directory. Treat any
-  `Engine/<X>/`, `Project/<X>/`, or similar path as suspect until a `Read`/`Glob` confirms it.
-- **Determinism claims need a stated posture.** Any "bit-exact", "deterministic", or
-  "reproducible" claim must cite the explicit conditions that make it true: BLAS thread counts
-  (`OPENBLAS_NUM_THREADS=1` / `MKL_NUM_THREADS=1`), pinned library versions, seeded RNG. If you
-  cannot state the posture, downgrade the wording to "deterministic under <posture>" or
-  "best-effort reproducible". Bit-exact across BLAS-threaded numerics or an unpinned
-  compression library is false by default, even on a single host.
-- Follow the project's coding conventions (CLAUDE.md) — **and before writing any C++, read `Docs/StyleGuide.md` and `${CLAUDE_PLUGIN_ROOT}/references/tooling.md`** so the implementation conforms to enforced conventions (formatting, naming, comments, namespaces, return-value handling, `auto`, scope spacing, tooling). `${CLAUDE_PLUGIN_ROOT}` is the plugin install path (fall back to `~/phoenixclaudeplugin/references/` if it is unset)
-- Use plain ASCII only -- no unicode characters
-- **Do not yield your turn until committed + reported.** Ending your turn with edits unverified or uncommitted strands the work and the orchestrator cannot resume you mid-task. A build that outruns the command timeout is waited out with the wait script in step 1, not by yielding.
-- **Use worktree-absolute paths.** The paths in your prompt/context use the main-repo form (`/home/ryan/phoenix/...`), but the files you must edit live under the worktree prefix (`.claude/worktrees/challenge-<branch-label>/...`). Reading the main-repo path can serve stale content, and a later `Edit` then fails "File has not been read yet" — read and edit the worktree copy.
-- **This shell is zsh.** Quote `grep --include` globs (`'*.cpp'`, not `*.cpp`) and do not rely on unquoted `$VAR` word-splitting — pass file lists literally or use arrays. An unquoted multi-file variable collapses to a single argument and silently checks nothing.
-- **Numeric safety.** Any clamp / `min` / `max` over a caller-supplied float must guard with `isfinite`/`isnan` FIRST — `std::clamp`/`min`/`max` pass NaN straight through into casts and persisted state. This is a recurring CRITICAL class the adversarial reviewer keeps catching.
-- **Byte/format-parser safety.** Bound every allocation and element count by the actual payload/blob size BEFORE any `reserve`/`resize`/multiply; a hostile count field otherwise drives a multi-GB reserve or a `length_error`/terminate (Phoenix bans exceptions). Add an adversarial regression trial with inflated counts — the happy-path round-trip cannot catch this.
-- Use full descriptive variable names -- no abbreviations
-- Prefer sized integer types (int32_t, uint64_t) over platform-dependent types
-- Comments: default to none. Prefer one line; two or three for the genuinely complex. *Why*, not *what*. Paragraphs belong in the commit message. Full rules in `Docs/StyleGuide.md` §Comments.
-- TODO comments must follow the discipline in the plugin's CLAUDE.md "TODO Comments" section:
-  short, describe the work itself, never reference anything that can go stale (file paths, line
-  numbers, challenge labels, PR numbers, branch names, dates), and never narrate refactors you
-  just made. If a TODO needs more than one line, file it as a Crucible challenge instead.
-
-## Workflow Friction Log
-At the end of your report, include a "## Workflow Friction" section listing any issues
-you encountered that slowed you down or required workarounds:
-- Command errors or unexpected tool behavior
-- Missing or unclear context in the challenge spec
-- Codebase patterns that were hard to discover
-- Files that were harder to find than expected
-- Permission issues or sandbox limitations
-- **Context bloat** -- tools or defaults that flooded your context window with low-signal output.
-  Call these out specifically so they can be tuned. Examples:
-  - A Forge phase emitting per-node lines when only pass/fail + errors are needed (e.g. `--verbose`
-    left on, or `--json` withheld where a single result object would do)
-  - The engine running with verbose trace logging on by default, producing a wall of breadcrumbs
-    on every launch (Scribe traces, Vulkan validation spam, asset loader chatter, etc.)
-  - The trial runner printing full per-trial logs instead of a summary on success
-  - Any tool whose default output is so noisy that you had to grep/head/tail it to stay useful
-  When you flag a context-bloat item, name the specific tool/flag/subsystem so the fix is
-  actionable (e.g. "`forge build` streamed per-edge lines without `--json`" rather than "build
-  output was noisy").
-- Anything that would help future autonomous runs go smoother
-
-## Report Format
-
-Status: DONE | DONE_WITH_CONCERNS | BLOCKED | NEEDS_CONTEXT
-What was implemented: (summary)
-Tests added: (list or "N/A")
-Files changed: (list)
-Self-review: (per-criterion pass/fail)
-Concerns: (if DONE_WITH_CONCERNS)
-Blocker: (if BLOCKED -- what specifically is preventing progress)
-Questions: (if NEEDS_CONTEXT -- what specific information is needed)
-
-## Workflow Friction
-(list issues encountered)
-```
-
-### 4c. Handle Implementer Results
-
-For each returning subagent:
+### 4c. Handle implementer results
 
 | Status | Action |
 |--------|--------|
-| **DONE** | Proceed to 4d (Rebase + Verify) |
-| **DONE_WITH_CONCERNS** | Read concerns. If about correctness/scope: dispatch a targeted fix subagent. If observational: note and proceed. |
-| **BLOCKED** | Retry once: re-read the affected files and any files the subagent mentioned, enrich the prompt with additional context from the codebase, and re-dispatch. On second BLOCKED: mark challenge blocked in Crucible with detailed explanation, write checkpoint to `.claude/handoffs/<LABEL>-checkpoint.md`, **keep the branch and commits intact**. Skip to next challenge. |
-| **NEEDS_CONTEXT** | Retry once: read the subagent's questions, answer them by reading the codebase/CLAUDE.md/sibling saga challenges, and re-dispatch with enriched context. On second NEEDS_CONTEXT: mark blocked with unanswered questions as the reason, **keep the branch intact**. Skip. |
+| **DONE** | Dispatch the next layer, then review it (4e). 4d waits for the verification point. |
+| **DONE_WITH_CONCERNS** | Correctness or scope concerns: dispatch a targeted fix subagent, and consider a checkpoint. Observations: note them and proceed. |
+| **BLOCKED** | Retry once with the affected files, the files it named and more codebase context in the brief. Blocked again: block the challenge in Crucible with a detailed reason, write a checkpoint, keep the branch and commits, and move on. |
+| **NEEDS_CONTEXT** | Retry once, answering its questions from the codebase, the core rules and sibling challenges. Again: block it with the unanswered questions as the reason, keep the branch, and move on. |
 
-When marking a challenge blocked:
+A block needs a blocker (`challenge move ... blocked` is refused):
 
 ```bash
-"$CRUCIBLE" challenge move --label=<LABEL> blocked
+"$CRUCIBLE" challenge block <ID> --blocked_by=<BLOCKER_ID>
 ```
 
-Write a checkpoint file:
+Layers above a blocked layer name that layer as the blocker. The failing challenge itself needs a
+blocker challenge, filed first with `/phoe:crucible`, that describes the failure.
+
+Write the checkpoint to `.claude/handoffs/<LABEL>-checkpoint.md`:
 
 ```markdown
 # Checkpoint: <LABEL>
 ## Challenge
 <title and description>
 ## What Was Attempted
-<summary of subagent's work>
+<summary of the subagent's work>
 ## Why It Failed
-<specific failure reason from subagent report>
+<the specific failure from its report>
 ## Suggested Next Steps
-<concrete steps for human to continue>
+<concrete steps for a human to continue>
 ## Subagent Report
-<full subagent report for context>
+<the full report>
 ```
 
-### 4d. Rebase + Verify (sequential, per challenge in ID order)
+Never revert a blocked challenge's branch or discard its commits: partial work is context for
+resuming with `/phoe:implement <label>`. Keep branches, commits and checkpoint files.
 
-All post-implement work stays on the challenge branch in its own worktree. **Local `main` is never
-checked out, merged into, or committed to by `/phoe:execute`.** When more than one agent is active,
-local `main` is shared mutable state — writing to it bundles unrelated parallel commits into the
-PR (and the old "merge to main, fix on main, push the branch" flow silently left those fixes off
-the pushed branch entirely). The PR *is* the challenge branch; `main` only moves when a PR merges
-on the remote.
+### 4d. Integrate and verify
 
-For each completed challenge, working inside its worktree (`.claude/worktrees/challenge-<branch-label>`):
+Runs per verification point or checkpoint once 4f converges, in the layers' own worktrees. Local
+`main` is never checked out, merged into or committed to: parallel agents share it, and a PR built
+from it carries their commits. First confirm the stack's new names ([challenge
+workflow](../../references/challenge-workflow.md) §9) in one question round; other stacks keep
+working meanwhile. Then integrate main, so one verify covers the renames and the integration:
 
-1. Rebase the branch onto the freshest upstream so the PR diff is minimal. When the remote is
-   reachable (`REMOTE_REACHABLE=1` from Step 1):
+1. Rebase the stack's bottom onto `origin/main`, then restack each layer above it (`rebase --onto`,
+   as in carrying a fix up). Skip when main has not moved since the bottom was created. Check
+   sibling contracts after the rebase ([parallel
+   integration](../../references/parallel-integration.md) §Independent siblings and semantic
+   overlap).
    ```bash
-   git -C .claude/worktrees/challenge-<branch-label> fetch origin main
-   git -C .claude/worktrees/challenge-<branch-label> rebase origin/main
+   git -C .claude/worktrees/challenge-<bottom-branch-label> fetch origin main
+   git -C .claude/worktrees/challenge-<bottom-branch-label> rebase origin/main
    ```
-   When unreachable, skip the fetch and `git -C <worktree> rebase main` onto local `main`.
-   Combined-branch chains rebase the shared branch once, not once per challenge.
+2. On conflict, `rebase --abort` and block that layer and every layer above it with "Rebase conflict
+   with origin/main on files: <list>". Keep the branches.
+3. Run `/phoe:verify` in the verification point's worktree for the profiles `/phoe:verify` §2a
+   requires across every covered layer (one run covers one profile; never CI's lane set). Record
+   the profiles verified.
+4. Run every covered layer's Verification Commands.
+5. On failure, attribute it: the layer whose own range (`git diff --name-only <parent-sha>
+   <layer-tip>`) touched the failing file; when none or several match, verify the midpoint layer. A
+   fix subagent commits there; restack the layers above and verify again. On a second failure, block
+   that layer and those above it with the error output, keeping the branches; the layers below can
+   still ship once the highest of them verifies.
 
-2. If the rebase conflicts: `git -C <worktree> rebase --abort`. Mark the challenge blocked with
-   "Rebase conflict with origin/main on files: <list>". **Keep the branch intact.** Skip.
+### 4e. Review
 
-3. Run full project verification via `/phoe:verify` from inside the worktree. Forge drives the full
-   sequence: configure + build, format-check, lint (clang-tidy on changed files), the policy audits,
-   and test.
+The adversarial reviewer is a mandatory gate: a layer without it never reaches 4h, because nothing
+else stands between an autonomous diff and `origin`. Review layers in ID order. For each, dispatch
+the spec, quality and adversarial reviewers at once and wait for all three before the next layer. A
+group is reviewed once, over the whole branch, with every member's contract in each brief.
 
-   **One verify run covers one profile.** Always `editor`; add `forge` if the challenge touched
-   `Applications/Forge/` (the editor profile does not run Forge's own trials, and a green editor
-   verify has twice hidden a broken Forge trial), the app profile whose own directory it changed,
-   and any build profile it edited. Never CI's full lane set; `minimal` stays with CI. Record the profiles actually verified; 4e's brief has to report them, and a
-   change that edits a profile must name that profile in the set.
+Assemble and dispatch per [dispatch briefs](../../references/dispatch-briefs.md) §1-§4: `Explore`
+with the read-only clause, a frozen range (a stack layer's base is its parent SHA), the verbatim
+contract, a build state saying `/phoe:verify` runs after review, the preamble, and the §4 prompts.
 
-4. Run challenge-specific verification commands from the challenge JSON.
+### 4f. Handle review results
 
-5. On verify failure: dispatch a fix subagent (cwd = the worktree) with the error output; it commits
-   the fix to the challenge branch. Re-run `/phoe:verify`. On second failure: mark blocked with the
-   verify error output. **Keep the branch and its commits intact.** Skip.
+Fix and triage subagents commit in the layer's own worktree. Passes for the same layer run one at a
+time, each finishing (committed, and built where the layer builds) before the next starts. Carry a
+fix up before the layers above it are next reviewed. If a fix would change the shape of the work
+rather than touch it up, block the challenge and let the user re-plan.
 
-### 4e. Review (spec + quality + adversarial in parallel per challenge)
+For each layer, in ID order:
 
-Process challenges in ID order; a combined branch is reviewed once as a unit, over the whole
-branch's range, with every member's contract in each brief. For each challenge, dispatch all three reviewers simultaneously — as **read-only** `Explore` agents pointed at the challenge worktree, which is what makes parallel dispatch safe — wait for all to return, then move to the next challenge. Reviewers work over the frozen range `$REVIEW_BASE..$REVIEW_SHA` resolved below, which pins the review to a commit while the shared checkout keeps moving underneath it.
+- **Blocking** (spec FAIL, or a quality or adversarial CRITICAL or WARNING): dispatch a fix
+  subagent with every reviewer's blocking findings and the verbatim instruction from
+  [dispatch briefs](../../references/dispatch-briefs.md) §6, split into narrow passes when the set
+  is large. Then re-run all three reviewers and judge convergence by dispatch briefs §7. When the
+  trend stalls, regresses or hits the backstop, block the challenge with the full feedback and the
+  round-by-round trend, keep its branches, and move on. With no human to waive one, an unresolved
+  WARNING blocks.
+- **SUGGESTION** (quality or adversarial, merged and deduplicated): dispatch a triage subagent. It
+  implements each suggestion that is in scope, correct and valuable, and defers the rest as a
+  one-line `// TODO:` at the relevant code (`Docs/StyleGuide.md` §TODO Comments). Nothing is dropped
+  silently. It commits to the branch; do not re-review. Log implemented and deferred counts by
+  source.
+- **NOTE:** log it.
 
-**A reviewer that returns with zero tool uses and no verdict is a failed dispatch, not a pass.** Reviewers occasionally terminate early (no `git diff` run, no per-criterion table). Detect this — an empty or verdict-less return — and re-dispatch that reviewer once with the same prompt; never treat an empty review as a clean gate.
+Surface every `## Also Noticed` in the final report. When review cannot run, the gate is unmet
+(dispatch briefs §7): the layer stops short of `review`, and the report and PR body say so.
 
-The adversarial reviewer is a **mandatory pre-PR gate** — no challenge advances to 4h without it. The standard quality reviewer asks "is this code well-formed?"; the adversarial reviewer asks "how does this break?". Both are required because they catch different failure modes, and `/phoe:execute` ships PRs without human judgment in the loop, so the adversarial pass is the last line of defense before the diff lands on `origin`.
+### 4g. Move to review
 
-For each verified challenge:
-
-**Spec reviewer** -- dispatch read-only (`Explore`) with the worktree path. Do NOT launch
-`invoke-spec-reviewer`: it carries `Bash`, so it can mutate the tree under review, and this
-review must not. Use its prompt, not its agent type:
-
-```
-Review spec compliance for challenge: <label>
-
-## Acceptance Criteria
-<numbered criteria from challenge JSON>
-
-## Strategy
-<strategy from challenge JSON, if present>
-
-## Diff
-Run: git diff <BASE>..<SHA> -- <path>, one path at a time; read reviewed content
-with git show <SHA>:<path>.
-
-## Files Changed
-<list generated by `git diff --name-only <BASE>..<SHA>` — never copied from the
-challenge's Files field, which is a hint and goes stale>
-```
-
-**Challenge Contract** -- capture the challenge verbatim BEFORE dispatching:
-
-```bash
-"$CRUCIBLE" challenge show <ID>
-```
-
-Interpolate that whole output -- title, description, acceptance criteria, verification,
-references -- into ALL THREE reviewer prompts under a `## Challenge Contract (verbatim
-from Crucible)` heading. Do not summarize; the exact AC wording is what the reviewer judges
-scope against. All three review gates block on CRITICAL/WARNING, so a reviewer that cannot
-read the criteria invents the contract from the fixtures and then blocks on it.
-
-Resolve every design-doc reference the challenge or the code cites (`Docs/Cortex_DD.md
-§4.6`, `Docs/PublishPath_DD.md`, ...): confirm the file exists in THIS worktree and the
-cited section is present. If it is absent, say so explicitly in the prompt -- reviewers
-have built headline findings on sections that were never there. Also state which build
-directory is warm and whether a build has run on this branch.
-
-**Review Dispatch Preamble** -- paste `${CLAUDE_PLUGIN_ROOT}/references/dispatch-briefs.md`
-§3 verbatim into ALL THREE reviewer prompts below. Read that file before dispatching;
-it is the single source for this block, and every failure mode it prevents fails toward
-a *false clean*: a reviewer that cannot find something reports it as absent, and that
-reaches the PR body. It covers reading the frozen commit instead of the working tree,
-the stat-path and pathspec hazards, the zsh traps, and the rule that
-every cited path and symbol is resolved before it is reported.
-
-Resolve the range once, at dispatch time, and substitute the values into the preamble's
-`<BASE>`/`<SHA>` placeholders -- never transcribe a hash from earlier output or extend a
-short one by hand (see `dispatch-briefs.md` §2; a hash that shared only a nine-character
-prefix with the real head read to two reviewers as a broken worktree):
-
-```bash
-REVIEW_SHA=$(git -C .claude/worktrees/challenge-<branch-label> rev-parse HEAD)
-REVIEW_BASE=$(git -C .claude/worktrees/challenge-<branch-label> merge-base origin/main HEAD)
-```
-
-When origin is unreachable (`REMOTE_REACHABLE=0` from Step 1), there is no `origin/main` ref --
-use `merge-base main HEAD` instead, and say in the brief that the base is local `main`.
-
-**Build state.** State which build directory is warm, whether a build has run on this
-branch, **which profile the shared build tree is currently configured for**, and **which
-profiles were actually verified in 4d**. A change that edits a profile must name that
-profile in the verified set -- one brief listed six verified profiles while the commit
-edited six others.
-
-**Dispatch all three reviewers read-only** (`Explore`) with the absolute worktree path,
-and include the read-only clause from `dispatch-briefs.md` §1. A write-capable reviewer
-pointed at a live worktree has destroyed uncommitted work and corrupted the shared build
-tree; read-only dispatch cost nothing in review quality.
-
-**Ask every reviewer for friction.** End each of the three prompts with: *"End your report with a
-`## Workflow Friction` section listing anything that made this review harder than it should have
-been — missing context, ambiguous spec, undocumented convention, tooling gaps — or the single word
-`none` if nothing applied."* Step 5 collects these.
-
-**Quality reviewer** -- dispatch read-only (`Explore`) with the worktree path, using the
-`invoke-code-reviewer` prompt below rather than that agent type (same reason):
-
-```
-Review the change on this challenge branch.
-Focus on correctness, safety, modern C++23 opportunities, performance,
-and project convention compliance. Report findings using
-CRITICAL/WARNING/SUGGESTION/NOTE severity levels.
-
-<Challenge Contract, verbatim>
-
-<Review Dispatch Preamble, verbatim>
-```
-
-**Adversarial reviewer** -- dispatch a second read-only (`Explore`) subagent, fresh with no
-shared context with the quality reviewer, with this prompt:
-
-```
-Adversarially review the change on challenge: <label>.
-Your job is to attack this implementation, not validate it. Assume the
-quality review is happening in parallel — do not duplicate it.
-
-<Challenge Contract, verbatim>
-
-<Review Dispatch Preamble, verbatim>
-
-Hunt for:
-
-- Edge cases the implementation does not handle (empty input, max-size
-  input, unicode, negative values, NaN, integer overflow, signed/unsigned
-  mismatches, off-by-one at boundaries).
-- Concurrency hazards: races, reentrancy, ordering assumptions across
-  threads or subsystems, lifetime invariants not enforced by the type
-  system.
-- Silent failure modes: paths that swallow errors, no-op on the
-  unexpected branch, or fail to log via Scribe.
-- Hidden coupling: state shared across modules, ownership confusion,
-  assumptions about call order or initialization sequence.
-- Performance pathologies under realistic load (allocation in hot paths,
-  O(n²) under expected n, lock contention, cache-hostile patterns).
-- Spec gaps: acceptance criteria that pass for the easy case but fail in
-  plausible variations the spec did not enumerate.
-
-Report only findings that represent real failure modes, not stylistic
-concerns. Use CRITICAL/WARNING/SUGGESTION/NOTE severity. If you find
-nothing actionable, say so explicitly — a clean adversarial pass is a
-valid result.
-```
-
-### 4f. Handle Review Results
-
-**Where fixes land.** Every fix and triage subagent in this step commits to the **challenge
-branch in its own worktree** (cwd = `.claude/worktrees/challenge-<branch-label>`) — never to local
-`main`, preserving the "no direct commits to main" rule. Because each challenge owns an isolated
-worktree, per-challenge fix subagents do not collide; but run multiple fix/triage passes for the
-*same* challenge sequentially (each must finish — commits landed, verify passed — before the next
-starts) so a later pass sees the earlier one's committed state.
-
-If a fix would materially change the shape of the work rather than touch it up, mark the challenge
-blocked instead and let the user re-plan.
-
-Process challenges in **ID order** within the wave, and for each one:
-
-- **Spec FAIL, quality CRITICAL or WARNING, or adversarial CRITICAL or WARNING:** Dispatch a fix subagent with the combined feedback from every reviewer that flagged a blocker (spec, quality, adversarial — whichever fired).
-
-  **Make the fix subagent verify every citation first.** Review findings routinely name a path or symbol that does not exist while being otherwise correct — from stat-summary path elision, a stale contract file list, or the applications-vs-engine tree confusion. Instruct it to resolve each cited path and symbol against the reviewed commit before acting, to report any that do not resolve rather than fixing the nearest plausible thing, and to re-check a finding's factual claims (one fix pass was built on a prior review's assertion that a function had no production consumer; a single search disproved it). See `${CLAUDE_PLUGIN_ROOT}/references/dispatch-briefs.md` §5.
-
-  **Narrow the fix subagent to the named findings.** It must close *only* the specific findings in the feedback and nothing else. If it notices an unrelated problem while working, it **reports** it in its result — it does not fix it. An over-reaching fix pass that "improves" code the findings did not name has shipped 3 new blocking defects in a single run: the reviewers never vetted those changes, so they re-open the gate instead of closing it. Give the fix subagent this instruction verbatim: *"Fix exactly these findings: `<list>`. Do not refactor, rename, or touch anything the findings do not name. If you spot another problem, describe it under an `## Also Noticed` heading in your report — do not fix it. End with a `## Workflow Friction` section, or `none`."* Surface anything it reports under `## Also Noticed` in the final run summary.
-
-  Wait for it to finish. Re-run `/phoe:verify`. Re-dispatch **all three** reviewers against the fixed commit (a fix can introduce new adversarial-class regressions).
-
-  **Decide continue-vs-block on the severity trend and the new-defect signal — not a flat round count.** After each fix+re-review round, compare the new blocking findings to the prior round's:
-  - **Converging** — the blocking (CRITICAL+WARNING) count dropped *and* the fix introduced no new blocker the prior round lacked: keep iterating with another narrowed fix. A challenge that walks R1 `1C+6W` → R2 `0C+3W` → R3 `0C+1W` is nearly done; a fixed 2-round cap would strand it wrongly.
-  - **Stalled or regressing** — the blocking count did not drop, *or* the fix introduced a new CRITICAL/WARNING that was absent the round before (the fix is thrashing): stop. Mark the challenge blocked with the full reviewer feedback and the round-by-round trend. **Keep all branches and commits intact.** Skip this challenge and move to the next one in the wave.
-  - Bound total rounds with a sane backstop (e.g. 5) so a pathological oscillation cannot loop forever, but let the trend, not the count, drive the decision.
-
-  WARNING is a blocking tier alongside CRITICAL — an autonomous run has no human to waive one, so an unresolved WARNING blocks the challenge for human review rather than shipping with it ignored.
-- **Quality SUGGESTION or adversarial SUGGESTION:** Dispatch a suggestion-triage subagent with the combined suggestion list (both sources merged, deduplicated). For each suggestion the subagent must decide:
-  - **Implement it** if it is clearly in-scope, correct, and adds value -- apply the change directly.
-  - **Defer it** if it raises a real question, is ambiguous, or is out of scope for this challenge -- emplace a `// TODO: <one-line description of the work that needs doing>` comment at the most relevant code location so it can be evaluated later. Follow the TODO discipline in the plugin's CLAUDE.md: describe the work, not where the note came from; never embed the challenge label, a PR number, a file path, a line number, a branch name, or any other reference that can go stale.
-
-  Suggestions must never be silently dropped. The triage subagent commits any changes (implementations and TODOs) to the challenge branch in its worktree. Wait for it to finish. After it returns, re-run `/phoe:verify`. Do NOT re-dispatch the reviewers. Log the triage outcome (implemented / deferred counts, broken out by source) in the final report.
-- **Quality NOTE or adversarial NOTE:** Proceed. Log notes in the final report.
-
-**Do not judge the trend until every reviewer has returned.** Two of three round-2 reviews once
-looked like textbook convergence (8 blocking → 3) before the adversarial pass landed 2 CRITICAL and
-6 WARNING. Judge on CRITICAL count plus total blocking count, and count findings raised *against
-surface a previous round demanded* as expected, not as thrashing — read literally, "the fix
-introduced a new finding" blocks every round that adds code.
-
-**Split a large finding set.** One pass handed ten findings touched five files outside the original
-diff and introduced three new defects there. Two or three narrow passes, each re-reviewed, converge
-where one broad pass does not.
-
-**Watch whose reasoning is failing.** In one saga the orchestrator's own fix *directions* caused
-three of five rounds' regressions — each agent did what it was told and the instruction was wrong.
-When three consecutive rounds each close a finding and open a new one, the shape is the problem:
-stop adding guards and ask what object the obligations want to be. Two corollaries: verify a design
-justification before briefing it ("the API doesn't allow X" — grep the API first), and adjudicate
-contradicting reviewers from the source rather than by counting votes, which has been wrong both
-times it was tested.
-
-**Prefer subtractive edits when the artifact is prose** — a deletion cannot introduce a false claim,
-and two fix rounds each replaced a wrong statement with a new wrong one.
-
-**Read each agent's `## Also Noticed` before its fix report**; it has carried a run's most valuable
-observation.
-
-A challenge cannot reach 4h (Publish) until all three reviewers have returned and zero CRITICAL and zero WARNING findings remain across spec, quality, and adversarial. The adversarial gate is non-skippable — autonomous PR submission without it is forbidden. If review dispatch is *unavailable* (session instructions forbidding the Agent tool, repeated 429/529 deaths), the gate is unmet, not passed: say so explicitly in the report and the PR body, substitute mutation testing with armed negative controls as a stated stand-in, and leave the challenge short of `review`. Four consecutive rounds once shipped on self-review alone with nothing recording that the gate had not run. A partial reviewer output — a fragment left by an overloaded or rate-limited dispatch — is a failed dispatch, never a clean pass; re-dispatch it.
-
-### 4g. Move to Review
-
-For each successfully reviewed challenge:
-
-1. Move to review: `"$CRUCIBLE" challenge move --label=<LABEL> review`
-2. **Reconcile follow-on siblings and docs** (pre-merge pass) -- this implementation may have invalidated later sibling specs *or* `docs/` design/spec files: a rename or API change leaving a sibling's `description`, `strategy`, `affected_files`, or `acceptance_criteria`, or a doc, referring to the old name. Do a best-effort pass now against the committed diff; the authoritative pass runs post-merge in Step 6.
-   1. `"$CRUCIBLE" --json saga show --label=<SAGA_LABEL>` lists remaining todo + blocked siblings after this challenge's position. (Skip for orphans -- no siblings -- but still run the docs scan below.)
-   2. Scan each later sibling's text (`"$CRUCIBLE" --json challenge show --label=<SIBLING_LABEL>`) **and** `docs/` design/spec files against the committed diff for stale references: renamed types / functions / files, changed signatures, moved modules, replaced concepts.
-   3. Fix each surgically -- `"$CRUCIBLE" challenge update --label=<SIBLING_LABEL> [--field=...]` (run `--help` for flags) for sibling text; an in-place edit on this challenge's branch (rides the same PR) for docs. Update only stale references; do not rewrite scope.
-   4. **Comment on every open challenge whose ground this work moved** -- sibling or orphan, and in addition to the `challenge update` above. The trigger is landing work that renames, moves, or supersedes something the challenge points at: `"$CRUCIBLE" challenge comment --label=<OTHER_LABEL> --body="<what moved; what must not be dropped>"`. Record what moved to what name, and which behaviors introduced since must not be dropped by the eventual rewrite -- editing the words fixes the text, but only the comment tells the implementer the ground moved at all.
-   5. Record sibling + doc updates for the final report (which siblings/docs, which fields). If a later sibling's scope is genuinely broken (not just a rename), do not rewrite it -- flag it as a blocked-follow-on in the report and let the user re-plan.
-
-**Blocked challenge policy:** Never revert branches or discard commits from blocked challenges. Partial work is valuable context for human resumption via `/phoe:implement <label>`. Always keep branches, commits, and checkpoint files intact.
+1. `"$CRUCIBLE" challenge move --label=<LABEL> review`
+2. Run the pre-merge pass of [challenge workflow](../../references/challenge-workflow.md) §6.
 
 ### 4h. Publish
 
-**Pre-push race check.** Before pushing, re-fetch and check origin/main for equivalent work — a
-parallel agent may have landed a similar PR. Otherwise the rebase drops your commits as
-cherry-pick-equivalent and leaves an empty PR.
+**Race check.** A parallel agent may have landed equivalent work, and a rebase would then drop your
+commits as cherry-pick-equivalent, leaving an empty PR:
 
 ```bash
 git fetch origin main
 git log origin/main --oneline -i --grep="<label>" -10
 ```
 
-If no match, rebase the branch once more onto the freshest origin/main so the push is a clean
-fast-forward of the PR head (origin/main may have advanced since 4d):
+If a match delivers this challenge, mark it merged, remove its worktree (branch-per-challenge only)
+and `git branch -D challenge/<branch-label>`, log "Pre-empted by parallel agent", and move on.
 
-```bash
-git -C .claude/worktrees/challenge-<branch-label> rebase origin/main
-```
+Otherwise push the verified tree even if main has moved since 4d: each PR's CI builds its merge with
+main. Repeat 4d first only when the new main commits touch the stack's files, modules or shared
+contracts ([parallel integration](../../references/parallel-integration.md) §Independent siblings
+and semantic overlap); a clean rebase there can still collide at runtime. Regenerate a tree-wide
+sweep on the new base rather than rebasing it, since a rebase misses instances main added. Check
+every tracker record you filed against the freshly fetched `origin/main`; a long run's worktree
+drifts far behind.
 
-If this rebase conflicts, abort it, mark the challenge blocked with the conflicting files, keep
-the branch intact, and skip.
+Publish per [challenge workflow](../../references/challenge-workflow.md) §5, exiting each worktree
+before starting the next:
 
-**A clean rebase is not a correct rebase.** Two branches touching one module merge without conflict
-and still collide at runtime — main changed an accessor's return type mid-run and a fixture this
-branch added still spelled the old shape. Only the post-rebase build catches that, so re-run 4d's
-verify. And regenerate a tree-wide sweep on the new base rather than rebasing it: a rebase silently
-misses the instances main added while it was in flight.
+- **Branch-per-challenge:** one PR; remove the worktree after pushing.
+- **Stack layer:** push bottom-to-top. Each PR above the bottom uses `--base
+  challenge/<parent-branch-label> --draft` and adds `Stacked on PR #<parent>; layer range
+  <parent-sha>..<tip>` to its body. Once its parent lands, the session that sees it retargets the PR
+  to main (`gh pr edit <N> --base main`) and marks it ready. Keep every layer's worktree until the
+  whole stack is pushed; a late fix may still have to be carried up.
+- **Combined branch:** once every member has reached `review`, push once and open one PR listing
+  them all, with the review link recorded on each; then remove the shared worktree.
 
-**Re-verify every tracker record against a freshly fetched `origin/main`.** A long run's worktree
-drifts dozens of commits; one run filed a blocker for a defect main had fixed the same day.
+Later fixes (review comments, conflicts, CI failures) use `/phoe:pr-fixup`.
 
-**Exit the worktree as part of finishing the challenge**, before starting the next — see 4a.
+## 5. Feedback log
 
-If matches exist, mark merged, clean up the branch/worktree, log "Pre-empted by parallel agent"
-in the final report, and skip to the next challenge:
-
-```bash
-"$CRUCIBLE" challenge move --label=<LABEL> merged
-git worktree remove .claude/worktrees/challenge-<branch-label>  # branch-per-challenge only
-git branch -D challenge/<branch-label>
-```
-
-For every reviewed challenge that survives the pre-push check, push its branch and open a pull
-request. Group by strategy:
-
-- **branch-per-challenge:** push the challenge branch and create a single-challenge PR.
-- **combined-branch:** wait until every challenge in the chain or group has reached `review`, then push
-  the shared branch once and create one PR that lists all the challenges it carries.
-
-```bash
-# branch-per-challenge
-git push -u origin challenge/<branch-label>
-PR_URL=$(gh pr create \
-  --head challenge/<branch-label> \
-  --base main \
-  --title "<challenge title>" \
-  --body "$(cat <<'EOF'
-## Summary
-<2-4 bullets describing what the branch accomplishes>
-
-Crucible: #<id> <label>
-Saga: #<saga-id> <saga-label>
-EOF
-)")
-PR_NUM="${PR_URL##*/}"
-echo "Opened PR #${PR_NUM}: ${PR_URL}"
-"$CRUCIBLE" challenge update --label=<LABEL> --replace-review-link="${PR_URL}"
-```
-
-```bash
-# combined-branch (named after the first challenge in the chain — see 4a's branch-strategy rule)
-git push -u origin challenge/<first-branch-label>
-PR_URL=$(gh pr create \
-  --head challenge/<first-branch-label> \
-  --base main \
-  --title "<chain title — summarizes the shipped-together challenges>" \
-  --body "$(cat <<'EOF'
-## Summary
-<bullets covering all challenges in the chain>
-
-Crucible: #<id-1> <label-1>, #<id-2> <label-2>, #<id-3> <label-3>
-Saga: #<saga-id> <saga-label>
-EOF
-)")
-PR_NUM="${PR_URL##*/}"
-echo "Opened PR #${PR_NUM}: ${PR_URL}"
-# Combined PR covers every challenge in the chain — record the same review link on each one
-# so subsequent `crucible challenge show` calls all surface the PR URL.
-for LBL in <label-1> <label-2> <label-3>; do
-  "$CRUCIBLE" challenge update --label="${LBL}" --replace-review-link="${PR_URL}"
-done
-```
-
-`Crucible:` and `Saga:` trailers are mandatory; pull IDs from the JSON already fetched in Step 2. Combined-branch PRs list every challenge in the chain. Drop the `Saga:` line for orphans.
-
-The `--replace-review-link` step after each `gh pr create` is source-neutral by design — the
-flag accepts any URL string, so a non-GitHub review system fits without rewording this step.
-
-Refer to each PR as **PR #<N>** (the trailing `/pull/<N>` segment) in narration and the Report table — never URL alone. Record each `PR #<N>` + URL for the final report.
-
-After the wave's PRs are open, clean up worktrees only — the local and remote branches carry the
-open PRs. They are deleted once each PR provably lands, per the plugin CLAUDE.md's *Concluding
-work*, by whichever later session observes the merge. If the orchestrator's cwd is currently *inside* the worktree being removed
-(you entered it via `EnterWorktree(path=...)` in 4b), `ExitWorktree(keep)` to return to the main
-checkout first — a raw `git worktree remove` on the worktree you are standing in dangles the pin.
-Removing a worktree you are not currently in is fine:
-
-- **branch-per-challenge:** `git worktree remove .claude/worktrees/challenge-<branch-label>` after
-  pushing.
-- **combined-branch:** only remove the shared worktree (`.claude/worktrees/challenge-<first-branch-label>`)
-  after the chain's PR has been pushed.
-
-If a PR comment loop later requests fixes, check out the branch, apply the change, rebuild
-(full `/phoe:verify` only when changes are significant), commit with a brief
-"Address review: …" message, and push.
-
-## 5. Agent Feedback Log
-
-After all waves complete, collect every `## Workflow Friction` section — from each implementer
-(4b), each reviewer (4e), and any fix pass (4f) — and add your own as the orchestrating agent: what
-slowed *this run* down (dispatch, lock contention, rebase, Crucible, publish). Append them to
-`.claude/AGENT_FEEDBACK.md` in the **main checkout** — resolve its absolute path from the first
-entry of `git worktree list`, never a worktree-relative `.claude/`. If every section is `none` or
-empty, write nothing.
-
-**Append with Bash, never `Write`/`Edit` on the log.** In a background session the isolation guard
-refuses the native file tools for repo paths the parent has not entered, and gitignored `.claude/`
-is covered -- the same guard 4b describes. That guard is **tool-scoped, not path-scoped**: Bash
-redirection is not intercepted. The command guard does refuse heredocs, though, so stage the entry
-in a scratch file outside the repo (`$CLAUDE_JOB_DIR/tmp/` in a background session) and append it
-with one plain command:
-
-```bash
-cat <scratch>/feedback-entry.md >> <main-root>/.claude/AGENT_FEEDBACK.md
-```
-
-The same `>>` creates the log when it does not exist yet. Never write the log itself whole: it is a
-long-lived append log that reaches hundreds of KB, and a whole-file write discards every prior
-run's entry. Confirm the append with `wc -c` before and after plus a `head -1` that the original
-heading survived. A refused command means try the other form; it never means the step is
-impossible.
-
-Entry format — start with a blank line, omit any agent whose section was `none`, and copy friction
-items verbatim (do not summarize, paraphrase, or filter):
-
-```markdown
-
-## <YYYY-MM-DD> - /phoe:execute <args>
-
-### Orchestrator
-- <friction item>
-
-### Challenge: <label> (implementer)
-- <friction item 1>
-- <friction item 2>
-
-### Challenge: <label> (spec-reviewer)
-- <friction item>
-
-### Challenge: <label> (quality-reviewer)
-- <friction item>
-
-### Challenge: <label> (adversarial-reviewer)
-- <friction item>
-
-### Challenge: <label> (fix pass, round <N>)
-- <friction item>
-```
-
-This log helps the user evolve CLAUDE.md, challenge specs, and the plugin to be more conducive to
-autonomous operation.
+Follow [challenge workflow](../../references/challenge-workflow.md) §8 with
+`--run "/phoe:execute <args>"`, collecting the friction sections of every implementer, reviewer and
+fix pass, plus your own as orchestrator (dispatch, lock contention, rebase, Crucible, publish).
 
 ## 6. Report
 
-Print a summary table:
-
-**Names pending confirmation go first.** Collect every implementer's `## Names Pending
-Confirmation` list, record each on its challenge as a Crucible comment marked "pending Ryan's
-confirmation", and open the report with them. A run never waits on a naming answer, but the names
-must be confirmed at this interaction, before their PRs merge.
+Open with the names Ryan confirmed or renamed in 4d.
 
 ```
 /phoe:execute Results
 =====================
 
-Names pending confirmation:
-  RasterBaselinePass (wire-raster-baseline) -- the pass that records the reference image; runner-up: ReferenceRasterPass
+Names confirmed:
+  RasterBaselinePass (wire-raster-baseline) -- the pass that records the reference image; was ReferenceRasterPass
 
 | Challenge | Wave | Status | Branch | PR | Notes |
 |-----------|------|--------|--------|----|-------|
@@ -1002,19 +386,15 @@ Stats: 2 completed, 1 blocked, 0 skipped
 Feedback logged to: .claude/AGENT_FEEDBACK.md
 ```
 
-Include:
-- Saga progress updates for all affected sagas
-- Reconciliation outcome (pre-merge pass, Step 4g.2): siblings + `docs/` scanned against each committed diff -- which siblings/docs were updated, any flagged-as-broken follow-ons that need user re-planning, or "none stale" (required -- a present line makes a skipped reconciliation visible). The authoritative post-merge pass runs later when each PR lands and reports its own outcome then.
-- Full explanation for each blocked challenge
-- Reference to checkpoint files and how to resume
-- Total stats (completed, blocked, skipped)
-- Branch strategy per challenge (branch-per-challenge or combined-branch) and resulting **PR #<N>** + URL. Lead with `PR #<N>`.
-- Reference to the feedback log
+Also include:
 
-After each PR lands on remote main, mark the corresponding challenge merged, then run the **end-of-cycle reconciliation** (the authoritative pass) against its merged diff. This fires whenever the merge is observed -- e.g. the next `/phoe:execute` Step 2, or interactively -- not inside the run that opened the PR:
+- Each stack bottom-to-top: each PR as **PR #<N>** with URL, its base, its strategy and where it
+  was verified (profiles), plus "merge bottom-up with 'Create a merge commit', never 'Update
+  branch'".
+- The reconciliation outcome (4g), suggestion triage counts, `## Also Noticed` items, waived or
+  unmet gates, and every skipped candidate with its reason.
+- A full explanation for each blocked challenge, its checkpoint file and how to resume.
+- Saga progress for every affected saga, and total stats.
 
-```bash
-"$CRUCIBLE" challenge move --label=<LABEL> merged
-```
-
-Re-scan the merged diff against every remaining todo/blocked challenge (saga sibling or orphan) **and** `docs/` design/spec files for stale references the pre-merge pass (Step 4g.2) missed or that only the landed diff made certain. Fix challenge text in place with `crucible challenge update`, and comment (Step 4g.2, item 4) on any challenge whose ground the merged diff moved. For stale docs, file a tracked docs-reconcile challenge (`/phoe:plan`) so the edit flows through the normal implement path rather than an untracked side PR -- the original challenge branch is gone post-merge. Flag genuinely scope-broken siblings as blocked for re-plan rather than rewriting them. Report this pass's outcome when it runs.
+When each PR lands, whichever session observes it runs
+[challenge workflow](../../references/challenge-workflow.md) §7.

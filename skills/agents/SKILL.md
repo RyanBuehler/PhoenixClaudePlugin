@@ -1,6 +1,6 @@
 ---
 name: agents
-description: Use to answer "which background job owns PR #X?" or "which PRs is job Y juggling?" — looks up the PR/job/session registry written by the agent-registry-tracker hook. Activates on phrases like "who owns PR 1234", "which agent made this PR", "list live agents", or any cross-reference between `claude agents` background jobs and GitHub PRs.
+description: 'Use to answer "which background job owns PR #X?" or "which PRs is job Y juggling?" — looks up the PR/job/session registry written by the agent-registry-tracker hook. Activates on phrases like "who owns PR 1234", "which agent made this PR", "list live agents", or any cross-reference between `claude agents` background jobs and GitHub PRs.'
 ---
 
 # Agent ↔ PR Registry
@@ -25,7 +25,7 @@ This skill is what you read before answering any question about who is working o
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/agents/query.py <subcommand> [args]
 ```
 
-`${CLAUDE_PLUGIN_ROOT}` resolves to the plugin install path. If running outside a plugin context (e.g. debugging), use the literal path under `~/phoenixclaudeplugin/`.
+`${CLAUDE_PLUGIN_ROOT}` resolves to the plugin install path. If running outside a plugin context (e.g. debugging), find it under the installed plugin (`~/.claude/plugins/cache/*/phoe/*/`).
 
 | Subcommand | What it answers |
 |---|---|

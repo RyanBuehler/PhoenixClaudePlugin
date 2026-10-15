@@ -134,15 +134,13 @@ TARGET=crucible   # or forge, or vigil
 **Finding the built binary — discover, don't hardcode.** The output lands under
 the configured build tree (`Applications/Forge/.forge/` for shared groups) in a subtree whose name depends on the host and build
 config (build group, platform, build type), so never hardcode that subtree in a consuming command —
-read `output_path` from the `build --json` result, or discover it:
+read `output_path` from the `build --json` result. For the Crucible CLI, use the script:
 
 ```bash
-CRUCIBLE=$(find Applications/Forge/.forge Applications/Forge/.forge-out -type f \
-    -path '*/bin/crucible' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+CRUCIBLE=$(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/crucible_path.py) || exit 1
 ```
 
-The commands that consume the Crucible CLI (`/phoe:implement`, `/phoe:bugfix`, `/phoe:plan`,
-`/phoe:execute`) resolve `$CRUCIBLE` this way and call `"$CRUCIBLE"`. For `crucible`, **both**
+For `crucible`, **both**
 `crucible` and `crucible-server` must exist under the output tree or the build is incomplete.
 
 ### Version check
@@ -172,6 +170,10 @@ than proceeding to build.
   sources into the ccache key, so a changed `.cppm` busts exactly the dependent consumers — safe
   with C++23 modules.
 - **clang-tidy** runs through `forge lint` against the same build graph — see `/phoe:lint`.
-- **Worktrees.** Forge resolves the project root from the executable's location, not the cwd, so a
-  bootstrapped binary run from a worktree still builds the worktree it lives in. Each worktree owns
-  its own `.forge-out/`, `.forge/`, and `.bootstrap-out/` dirs.
+- **Worktrees.** Forge finds the project root by walking up from its own executable (`argv[0]`),
+  never the cwd, so it builds the checkout its binary lives in: the main checkout's `forge` run
+  from a worktree silently builds main. In a worktree, bootstrap and run that worktree's own
+  `forge` (a new worktree has none), or pass `--project-root=<worktree>`, which wins over
+  auto-detection; `"$FORGE" --project-root=<worktree> list profiles` confirms which tree it sees.
+  Each worktree owns its own `.forge/` and `.bootstrap-out/` dirs — do not symlink or reuse another
+  checkout's build tree.

@@ -14,12 +14,10 @@ Plan a feature from idea to actionable Crucible Challenges grouped under a Saga.
 
 Run `/phoe:build crucible` so both `crucible` and `crucible-server` exist and match the expected version. The first build is a clean build; subsequent invocations are no-ops. If `/phoe:build crucible` stops with a version mismatch, stop here and report it to the user.
 
-**Locate the Crucible CLI — discover it, don't hardcode a path.** Forge places the binary in a per-profile subtree whose name varies with host and build config, under both the configured build tree (`Applications/Forge/.forge/`) and the bootstrap output (`Applications/Forge/.forge-out/`) — take the **newest**, since a stale `.forge-out/` copy still reports a plausible version, so resolve it into `$CRUCIBLE` and use `"$CRUCIBLE"` in every crucible call below. Each Bash block is a fresh shell, so the variable will not carry across the separate blocks — re-run this `find` (or substitute the path it resolved) in each block that calls the CLI:
+**Resolve the Crucible CLI** into `$CRUCIBLE` and call it as `"$CRUCIBLE"`. Each Bash block is a fresh shell, so repeat this line in every block that calls the CLI:
 
 ```bash
-CRUCIBLE=$(find Applications/Forge/.forge Applications/Forge/.forge-out -type f \
-    -path '*/bin/crucible' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
-[ -x "$CRUCIBLE" ] || { echo "crucible not found — run /phoe:build crucible first"; exit 1; }
+CRUCIBLE=$(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/crucible_path.py) || exit 1
 ```
 
 The Crucible server is a user-managed process outside the plugin's scope — do not start it. If the CLI can't reach a server, the first `"$CRUCIBLE"` call below will fail with a clear error; surface that to the user and stop.
@@ -77,97 +75,49 @@ Draft a saga and break the work into commit-sized, ordered Challenges.
 - **Tags** — pipe-separated tags (e.g., `cpp|rendering`, `plugin|commands`, `tests`)
 - **Acceptance criteria** — what "done" looks like
 - **Strategy** — ordered implementation steps: patterns to follow (with file paths), functions/classes to extend, specific constraints, and step-by-step approach. Think of this as briefing a capable engineer who cannot ask questions. When creating challenges intended for `/phoe:execute`, the strategy must be thorough enough for fully autonomous implementation.
-- **Verification steps** — describe the **intent** of each verification in plain language, not the literal shell command. Write "build the editor in debug", "run the LayoutSorter tests", "confirm Aurora emits a resize event on window shrink" — never a literal invocation pinned to today's flags and output paths. The implementing agent resolves intent to the current invocation (Forge profiles, output paths, etc.), so literal commands go stale the moment the build system shifts. **Intent is not a licence to be unrunnable** — see "Verification must be executable" below.
-- **Affected files** — **only the files the change is expected to modify.** Files a reader merely needs in order to judge the work go in **References**, prefixed `Context:`. The two readings of this field diverge constantly and reviewers pay for it: four separate reviews treated an unchanged entry as an implementation gap, and one was sent through sixteen hundred lines of an input file the commit never touches. With the split, a reviewer can treat an unchanged entry here as a real question and an unchanged `Context:` entry as expected. The list is still a **hint, not a contract** — the clean realization often adds helper files the list did not predict — but every entry should be a file you expect the commit to touch.
+- **Verification steps** — describe the **intent** of each verification in plain language, not the literal shell command. Write "build the editor in debug", "run the LayoutSorter tests", "confirm Aurora emits a resize event on window shrink" — never a literal invocation pinned to today's flags and output paths. The implementing agent resolves intent to the current invocation (Forge profiles, output paths), so literal commands go stale when the build system shifts. Intent must still be runnable — see spec rule 1 below.
+- **Affected files** — only the files the change is expected to modify, so a reviewer can treat an
+  unchanged entry as a real question. Files a reader needs only to judge the work go in
+  **References** as `Context:` entries. The list is a hint, not a contract: the clean realization
+  may add helper files it did not predict.
 - **References** — related docs, issues, or prior work, plus the `Context: <path> — <why it matters>` entries displaced from Affected files.
 
-**Verification must be executable.** A verification block is what settles whether the work is done,
-so a reviewer must be able to run it and reach a verdict without repairing it first. Four separate
-reviews hit blocks that could not be run as written. Each entry must satisfy:
+### Spec rules
 
-- **Runnable in this repository as stated.** Use the scoped search form (`git grep -n <pattern> --
-  '<pathspec>'`); an unscoped recursive search over the repo root sweeps the build trees and sibling
-  agent worktrees and returns near-identical duplicates.
-- **A named profile must build on the target host *and* be scoped to run the trials in question.**
-  One criterion named a profile that neither builds here nor would ever run the guard trials even on
-  a working machine — unsatisfiable anywhere. If a differently scoped profile expresses the intent,
-  name that one.
-- **Where a harness already performs the check, name the harness.** One block described packaging a
-  standalone and running it from another directory — a procedure that maps one-to-one onto an
-  existing harness a workflow already runs. The reviewer found it only by searching.
-- **The step must be performable against the branch.** One depended on a slot no production schema
-  wires, discoverable only by tracing registrations.
-- **A criterion that cannot be checked mechanically says so.** Mark it explicitly, so a reviewer
-  spends its effort on the criteria that can be.
+Check every challenge against these before step 5; the spec reviewer checks the same list.
 
-Before the challenge leaves planning, read its criteria against each other for contradiction. One
-challenge asked both that trials assert real relationships and that a table encode them, with
-nothing saying whether the trials must bind to real code — which is the whole question of whether
-they can catch a regression.
-
-**Cite symbols, never line numbers.** Challenge descriptions and strategies must point at a file
-plus a searchable name — a function, type, constant, or a distinctive literal — never `File.cpp:412`.
-Line numbers drift as soon as anything above them changes, so a citation is typically stale before
-the challenge is picked up and the reader has to find the thing by name anyway, which is what the
-citation was supposed to save. One spec review found six cited positions in a single contract that
-had all drifted against the very pre-image it was reviewing; another challenge's citations had
-drifted twelve commits; a third turned a line-range read into a false finding when the offsets
-disagreed with a symbol search of the same file. Symbol names do not go stale. Where a position
-genuinely matters, name what is *at* that position in terms a search can find.
-
-**Resolve every symbol and document path your plan names, before writing the plan against them.**
-A name that resolves to nothing is not a stale citation — it is a plan built on something that does
-not exist. One saga's description and all three of its design forks rested on a symbol found nowhere
-in the tree, and it surfaced three challenges into execution; another challenge cited a design
-document that was not in the repository at all. Two rules follow:
-
-- Before writing a challenge, `git grep` every symbol and `git ls-files` every document path it will
-  name. Anything that does not resolve is a bug in the plan, not a detail for the implementer.
-- **Check the starting premise against the tree, not against the design document.** Three of five
-  challenges in one saga carried a factually wrong premise, all caught cheaply by scouting against
-  `main` first. A design doc written before the type exists is a hypothesis, not authority — one
-  landed a commit before its saga and was wrong in six verifiable ways — so every implementing
-  challenge re-checks it, not just the first.
-
-**Co-specified header/compile pairs.** When a challenge both drops a declaration from a header
-(e.g. "remove the forward declaration of X", "stop exporting Y") *and* requires downstream
-consumers to compile unchanged, name the transitive-include implication in the spec. Consumers
-were likely leaning on that header to pull a symbol in indirectly, so the acceptance criteria must
-state where they get it now — their own direct include, or another header. Spelling this out saves
-the iteration where the implementer drops the header, breaks a transitive include, and rediscovers
-the coupling at verify time.
-
-**Mandatory cross-file couplings.** Beyond `affected_files`, name any wiring the work cannot compile
-or run without — these are the recurring "first build fails" misses: a new `Phoenix.Core` partition
-is invisible until re-exported from the `Phoenix.Core.cppm` aggregator (`export import :X;`); a new
-pipeline stage / registration usually must be added in two places (a runtime registry list AND a
-manifest/entry-points file); a dockable Editor panel needs `EditorUI.{h,cpp}` wiring; a
-glob-discovered new trial file needs a `forge configure` re-run before the build sees it.
-
-**Phoenix placement: Mirage GPU/inference code lives in VulkanBackend, not Mirage.** When
-decomposing Mirage rendering/inference work, GPU passes, inference kernels, and their trials must be
-specced under `Rendering::VulkanBackend` (free functions + trials), NOT `Rendering/Mirage` —
-`Mirage` does not depend on `VulkanBackend`, so GPU code placed there will not link. (`Mirage` is
-already in VulkanBackend's `requires_test_module`, so an e2e trial linking both needs no manifest
-edit.)
-
-**Never name a forbidden third-party library in a spec.** Phoenix uses zero third-party libraries
-(no zstd/zlib, no JSON libs, no scikit-learn/scikit-image, no torch in engine code, etc.); only OS
-deps (X11/ALSA/Vulkan) are allowed. A spec must not instruct the implementer to pull one in — spec
-the pure in-tree approach (e.g. a hand-rolled k-means / connected-components) instead.
-
-**One challenge owns a shared mechanism; the others refer to it.** When two challenges in a saga
-constrain the same mechanism — the same threading model, registration point, or storage layout —
-read their criteria against each other before creating either. Two challenges that describe it
-differently cannot both be the design, and the conflict surfaces only once the first has landed and
-the second's contract no longer matches the tree. Name the challenge that owns the mechanism and have
-every sibling refer to it ("the opt-in marker `<label>` introduces") instead of restating it.
-
-**Read each criterion literally and ask what that permits.** A criterion whose literal satisfaction is
-a defect is worse than a vague one, because a conscientious implementer follows it — "parallelizing a
-processor requires no change to its process body" is satisfied by a one-word registration change that
-silently parallelizes processors that are not safe to run that way. For each criterion, name the
-cheapest change that satisfies its exact words; if that change would be wrong, reword until it isn't.
+1. **Verification is executable.** A reviewer must be able to run each entry as written and reach a
+   verdict:
+   - use the scoped search form (`git grep -n <pattern> -- '<pathspec>'`) — an unscoped search
+     sweeps build trees and sibling worktrees;
+   - name a profile that builds on the target host *and* runs the trials in question;
+   - name the existing harness where one already performs the check;
+   - require only steps performable against the branch;
+   - mark a criterion that cannot be checked mechanically, so review effort goes to the ones that can.
+2. **Criteria do not contradict each other**, within a challenge or across the saga. When two
+   challenges constrain one mechanism (a threading model, a registration point, a storage layout),
+   one owns it and the others refer to it ("the opt-in marker `<label>` introduces") — two
+   descriptions cannot both be the design.
+3. **Read each criterion literally.** Name the cheapest change that satisfies its exact words; if
+   that change would be a defect, reword until it is not — a conscientious implementer follows the
+   words.
+4. **Cite symbols, never line numbers** — name a file plus a searchable function, type, constant or
+   literal, because line numbers drift before the challenge is picked up.
+5. **Every name resolves.** `git grep` each symbol and `git ls-files` each document path the plan
+   names; one that resolves to nothing is a bug in the plan. Check the starting premise against the
+   tree, not the design document — a design doc written before the code exists is a hypothesis, so
+   every implementing challenge re-checks it.
+6. **Name the couplings a build needs.** When a challenge drops a declaration from a header and
+   requires consumers to compile unchanged, state where consumers get the symbol now. Name the
+   wiring a first build misses: a new `Phoenix.Core` partition needs `export import :X;` in the
+   `Phoenix.Core.cppm` aggregator; a new pipeline stage or registration usually goes in both a
+   runtime registry list and a manifest or entry-points file; a dockable Editor panel needs
+   `EditorUI.{h,cpp}` wiring; a new glob-discovered trial file needs a `forge configure` re-run.
+7. **Place Mirage GPU and inference code in `Rendering::VulkanBackend`** (free functions plus
+   trials), not `Rendering/Mirage` — Mirage does not depend on VulkanBackend, so GPU code there does
+   not link. Mirage is already in VulkanBackend's `requires_test_module`.
+8. **Spec only in-tree code** — never name a third-party library (zstd, a JSON library, torch);
+   Phoenix allows only OS dependencies (X11, ALSA, Vulkan).
 
 Challenges must be:
 - **Commit-sized** — completable in a single focused session
@@ -187,17 +137,13 @@ only in this conversation and nothing is implemented yet.)
 
 > Audit the following draft Crucible saga and challenges for **spec quality** — there is no implementation yet, so this is a forward-looking review of the contract, not a compliance check. For each challenge, evaluate:
 >
+> - **Spec rules** — check each challenge against these rules: <paste step 4's "Spec rules" list verbatim>
 > - **Completeness** — are description, acceptance criteria, strategy, verification, and affected_files concrete enough to brief a capable engineer who cannot ask questions? `/phoe:execute` runs these specs autonomously, so missing context is a future failure.
-> - **Ambiguity** — are any criteria phrased so they admit multiple correct implementations, or in ways that cannot be mechanically verified? Verification entries must be intent strings, never literal shell commands. Do any two criteria within one challenge pull against each other?
-> - **Runnable verification** — can each verification entry be executed as written, in this repository, and yield a verdict? Flag unscoped searches, profiles that do not build on the target host or are not scoped to the trials named, procedures that duplicate an existing harness instead of naming it, and steps that cannot be performed against the branch at all. A criterion that cannot be checked mechanically must be marked as such.
-> - **Citations** — does any description or strategy cite a line number? Every citation must name a searchable symbol instead; line numbers drift within a single challenge's lifetime.
+> - **Ambiguity** — does any criterion admit several correct implementations? Verification entries must be intent strings, never literal shell commands.
 > - **Files vs context** — does `affected_files` list anything the change is not expected to modify? Context-only files belong in `references` under a `Context:` prefix.
-> - **Ordering** — do dependencies implied by strategy, affected_files, or referenced symbols match the current sequence? Earlier challenges must not depend on later ones.
-> - **Missing context** — which file paths, prior-art references, or project conventions need to be cited for the implementer to ground their approach in Phoenix patterns?
+> - **Ordering** — do dependencies implied by strategy, affected_files, or referenced symbols match the sequence? Earlier challenges must not depend on later ones, and no challenge may use a symbol, file, or concept that neither an earlier challenge nor the codebase provides.
+> - **Missing context** — which file paths, prior-art references, or project conventions does the implementer need cited to ground the approach in Phoenix patterns?
 > - **Scope** — is each challenge commit-sized? Is anything bundled that should split, or split that should bundle?
-> - **Cross-challenge coherence** — does any challenge reference a symbol, file, or concept not introduced by an earlier challenge in this saga and not already present in the codebase?
-> - **Mechanism conflicts** — do two challenges constrain the same mechanism (threading model, registration point, storage layout) in ways that cannot both be the design? One must own it and the rest refer to it, never restate it.
-> - **Literal satisfaction** — for each criterion, what is the cheapest change that satisfies its exact words? Flag any criterion whose literal satisfaction would itself be a defect.
 >
 > Report findings as a per-challenge punch list with severity: **BLOCKER** (spec is unusable as written), **CONCERN** (spec is risky and should be revised), or **SUGGESTION** (refinement).
 
@@ -232,7 +178,7 @@ If only a single challenge results, offer to create just a standalone challenge 
 
 After approval, create the challenges and saga using the CLI.
 
-All list-style flags use `|` as the separator. Verification entries are intent strings, not literal shell commands: `"Build the editor in debug"`, `"Run the LayoutSorter tests"`, `"Confirm Aurora emits a resize event on window shrink"`. Implementers resolve intent to the current invocation; a literal invocation rots when the build system shifts. Each entry must still be executable as stated against this repository (see step 4).
+All list-style flags use `|` as the separator. Verification entries are intent strings, not literal shell commands: `"Build the editor in debug"`, `"Run the LayoutSorter tests"`, `"Confirm Aurora emits a resize event on window shrink"`. Each entry must still be executable as stated against this repository (step 4, spec rule 1).
 
 `--affected-files` carries only files the change is expected to modify. Context files go into `--references` as `Context: <path> — <why>`.
 
