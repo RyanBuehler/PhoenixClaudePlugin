@@ -56,6 +56,12 @@ Read the current version from `.claude-plugin/marketplace.json`. Version lives t
 
 The project uses calendar versioning: `YYYY.MINOR.PATCH` (e.g., `2026.0.0`). Default to a **patch** bump (`YYYY.MINOR.PATCH+1`) — do not change the year or minor segments. Confirm with the user before bumping minor or year (e.g., for a major new feature or the first release of a new calendar year). Apply the bump only to `.claude-plugin/marketplace.json`.
 
-## 4. Report
+## 4. Commit and push
 
-Tell the user what was changed and the new version number. Do NOT commit or push — leave that to the user.
+Commit on the plugin repo's `main` and push. The plugin is the one repo that takes direct commits
+to `main`; Phoenix changes always go through a PR. If the push is rejected, rebase the unpushed
+commit onto `origin/main` and push again.
+
+## 5. Report
+
+Tell the user what changed, the new version and the commit.
