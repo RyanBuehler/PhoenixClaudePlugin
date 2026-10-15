@@ -362,7 +362,7 @@ For the rule on *how* to capture (and the prohibition on external screenshot app
 ### Commands
 
 - `aurora.screenshot` - Capture screenshot(s) from a running engine. Parameters: `frames` (default 1), `countdown` (seconds delay, default 0).
-- `aurora.screenshot.exit` - Capture a single screenshot (with 2-second stabilization delay) then shut down the engine. Used for one-shot capture workflows.
+- `aurora.screenshot_and_shutdown` - Capture a single screenshot then shut down the engine. Used for one-shot capture workflows.
 
 ### Output
 
@@ -389,7 +389,7 @@ The pipe accepts one command per line. Commands are queued and executed on the m
 Screenshots require a display server (X11 or Wayland). On headless CI, use `xvfb-run`:
 
 ```bash
-xvfb-run Applications/Forge/.forge/<profile>/bin/editor --aurora.screenshot.exit
+xvfb-run Applications/Forge/.forge/<profile>/bin/editor --aurora.screenshot_and_shutdown
 ```
 
 ## Subagent Definitions

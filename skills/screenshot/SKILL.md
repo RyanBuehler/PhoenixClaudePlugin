@@ -24,7 +24,7 @@ Detect the active Forge profile from existing build directories and launch the e
 ```bash
 for PROFILE in editor-release editor-debug; do
     if [ -x "build-${PROFILE}/bin/editor" ]; then
-        build-${PROFILE}/bin/editor --aurora.screenshot.exit
+        build-${PROFILE}/bin/editor --aurora.screenshot_and_shutdown
         break
     fi
 done
