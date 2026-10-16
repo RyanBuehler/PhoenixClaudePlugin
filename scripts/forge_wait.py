@@ -52,7 +52,43 @@ def GetPidPath(log):
 	return Path(f"{log}.pid")
 
 
+IS_WINDOWS = os.name == "nt"
+
+PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+ERROR_ACCESS_DENIED = 5
+STILL_ACTIVE = 259
+
+# No window for the command or the compilers it spawns, Ctrl+C aimed at the caller's console does
+# not reach it, and it leaves the caller's job so it outlives the tool call that started it.
+CREATE_NEW_PROCESS_GROUP = 0x00000200
+CREATE_BREAKAWAY_FROM_JOB = 0x01000000
+CREATE_NO_WINDOW = 0x08000000
+
+
+def IsAliveOnWindows(pid):
+	# os.kill(pid, 0) on Windows sends CTRL_C_EVENT rather than probing, so ask the process table.
+	import ctypes
+	from ctypes import wintypes
+	kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+	kernel32.OpenProcess.restype = wintypes.HANDLE
+	kernel32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+	kernel32.GetExitCodeProcess.argtypes = (wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD))
+	kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+	handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+	if not handle:
+		return ctypes.get_last_error() == ERROR_ACCESS_DENIED
+	try:
+		code = wintypes.DWORD()
+		if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+			return True
+		return code.value == STILL_ACTIVE
+	finally:
+		kernel32.CloseHandle(handle)
+
+
 def IsAlive(pid):
+	if IS_WINDOWS:
+		return IsAliveOnWindows(pid)
 	try:
 		os.kill(pid, 0)
 	except ProcessLookupError:
@@ -145,6 +181,18 @@ def Wait(log, timeout, script):
 	return STILL_RUNNING
 
 
+def Spawn(argv, env):
+	streams = dict(stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+	if not IS_WINDOWS:
+		return subprocess.Popen(argv, env=env, start_new_session=True, **streams)
+	flags = CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW
+	try:
+		return subprocess.Popen(argv, env=env, creationflags=flags | CREATE_BREAKAWAY_FROM_JOB, **streams)
+	except PermissionError:
+		# A job that forbids breakaway refuses the flag; the run then lives only as long as that job.
+		return subprocess.Popen(argv, env=env, creationflags=flags, **streams)
+
+
 def Start(log, command, timeout, script):
 	pid = ReadPid(log)
 	if pid is not None and IsAlive(pid) and not GetExitPath(log).exists():
@@ -153,11 +201,7 @@ def Start(log, command, timeout, script):
 	Path(log).parent.mkdir(parents=True, exist_ok=True)
 	for stale in (GetExitPath(log), Path(f"{log}.exit.tmp")):
 		stale.unlink(missing_ok=True)
-	child = subprocess.Popen(
-		["sh", "-c", WRAPPER, "sh", *command],
-		env={**os.environ, "FORGE_WAIT_LOG": log},
-		stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-		start_new_session=True)
+	child = Spawn(["sh", "-c", WRAPPER, "sh", *command], {**os.environ, "FORGE_WAIT_LOG": log})
 	GetPidPath(log).write_text(f"{child.pid}\n")
 	print(f"forge_wait: started pid {child.pid}: {' '.join(command)}")
 	return Wait(log, timeout, script)
@@ -176,6 +220,10 @@ def Main(argv):
 	args = parser.parse_args(argv)
 	log = os.path.abspath(args.log)
 	script = os.path.abspath(__file__)
+	if IS_WINDOWS:
+		# The wrapper's sh redirects to the log, and a backslash path is not one sh reads reliably.
+		log = log.replace("\\", "/")
+		script = script.replace("\\", "/")
 	if args.action == "wait":
 		return Wait(log, args.timeout, script)
 	command = args.command[1:] if args.command[:1] == ["--"] else args.command
