@@ -14,7 +14,8 @@ compile edge.
 
 ## Arguments
 
-- **`<target>`** — *(optional)* one of `engine`, `crucible`, `forge`, `vigil` (default: `engine`).
+- **`<target>`** — *(optional)* one of `engine`, `crucible`, `forge`, `forgegui`, `vigil`, `vigil-gui`
+  (default: `engine`).
 
 ## What This Command Owns
 
@@ -111,21 +112,27 @@ first, then rebuild. Treat such a segfault as a build artifact first, a logic bu
 
 ---
 
-# Tool Targets (`crucible`, `forge`, `vigil`)
+# Tool Targets (`crucible`, `forge`, `forgegui`, `vigil`, `vigil-gui`)
 
-The tool applications are ordinary Forge profiles — build them exactly like the engine.
+The tool applications are ordinary Forge profiles — build them exactly like the engine. A plain app
+name is its command-line build and a `-gui` name its windowed one (`forgegui` predates the hyphen):
+`vigil` answers the verbs but opens no viewer, so build `vigil-gui` when you need the viewer. The
+same holds for the `-gcc` and `-windows` variants (`vigil-gcc`/`vigil-gui-gcc`,
+`vigil-windows`/`vigil-gui-windows`). Crucible is command line only.
 
 | Target     | Profile    | Binaries produced                    |
 |------------|------------|--------------------------------------|
 | `crucible` | `crucible` | `crucible`, `crucible-server`        |
 | `forge`    | `forge`    | `forge`                              |
-| `vigil`    | `vigil`    | `vigil`                              |
+| `forgegui` | `forgegui` | `forgegui`                           |
+| `vigil`    | `vigil`    | `vigil` (no viewer)                  |
+| `vigil-gui`| `vigil-gui`| `vigil` (with the VigilGUI viewer)   |
 
 Building the `crucible` profile produces **both** `crucible` and `crucible-server`.
 
 ```bash
 FORGE=$(forge_bin) || { python3 Applications/Forge/Scripts/bootstrap.py && FORGE=$(forge_bin); }
-TARGET=crucible   # or forge, or vigil
+TARGET=crucible   # or forge, forgegui, vigil, vigil-gui
 
 "$FORGE" configure "$TARGET" --json
 "$FORGE" build     "$TARGET" --json

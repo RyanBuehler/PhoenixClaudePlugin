@@ -77,7 +77,9 @@ Forge's own trials**, so a change under `Applications/Forge/` can be green here 
 
 - **The local set is `editor`, plus what the change owns.** Always `editor` — it is the coverage
   hub for engine trials. Add the app profile whose own directory you changed (`vigil`,
-  `crucible`, `forgegui`), and `forge` when the builder changed.
+  `crucible`, `forgegui`; `vigil-gui` for `Applications/Vigil/Modules/VigilGUI/`), and `forge` when
+  the builder changed. PR CI builds only the command-line tools; `vigil-gui` and `forgegui` build
+  nightly, so a GUI change's local verify is its only check before merge.
   **Do not mirror CI's lane set** — CI runs every lane on any `Applications/Forge/` change, and
   repeating that locally costs a cold build per profile. `minimal` stays CI's: it is a cold build
   in its own tree, and it fails only for a missing dependency declaration.
