@@ -4,6 +4,15 @@ These are the phoe plugin's standing conventions for work on the Phoenix engine.
 loads this file into every session and subagent through `hooks/core-rules.py`. Plugin paths
 below are under `${CLAUDE_PLUGIN_ROOT}`; `Docs/` paths are in the Phoenix repository.
 
+## Pillars of Phoenix
+
+1. Human and AI users are equal and symbiotic.
+2. Creation is play.
+3. The Editor bends to the user, never the user to the Editor.
+4. Every pixel earns its place.
+5. Every action is illuminated.
+6. What automation does, the user can undo.
+
 ## Where the rules live
 
 | Subject | Authority |
