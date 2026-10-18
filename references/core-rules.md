@@ -83,6 +83,9 @@ below are under `${CLAUDE_PLUGIN_ROOT}`; `Docs/` paths are in the Phoenix reposi
   verify may cover several commits, such as a stack's layers. This overrides TDD and
   verification-before-completion guidance from other skills.
 - Name the profiles you verified whenever you report verification.
+- Treat `forge clean` and `forge build --clean` as destructive. If Forge refuses or asks, stop and
+  ask the user, and never add `--force` yourself, because the build tree holds files Forge did not
+  produce, such as saved Editor projects, and `--force` deletes them permanently.
 - Push and open PRs without asking; `hooks/push-gate.py` checks git identity and credentials first.
 - Add tool permissions to `~/.claude/settings.json`, not `.claude/settings.local.json`, so they
   apply in every checkout and worktree.

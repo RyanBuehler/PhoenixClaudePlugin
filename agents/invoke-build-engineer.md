@@ -47,9 +47,14 @@ host is shared; check load before a cold build and never generate artificial loa
 
 ```bash
 forge configure|build|test|status|clean|verify <profile>
-forge build <profile> --clean     # wipe, reconfigure, rebuild; the wipe is confined to .forge
+forge build <profile> --clean     # wipe, reconfigure, rebuild — destructive, see below
 forge lint [--all|--staged] [--build-dir=<path>]
 ```
+
+`clean` and `--clean` delete the build tree, and that tree can hold files Forge did not produce, such
+as Editor projects a user saved beside the built binaries. Forge lists those files and asks before
+deleting them, and with no terminal to ask on it refuses. On a refusal or a prompt, stop and report
+the listed paths to the user. Never add `--force` yourself: it deletes them permanently.
 
 Parallelism is `--jobs=N`. Profiles are `Applications/Forge/Profiles/*.json`; output lands under
 `Applications/Forge/.forge/` (profiles in a shared build group share one tree there). The plugin

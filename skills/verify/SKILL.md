@@ -140,7 +140,8 @@ regressed.
 layout of a struct/enum in a widely-included header, an incremental module build can leave some TUs
 on the old layout and produce a *phantom* trial segfault (an ABI/size skew, not a logic bug). For an
 authoritative clean run, `"$FORGE" clean editor` first. Treat such a segfault as a build artifact
-first, a logic bug second.
+first, a logic bug second. Clean is destructive: if it refuses or asks about files Forge did not
+produce, stop and ask the user, and never add `--force` yourself (see `/phoe:build`).
 
 ## 3. Python-only changes
 

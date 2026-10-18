@@ -110,6 +110,11 @@ on the old layout and produce a *phantom* trial segfault near a `vector`/copy of
 (an ABI/size skew, not a logic bug). For an authoritative clean build, `"$FORGE" clean "$PROFILE"`
 first, then rebuild. Treat such a segfault as a build artifact first, a logic bug second.
 
+**Clean is destructive.** It deletes the build tree, which can hold files Forge did not produce,
+such as Editor projects a user saved beside the binaries. Forge lists them and asks, and with no
+terminal it refuses. On a refusal or a prompt, stop and show the user the listed paths. Never add
+`--force` yourself: it deletes those files permanently.
+
 ---
 
 # Tool Targets (`crucible`, `forge`, `forgegui`, `vigil`, `vigil-gui`)
