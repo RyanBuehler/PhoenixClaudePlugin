@@ -185,7 +185,7 @@ than proceeding to build.
 - **Worktrees.** Forge finds the project root by walking up from its own executable (`argv[0]`),
   never the cwd, so it builds the checkout its binary lives in: the main checkout's `forge` run
   from a worktree silently builds main. In a worktree, bootstrap and run that worktree's own
-  `forge` (a new worktree has none), or pass `--project-root=<worktree>`, which wins over
-  auto-detection; `"$FORGE" --project-root=<worktree> list profiles` confirms which tree it sees.
+  `forge` (a new worktree has none), or pass `--repository-root=<worktree>`, which wins over
+  auto-detection; `"$FORGE" --repository-root=<worktree> list profiles` confirms which tree it sees.
   Each worktree owns its own `.forge/` and `.bootstrap-out/` dirs — do not symlink or reuse another
   checkout's build tree.

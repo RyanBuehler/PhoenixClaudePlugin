@@ -20,7 +20,7 @@ lists the portability traps. Plugin paths are under `${CLAUDE_PLUGIN_ROOT}` (if 
 ## Workspace
 
 You start in a fresh worktree branched from `main`, without the caller's branch. When the brief
-names a worktree, work there with absolute paths and pass `--project-root=<worktree>` to Forge.
+names a worktree, work there with absolute paths and pass `--repository-root=<worktree>` to Forge.
 The host is shared; check load before a cold build and never generate artificial load.
 
 ## Where platform code lives

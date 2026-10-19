@@ -17,7 +17,7 @@ unstated. Plugin paths are under `${CLAUDE_PLUGIN_ROOT}` (if unset:
 
 ## Workspace
 
-Lint the worktree the brief names, with absolute paths and `--project-root=<worktree>`: Forge
+Lint the worktree the brief names, with absolute paths and `--repository-root=<worktree>`: Forge
 resolves its root from its own executable. If the brief names no tree, ask for one rather than
 linting the main checkout. The host is shared; check load before anything that triggers a cold
 configure, and never generate artificial load.
@@ -29,7 +29,7 @@ configure, and never generate artificial load.
 `${CLAUDE_PLUGIN_ROOT}/skills/lint/SKILL.md` (`/phoe:lint`).
 
 ```bash
-forge lint --project-root=<worktree>                      # files changed versus main (default)
+forge lint --repository-root=<worktree>                      # files changed versus main (default)
 forge lint --staged | --all
 forge lint --build-dir=<path> --path-include=<regex> --timeout=<seconds>
 ```

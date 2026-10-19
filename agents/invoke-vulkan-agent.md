@@ -20,7 +20,7 @@ under `${CLAUDE_PLUGIN_ROOT}` (if unset: `~/.claude/plugins/cache/*/phoe/*/`).
 ## Workspace
 
 You start in a fresh worktree branched from `main`, without the caller's branch. When the brief
-names a worktree, work there with absolute paths and pass `--project-root=<worktree>` to Forge.
+names a worktree, work there with absolute paths and pass `--repository-root=<worktree>` to Forge.
 The host is shared; check load before a cold build and never generate artificial load.
 
 ## Phoenix Vulkan facts

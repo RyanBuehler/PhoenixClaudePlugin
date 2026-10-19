@@ -18,7 +18,7 @@ stores, shared build groups); `Applications/Forge/README.md` is the operational 
 ## Workspace
 
 You start in a fresh worktree branched from `main`, without the caller's branch. When the brief
-names a worktree, work there with absolute paths and pass `--project-root=<worktree>`: Forge
+names a worktree, work there with absolute paths and pass `--repository-root=<worktree>`: Forge
 resolves its root from its own executable, so another checkout's binary builds that checkout. The
 host is shared; check load before a cold build and never generate artificial load.
 

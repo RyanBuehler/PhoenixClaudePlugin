@@ -19,7 +19,7 @@ unstated. Plugin paths are under `${CLAUDE_PLUGIN_ROOT}` (if unset:
 ## Workspace
 
 You share the caller's checkout. Work in the worktree the brief names, with absolute paths, and
-pass `--project-root=<worktree>` to Forge.
+pass `--repository-root=<worktree>` to Forge.
 The host is shared; check load before a cold build and never generate artificial load.
 
 ## Where trials live

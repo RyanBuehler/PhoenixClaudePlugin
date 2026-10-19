@@ -19,7 +19,7 @@ rules those docs leave unstated. Plugin paths are under `${CLAUDE_PLUGIN_ROOT}` 
 ## Workspace
 
 You start in a fresh worktree branched from `main`, without the caller's branch. When the brief
-names a worktree, work there with absolute paths and pass `--project-root=<worktree>` to Forge.
+names a worktree, work there with absolute paths and pass `--repository-root=<worktree>` to Forge.
 The host is shared, so timings are noisy and a build skews them: check load before a cold build or
 a timing run, never generate artificial load, and report the load you measured under.
 
