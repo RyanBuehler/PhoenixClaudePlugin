@@ -145,6 +145,9 @@ Execution Plan:
 4a-4c and 4e-4g run per layer; 4d and 4h run per verification point or checkpoint, covering every
 reviewed layer beneath it.
 
+When Ryan rules on a design change during a wave, the orchestrator runs the decision-time pass
+([challenge workflow](../../references/challenge-workflow.md) §6a) before the layer resumes.
+
 ### Docs-only fast path
 
 A challenge is **docs-only** when its `affected_files` and criteria touch no C++, build or test

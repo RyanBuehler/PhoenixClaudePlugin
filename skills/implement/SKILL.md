@@ -93,6 +93,8 @@ and run `/phoe:implement <LABEL>` to continue with fresh context", and stop.
 ## 5. Plan and implement
 
 Enter plan mode, plan (starting from the `strategy` field when there is one), then implement.
+When Ryan rules on a design change along the way, run the decision-time pass
+([challenge workflow](../../references/challenge-workflow.md) §6a) before writing more code.
 Before writing C++, read `Docs/StyleGuide.md` and `${CLAUDE_PLUGIN_ROOT}/references/tooling.md`.
 Comments default to none: one line, two or three for the genuinely complex, why rather than what
 (`Docs/StyleGuide.md` §Comments). A TODO is one line describing the work, with no path, line

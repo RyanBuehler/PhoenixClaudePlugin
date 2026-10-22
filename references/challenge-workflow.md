@@ -61,6 +61,9 @@ label is evidence to show the user, not proof.
    may have claimed it.
 2. Claim it before creating anything, so a parallel session cannot take it:
    `"$CRUCIBLE" <kind> move --label=<LABEL> active`. If you drop it later, move it back to `todo`.
+   In a saga, read its design log (`"$CRUCIBLE" saga comments --label=<SAGA_LABEL>`, the
+   `DESIGN:` entries, §6a): a ruling newer than the challenge's text wins over it. Name the
+   superseded text and follow the ruling.
 3. From the main repo root:
    ```bash
    git worktree add .claude/worktrees/<kind>-<branch-label> -b <kind>/<branch-label> <base-ref>
@@ -134,9 +137,28 @@ echo "Opened PR #${PR_URL##*/}: ${PR_URL}"
 
 ## 6. Reconcile siblings and docs
 
-Work can leave later challenges and design docs naming things it renamed. Two passes: pre-merge,
-against the committed diff once review passes, and the authoritative pass against the merged diff
-(§7). This step edits metadata and docs only, never the implementation.
+Work can leave later challenges and design docs naming things it renamed. Three passes: at
+decision time, whenever Ryan rules on a design change (§6a); pre-merge, against the committed diff
+once review passes; and the authoritative pass against the merged diff (§7). This step edits
+metadata and docs only, never the implementation.
+
+### 6a. At decision time
+
+When Ryan rules on a design change mid-challenge (an AskUserQuestion answer that drops, renames or
+replaces a mechanism, or a rewritten acceptance criterion), reconcile before writing more code; do
+not wait for the pre-merge pass.
+
+1. Record the ruling on the challenge (comment; rewrite the criteria it changes).
+2. Post it to the saga's design log, one line:
+   `"$CRUCIBLE" saga comment --label=<SAGA_LABEL> --body="DESIGN: <old> -> <new>. Why: <reason>. From #<id> <label>, Ryan <date>."`
+3. Find the linked open work with one list call and a term match; read only the hits. Linked means
+   later challenges in this saga, and any open challenge (any saga or orphan) blocked on this one
+   or naming its label or ID. Match singular and plural forms of each changed term. Do not scan
+   every challenge.
+4. Fix stale text in the hits and in the saga description, and comment on each changed challenge
+   (§6b steps 3-4). Report what changed, or "none stale".
+
+### 6b. Pre-merge and post-merge passes
 
 1. List the open siblings after this one (`"$CRUCIBLE" --json saga show --label=<SAGA_LABEL>`, todo
    and blocked; none for an orphan), read each (`challenge show --label=<SIBLING>`), and grep the
@@ -159,7 +181,10 @@ against the committed diff once review passes, and the authoritative pass agains
 Whichever session proves landing (§2) does this, usually not the one that opened the PR.
 
 1. `"$CRUCIBLE" <kind> move --label=<LABEL> merged`. This archives it;
-   `<kind> unarchive --label=<LABEL>` restores it to `todo`.
+   `<kind> unarchive --label=<LABEL>` restores it to `todo`. If that completes the saga, post a
+   design-shift summary on it: collect the `DESIGN:` log entries (§6a) into one saga comment
+   headed `DESIGN SHIFTS:`, grouped by subject, each with the challenge that ruled it, or
+   "none" when the log is empty. Show it to the user.
 2. Run §6 against the merged diff.
 3. If an open PR is based on this branch (`gh pr list --base <kind>/<branch-label>`), retarget it
    (`gh pr edit <N> --base main`) and mark it ready (`gh pr ready <N>`) before deleting the branch.
