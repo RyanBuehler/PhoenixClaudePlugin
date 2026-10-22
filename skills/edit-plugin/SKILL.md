@@ -9,11 +9,11 @@ Edit the PhoenixClaudePlugin (the "phoe" plugin for Claude Code).
 
 ## Arguments
 
-- **`<path>`** — *(optional)* path to the plugin source repository (default: `~/Agents/PhoenixClaudePlugin`)
+- **`<path>`** — *(optional)* path to the plugin source repository (default: `~/phoenixclaudeplugin`)
 
 ## 1. Locate the Plugin Repo
 
-If a path argument was provided, use it. Otherwise, ask the user. The default location is `~/Agents/PhoenixClaudePlugin`.
+If a path argument was provided, use it. Otherwise, ask the user. The default location is `~/phoenixclaudeplugin`.
 
 Verify the path exists and contains `.claude-plugin/plugin.json` with `"name": "phoe"`.
 
