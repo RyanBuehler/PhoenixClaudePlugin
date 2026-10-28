@@ -34,7 +34,8 @@ across invocations — they change):
    the rule wins.
 3. `Docs/Patterns.md` — the idioms, and the antipatterns each supersedes. A suggested fix should
    name the pattern that replaces the shape.
-4. `Docs/Lexicon.md` — the blessed word per concept and the banned ones (§Anti-terms). Consult
+4. `Docs/Lexicon.md` — the blessed word per concept and the banned ones (each entry's `Not:` line, read
+   per §Anti-terms), with `Docs/ApprovedTerms.txt` the approved plain words. Consult
    before proposing any rename.
 5. `references/core-rules.md` §Codebase rules — the plugin's rules the repository docs do not
    state: ownership tiers, boundary data flow, dependencies, and code-style rules such as

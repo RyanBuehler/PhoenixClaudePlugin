@@ -229,11 +229,16 @@ verify covers any rename. This covers names the work adds to production code (ty
 modules, flags, JSON keys, refusal text). Names used only in trials need no confirmation.
 
 1. Collect each name with what it names and its runner-up (an implementer reports them under
-   `## Names Pending Confirmation`).
+   `## Names Pending Confirmation`), and each word in it that is neither approved nor banned
+   ([core rules](core-rules.md)) with why it fits and whether to approve it everywhere or for one
+   module.
 2. Optionally dispatch one read-only Sonnet subagent (`model: "sonnet"`) with that list,
    `Docs/StyleGuide.md` §Naming a new symbol and `Docs/Lexicon.md`, to recommend the best name for
    each.
 3. Ask Ryan with AskUserQuestion, public and wire-visible names first, the best candidate as the
    recommended option.
-4. Apply each rename on the branch by hand, never with a bulk regex. A name added by a later review
-   fix is confirmed the same way before the push; rebuild and re-run the trials it touches.
+4. Apply each rename on the branch by hand, never with a bulk regex, and commit an approved word's
+   `Docs/ApprovedTerms.txt` line on the branch. A name added by a later review fix is confirmed the
+   same way before the push; rebuild and re-run the trials it touches.
+5. If Ryan does not answer this session, open the PR with `--draft`, comment each name on its
+   challenge as pending Ryan's confirmation, and lead the run's report with them.

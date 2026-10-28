@@ -181,7 +181,8 @@ direction of flow and nothing else.
 `Old*` where `Previous*` is meant, `Last` for the one before this one, `Maybe*` for `Tentative*`,
 `Kind`/`*Kind` for `Type`/`*Type`.
 
-**Rule**: `Docs/StyleGuide.md` §Form (`Previous`, not `Old`); `Docs/Lexicon.md` §Last, §Kind.
+**Rule**: `Docs/StyleGuide.md` §Form (`Previous`, not `Old`); `Docs/Lexicon.md` §Previous and §Type, whose
+`Not:` lines ban `Prev` and `Kind`.
 
 **Detection**: those prefixes and suffixes. `Last` also means *final in a sequence*, and that
 meaning stays — the last element, `First`/`Last`, "declared last" — so read the referent before

@@ -19,7 +19,7 @@ below are under `${CLAUDE_PLUGIN_ROOT}`; `Docs/` paths are in the Phoenix reposi
 |---|---|
 | Code style, naming, comments, design practices — read before writing C++ | `Docs/StyleGuide.md` |
 | Idioms, and the antipatterns each replaces | `Docs/Patterns.md` |
-| Blessed and banned terms | `Docs/Lexicon.md` |
+| Blessed and banned terms | `Docs/Lexicon.md`, `Docs/ApprovedTerms.txt` |
 | Build, test, verify | `/phoe:build`, `/phoe:test`, `/phoe:verify`; `Docs/Forge_DD.md` |
 | Smells by ID, with severity | `skills/audit/CHECKS.md`, `skills/ui-design-review/CHECKS.md` |
 | Formatter and linter mechanics | `references/tooling.md` |
@@ -105,6 +105,11 @@ Rules the repository docs do not state, or state as a pattern summarized here.
 - Name a new concept by `Docs/StyleGuide.md` §Naming a new symbol, and never drive a rename with
   a bulk regex. Keep working with your best name; confirm production names (not trial-only ones)
   with Ryan before the work ships.
+- Every word in a new name is approved (on `Docs/ApprovedTerms.txt`, a Lexicon heading or a module
+  name) or banned by a Lexicon `Not:` line. A word that is neither goes to Ryan as a proposal, never
+  straight into `Docs/ApprovedTerms.txt`. A `Not:` arrow (`stem `Spell` → Format`) names the
+  replacement; `in Module…` holds a ban only in those modules, `outside Module…` everywhere else; a
+  scoped ApprovedTerms line (`word Module…`) approves the word only in those modules.
 - One owner drives each system through its concrete interface; all other code reaches it through
   a registry-discovered subsystem that names no concrete type (`Docs/Patterns.md` §Ownership
   Tiers). A system without a clear owner gets a designated one or is Tier-2-only.
