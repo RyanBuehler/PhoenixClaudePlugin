@@ -1,12 +1,18 @@
 ---
 name: execute
-description: Autonomously execute N Crucible challenges via subagents (at most 3 at once) with zero user interaction. Runs independent challenges in parallel, dependent ones as stacked PRs, and groups related small challenges into one PR.
+description: Autonomously execute N Crucible challenges as an orchestrator over up to 4 parallel subagents, building and verifying on one at a time, with zero user interaction. Runs independent challenges in parallel, dependent ones as stacked PRs, and groups related small challenges into one PR.
 disable-model-invocation: true
 allowed-tools: Read, Edit, Write, Bash, Glob, Grep, Agent
 ---
 
 Execute Crucible challenges autonomously through subagents and report at the end. The challenge
 JSON is the whole spec; nothing waits on the user.
+
+**You are the orchestrator.** You plan, dispatch, commit, integrate and report; subagents do the
+implementing, fixing and reviewing. Keep up to 4 subagents busy at all times: whenever a slot
+frees and any layer, review, fix pass or triage pass is ready, dispatch it at once. Only one
+agent builds or verifies at a time (see Concurrency cap), so everything else is authoring and
+review, which never wait on a build.
 
 Load each reference at the step that needs it:
 
@@ -62,11 +68,26 @@ rebase; `git -C <child-worktree> merge challenge/<parent-branch-label>`, then pu
 
 ## Concurrency cap
 
-At most **3** subagents run at once across the whole run: implementers, fix and triage passes and
-reviewers all count, and a background agent counts until its notification arrives. A wave with more
-than 3 layers runs in batches, dispatching the next as one returns. One layer's three reviewers fill
-the cap on their own. Unbounded fan-out has exhausted Ryan's usage in a single run; grouping
-(Step 3) is the other lever.
+At most **4** subagents run at once across the whole run: implementers, fix and triage passes and
+reviewers all count, and a background agent counts until its notification arrives. Fill every slot
+with ready work, in this order: a review or fix that unblocks a verification point, the next layer
+of a stack, then the bottom of another stack. A wave with more than 4 layers runs in batches,
+dispatching the next as one returns. One layer's three reviewers take 3 of the 4 slots, so
+dispatch the fourth slot's work (an implementer for another stack) alongside them. Unbounded
+fan-out has exhausted Ryan's usage in a single run; grouping (Step 3) is the other lever.
+
+**One build or verify at a time.** Builds are the bottleneck, so at most one agent runs `forge
+build`, `/phoe:verify`, a Forge bootstrap or a trial run at any moment, run-wide. Treat it as a
+single build slot you hand out:
+
+- Dispatch a BUILD-role implementer, a fix pass that builds, or a verification point only when the
+  build slot is free; queue the rest in the order they became ready.
+- Every other agent runs in DEFER mode (author and commit only, no build), and reviewers never
+  build.
+- While the build slot is busy, keep the other 3 slots on authoring and review. A queued build
+  never blocks dispatching authoring work.
+- Release the slot when the building agent's notification arrives, then hand it to the next
+  queued build.
 
 ## 1. Bootstrap
 
@@ -200,15 +221,15 @@ a background session a subagent gets native `Write`/`Edit` and `git` only in the
 orchestrator has entered with `EnterWorktree(path=<absolute path>)`; entering another revokes the
 previous one.
 
-- **Serial (default):** enter A, dispatch A, await it, enter B, and so on. A stack's layers are
-  serial anyway; parallelism comes from independent stacks.
-- **Parallel:** dispatch up to 3 at once and tell each to author files through Bash (single-quoted
+- **Serial:** enter A, dispatch A, await it, enter B, and so on. Use it only when one layer is
+  ready, or a stack's layers wait on each other; parallelism comes from independent stacks.
+- **Parallel (default when 2 or more layers are ready):** dispatch up to 4 at once and tell each to author files through Bash (single-quoted
   heredocs for new files, a `python` exact-string replace with `assert count == 1` for edits).
   Their `git` is refused, so the orchestrator enters each worktree in turn to commit for it.
 - Use the general-purpose agent. Never pass `isolation: "worktree"`: it creates a fresh worktree
   off main and ignores the prepared branch. The `phoe:invoke-*` specialists carry it, so they are not
   implementers. Never let a subagent call `EnterWorktree`; it reports success and then breaks Bash.
-- Forge bounds build load itself (`/phoe:verify` §2b); only cold bootstraps need serializing.
+- Only one dispatched agent holds the build slot (Concurrency cap); give every other parallel implementer the DEFER role, and run its build-dependent Verification Commands at the verification point.
 
 ### 4c. Handle implementer results
 
