@@ -7,7 +7,8 @@ description: Use when fixing an open PR — review feedback, merge conflicts or 
 
 A PR has new review comments, may have drifted from main, and needs another revision. The order is
 fix, commit, push, resolve threads, then build while CI runs. A PR with only a merge conflict or a
-CI failure runs steps 1, 4, 5 and 7 (read a CI failure with `gh run view <run-id> --log-failed`).
+CI failure runs steps 1, 4 and 5 (read a CI failure with `gh run view <run-id> --log-failed`), and
+skips step 7: the push re-runs CI, so a local build or full re-verify only doubles the runners' work.
 
 Work in the PR branch's worktree. If it was removed after publishing, add a fresh one on the
 existing branch: `git worktree add .claude/worktrees/<type>-<label> <type>/<label>`.
@@ -88,8 +89,11 @@ reply.
 
 ## 7. Build while CI runs
 
-Check load first: this box is also a CI runner, so if a CI job or another build is running here,
-skip the build and let CI be the build. Otherwise run `/phoe:build` for the relevant profile. Do
+Skip this step when the only change is a CI-failure fix; the pushed commit's CI run is the check.
+Never run a full re-verify to confirm such a fix.
+
+For review feedback, check load first: this box is also a CI runner, so if a CI job or another
+build is running here, skip the build and let CI be the build. Otherwise run `/phoe:build` for the relevant profile. Do
 not run `/phoe:verify`; that gate is the user's. If the build fails, fix, commit and push again.
 
 ## 8. Backfill the review link
@@ -112,7 +116,7 @@ fi
 - Comments addressed and resolved (thread IDs or file:line).
 - Drafted replies awaiting the user, with the text inline.
 - Confirmation that every comment is fixed and resolved, or drafted and open.
-- The pushed commit and the build result (or that CI was left to build).
+- The pushed commit and the build result (or that CI was left to build or re-verify).
 - Whether the review link was backfilled, and any Crucible follow-ups filed.
 
 This skill does not post replies, approve or merge the PR, or run `/phoe:verify`.

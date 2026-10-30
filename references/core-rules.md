@@ -81,7 +81,8 @@ below are under `${CLAUDE_PLUGIN_ROOT}`; `Docs/` paths are in the Phoenix reposi
   `/phoe:format`) — the repository's forbidden-token audit fails any external generator.
 - Do not build or test after every change. `/phoe:verify` is required before a PR opens; one
   verify may cover several commits, such as a stack's layers. This overrides TDD and
-  verification-before-completion guidance from other skills.
+  verification-before-completion guidance from other skills. A fix for a failing CI run skips
+  verify — the push re-runs CI, and verifying again doubles the runners' work.
 - Name the profiles you verified whenever you report verification.
 - Treat `forge clean` and `forge build --clean` as destructive. If Forge refuses or asks, stop and
   ask the user, and never add `--force` yourself, because the build tree holds files Forge did not
