@@ -1,6 +1,6 @@
 # Phoenix Engine Plugin for Claude Code
 
-A comprehensive Claude Code plugin for developing the Phoenix Engine — a cross-platform C++ game engine targeting Linux and Windows.
+A comprehensive Claude Code plugin for developing the Phoenix Engine — a cross-platform C++ runtime targeting Linux and Windows.
 
 ## Installation
 

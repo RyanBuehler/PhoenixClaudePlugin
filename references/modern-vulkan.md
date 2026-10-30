@@ -1,6 +1,6 @@
 # Modern Vulkan Quick Reference (1.2–1.4)
 
-Practical reference for modern Vulkan features in a game engine context.
+Practical reference for modern Vulkan features in a real-time rendering context.
 
 ## Dynamic Rendering (Vulkan 1.3)
 
