@@ -81,6 +81,9 @@ build that outruns the command timeout is waited out with the wait script, not b
 - New names: do not stall on one. Pick it through `Docs/StyleGuide.md` §Naming, declare it in
   exactly one place so a rename stays cheap, and list every name you add to production code (not
   trial-only names) under `## Names Pending Confirmation` (name, what it names, the runner-up).
+- Every word in a new name is approved, banned, or asked of Ryan; `Tools/check_naming.py` gates CI
+  on it. Run it before you commit. For an `ASK`, use an approved word and list the one you wanted,
+  with its proposed ApprovedTerms line, under `## Names Pending Confirmation`.
 - Stay inside the challenge's scope unless leaving it is necessary.
 - Cite only what exists. Before referencing a helper, type, toolchain, tool, inspector page,
   script, vendored dependency or directory, in code, comments, commit messages or prose, confirm it

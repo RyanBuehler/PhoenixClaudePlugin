@@ -110,7 +110,9 @@ preamble has them read the file.
 > - `Invalid revision range` means a bad argument, not a broken repository. Re-resolve and retry.
 >
 > **The rules.** Before judging, read `<PLUGIN_ROOT>/references/core-rules.md`. A change that breaks
-> its §Codebase rules is a finding.
+> its §Codebase rules is a finding. Every word in a new name is approved (ApprovedTerms, a Lexicon
+> heading, a module name), banned (a Lexicon `Not:` line), or asked of Ryan; `Tools/check_naming.py`
+> gates CI on it.
 >
 > **Where things live.** The editor is `Applications/Editor/`, not under the engine tree; engine
 > modules are `Engine/Modules/<Group>/<Module>/`. Scope every search to the worktree root you were

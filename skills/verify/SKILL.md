@@ -45,6 +45,25 @@ the forge run saves a full cycle. An `ASK` goes to Ryan as a proposal ([core rul
 never edit `Docs/ApprovedTerms.txt`, `Docs/NamingExceptions.txt` or `Tools/naming_ledger.txt` to
 silence it. Touching a line that declares a name in the ledger fails until that name is fixed.
 
+**Naming review.** Once the gate passes, judge what its rules cannot: a mechanism name (`Pump`,
+`Glue`), a synonym of a concept the tree already names, a name that only reads at its declaration.
+
+1. Collect the branch's new declarations:
+   `python3 Tools/naming_inventory.py --new-since --output <worktree>/.forge-wait/new-names.jsonl`.
+   Skip the review when the file is empty or holds only trial names (paths under `Trials/`).
+2. Dispatch one read-only `Explore` subagent with `model: "sonnet"`, always Sonnet. Hand it the
+   file's path, `Docs/StyleGuide.md` §Naming, `Docs/Lexicon.md` and `Docs/ApprovedTerms.txt`, plus
+   the read-only clause from [dispatch briefs](../../references/dispatch-briefs.md) §1. Ask it to
+   find each name's nearest in-tree siblings by suffix role (`git grep` for other `*Registry`,
+   `*Request`, `On*` declarations), and to label each name `obvious` (it reads like its siblings and
+   says what the thing is) or `doubtful`. For each doubtful name, it gives the shape of the problem,
+   the siblings it compared against, a better name from approved words, and the Lexicon entry or
+   ApprovedTerms line that would settle it.
+3. Interactive runs ask Ryan about each doubtful name with AskUserQuestion. Describe the name by its
+   shape and role, put the suggested name first, and offer the Lexicon or ApprovedTerms entry as an
+   option. Under `/phoe:execute`, with nobody to ask, post the doubtful names as one comment on the
+   challenge (`"$CRUCIBLE" challenge comment --label=<LABEL> --body-file=<path>`) and continue.
+
 ```bash
 "$FORGE" verify editor
 ```

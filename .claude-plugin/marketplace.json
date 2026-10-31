@@ -10,7 +10,7 @@
     {
       "name": "phoe",
       "description": "Phoenix Engine C++ development toolkit — agents, skills, hooks, and references for cross-platform C++ development.",
-      "version": "2026.7.35",
+      "version": "2026.7.36",
       "source": "./",
       "author": {
         "name": "Ryan Buehler"
