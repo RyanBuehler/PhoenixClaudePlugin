@@ -240,5 +240,7 @@ modules, flags, JSON keys, refusal text). Names used only in trials need no conf
 4. Apply each rename on the branch by hand, never with a bulk regex, and commit an approved word's
    `Docs/ApprovedTerms.txt` line on the branch. A name added by a later review fix is confirmed the
    same way before the push; rebuild and re-run the trials it touches.
+   Run `python3 Tools/check_naming.py` after every rename and before the commit; a name it flags
+   is renamed, or proposed to Ryan if it is an unapproved word, never exempted.
 5. If Ryan does not answer this session, open the PR with `--draft`, comment each name on its
    challenge as pending Ryan's confirmation, and lead the run's report with them.
