@@ -111,10 +111,6 @@ Rules the repository docs do not state, or state as a pattern summarized here.
   straight into `Docs/ApprovedTerms.txt`. A `Not:` arrow (`stem `Spell` → Format`) names the
   replacement; `in Module…` holds a ban only in those modules, `outside Module…` everywhere else; a
   scoped ApprovedTerms line (`word Module…`) approves the word only in those modules.
-- Run `python3 Tools/check_naming.py` from the worktree root after writing new declarations and
-  before every commit — CI runs it too, and it fails a new name that breaks a ban or a naming rule.
-  An `ASK` finding means stop and propose the word to Ryan, or pick an approved word; never edit
-  `Docs/ApprovedTerms.txt`, `Docs/NamingExceptions.txt` or `Tools/naming_ledger.txt` to make it pass.
 - One owner drives each system through its concrete interface; all other code reaches it through
   a registry-discovered subsystem that names no concrete type (`Docs/Patterns.md` §Ownership
   Tiers). A system without a clear owner gets a designated one or is Tier-2-only.
