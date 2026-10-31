@@ -12,6 +12,8 @@ below are under `${CLAUDE_PLUGIN_ROOT}`; `Docs/` paths are in the Phoenix reposi
 4. Every pixel earns its place.
 5. Every action is illuminated.
 6. What automation does, the user can undo.
+7. Every module is optional.
+8. What is not meant to happen fails loudly.
 
 ## Where the rules live
 
