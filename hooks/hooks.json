@@ -56,6 +56,15 @@
             "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/agent-registry-tracker.py\""
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"${CLAUDE_PROJECT_DIR}/Tools/check_naming.py\"; [ -f \"$f\" ] && python3 \"$f\" --hook; exit 0"
+          }
+        ]
       }
     ]
   }
