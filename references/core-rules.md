@@ -14,6 +14,7 @@ below are under `${CLAUDE_PLUGIN_ROOT}`; `Docs/` paths are in the Phoenix reposi
 6. What automation does, the user can undo.
 7. Every module is optional.
 8. What is not meant to happen fails loudly.
+9. Teams never fight the files.
 
 ## Where the rules live
 
