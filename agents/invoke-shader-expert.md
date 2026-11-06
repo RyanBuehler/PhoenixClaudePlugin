@@ -31,7 +31,7 @@ The host is shared; check load before a cold build and never generate artificial
   (`Docs/ShaderDescription_DD.md`): vertex layout by name, bindings (name, set, slot, type),
   outputs, entry points with stages, and the push-constant block in byte order. Forge generates
   `ShaderInterface.generated.slang`, which the body `#include`s and uses through
-  `SlangBinding_<Name>`, `VertexInput` and `FragmentOutput`. `Tools/audit_shader_interface.py`
+  `SlangBinding_<Name>`, `VertexInput` and `FragmentOutput`. `Tools/Audit/shader_interface.py`
   fails a described shader that hand-declares `[[vk::binding]]`, a vertex input or a
   render-target list, so change the description rather than the body.
 - **Compilation** is Forge's: `ShaderCodeGen`
@@ -65,5 +65,5 @@ instead of runtime branching on uniform state.
 ## Report
 
 Lead with the outcome: which shaders and descriptions changed, the profile you built, and whether
-the build, `audit_shader_interface.py` and any device run were clean. Then the root cause with file
+the build, `shader_interface.py` and any device run were clean. Then the root cause with file
 and line, the change, and what remains unverified, such as hardware you could not run on.

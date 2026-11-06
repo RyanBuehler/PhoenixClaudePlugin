@@ -62,7 +62,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "f=\"${CLAUDE_PROJECT_DIR}/Tools/check_naming.py\"; [ -f \"$f\" ] && python3 \"$f\" --hook; exit 0"
+            "command": "f=\"${CLAUDE_PROJECT_DIR}/Tools/Audit/naming.py\"; [ -f \"$f\" ] || f=\"${CLAUDE_PROJECT_DIR}/Tools/check_naming.py\"; [ -f \"$f\" ] && python3 \"$f\" --hook; exit 0"
           }
         ]
       }

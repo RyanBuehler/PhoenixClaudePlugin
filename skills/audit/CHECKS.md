@@ -440,7 +440,7 @@ unreliably across module boundaries.
 A `<filesystem>` include or `std::filesystem::*` use outside `Engine/Core/{Public,Private}/IO/`,
 including the bare `filesystem::` spelling and an `fs::` alias.
 
-**Rule**: `Docs/StyleGuide.md` §Filesystem. `Tools/audit_io_seam.py` fails over it.
+**Rule**: `Docs/StyleGuide.md` §Filesystem. `Tools/Audit/raw_filesystem_calls.py` fails over it.
 
 **Detection**: the three spellings. Exempt: the wrapper's own implementation, and platform code
 where an OS API demands a `std::filesystem::path` shape — the ban targets the operations, not the

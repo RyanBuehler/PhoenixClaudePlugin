@@ -111,7 +111,7 @@ preamble has them read the file.
 >
 > **The rules.** Before judging, read `<PLUGIN_ROOT>/references/core-rules.md`. A change that breaks
 > its §Codebase rules is a finding. Every word in a new name is approved (ApprovedTerms, a Lexicon
-> heading, a module name), banned (a Lexicon `Not:` line), or asked of Ryan; `Tools/check_naming.py`
+> heading, a module name), banned (a Lexicon `Not:` line), or asked of Ryan; `Tools/Audit/naming.py`
 > gates CI on it.
 >
 > **Where things live.** The editor is `Applications/Editor/`, not under the engine tree; engine

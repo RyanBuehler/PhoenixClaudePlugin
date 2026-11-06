@@ -48,9 +48,9 @@ third where it was allocated. Fix at the ownership error, which is usually the f
 
 ## Phoenix memory facts
 
-- **No `new`/`delete`, no raw allocation.** `Tools/audit_heap_seam.py` bans
+- **No `new`/`delete`, no raw allocation.** `Tools/Audit/raw_heap_calls.py` bans
   `malloc`/`calloc`/`realloc`/`aligned_alloc`/`std::free` outside
-  `.github/heap-seam-allowlist.txt`. Ownership is `std::unique_ptr` from `std::make_unique`, values,
+  `Tools/Audit/Allowlists/RawHeapCalls.txt`. Ownership is `std::unique_ptr` from `std::make_unique`, values,
   or a registry; one owner per object; `std::span` for non-owning views. `Move()`, not `std::move`.
 - **Teardown leak audits.** `Docs/TeardownLeakSentinel.md` describes the baseline-and-diff audit
   of registries at shutdown, gated on `Build::IsDebugBuild` and reported at `LeakSeverity::Warn`

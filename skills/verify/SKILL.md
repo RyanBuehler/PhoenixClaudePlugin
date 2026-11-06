@@ -39,7 +39,7 @@ for bootstrap details.
 
 ## 2. Verify
 
-Run `python3 Tools/check_naming.py` first: it needs no build, takes seconds, and its findings (an
+Run `python3 Tools/Audit/naming.py` first: it needs no build, takes seconds, and its findings (an
 unapproved word, a banned word, a naming-rule break) are fixed by renaming, so catching them before
 the forge run saves a full cycle. An `ASK` goes to Ryan as a proposal ([core rules](../../references/core-rules.md));
 never edit `Docs/ApprovedTerms.txt`, `Docs/NamingExceptions.txt` or `Tools/naming_ledger.txt` to

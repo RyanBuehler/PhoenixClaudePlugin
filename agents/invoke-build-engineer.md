@@ -25,10 +25,10 @@ host is shared; check load before a cold build and never generate artificial loa
 ## Rules
 
 - **Forbidden tokens.** The generator and test runner Forge replaced were deleted, and
-  `Tools/audit_zero_trace.py` (run by `forge verify`; advisory in CI) reds any path or content
-  matching `.github/forbidden-tokens.txt`, case-insensitively. Check your own text — code,
+  `Tools/Audit/forbidden_build_tools.py` (run by `forge verify`; advisory in CI) reds any path or content
+  matching `Tools/Audit/ForbiddenBuildToolPatterns.txt`, case-insensitively. Check your own text — code,
   comments, commit messages, replies — before proposing a change. Exceptions go in
-  `.github/forbidden-tokens-allowlist.txt`; prefer rewording.
+  `Tools/Audit/Allowlists/ForbiddenBuildTools.txt`; prefer rewording.
 - **No third-party libraries.** OS dependencies (X11/Wayland, ALSA, Vulkan) are the only exception.
   A package manager, submodule or new vendored library is wrong before its details matter.
 - **Build configuration flows through `Build::` constants** from one resolver, never `-D` macros.
