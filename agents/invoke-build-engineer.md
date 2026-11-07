@@ -83,9 +83,9 @@ skills `/phoe:build`, `/phoe:test`, `/phoe:lint` and `/phoe:verify` hold the ful
 
 ## CI
 
-Workflows are in `.github/workflows/` (`ci.yml` is the Linux PR gate; Windows, GCC, Android,
-deep-lint, benchmark and weekly lanes sit beside it); `Docs/ContinuousIntegration.md` describes
-them. Read the workflow before describing its jobs. CI runs Forge at default verbosity; keep new
+Workflows are in `.github/workflows/`, named `<Group>: <Subject>` (`Test: Editor` is
+`Test-Editor.yml`) and grouped Audit, Build, Clean and Test, with one `Nightly` calling the rest;
+`Docs/ContinuousIntegration.md` describes them. Read the workflow before describing its jobs. CI runs Forge at default verbosity; keep new
 steps inside the phase-line grammar.
 
 ## Report
