@@ -43,7 +43,12 @@ Run `python3 Tools/Audit/naming.py` first: it needs no build, takes seconds, and
 unapproved word, a banned word, a naming-rule break) are fixed by renaming, so catching them before
 the forge run saves a full cycle. An `ASK` goes to Ryan as a proposal ([core rules](../../references/core-rules.md));
 never edit `Docs/ApprovedTerms.txt`, `Docs/NamingExceptions.txt` or `Tools/naming_ledger.txt` to
-silence it. Touching a line that declares a name in the ledger fails until that name is fixed.
+silence it. Touching a line that declares a name in the ledger fails until that name is fixed. A
+`SIGNOFF` is not fixed here: a local run lists it under "Pending Ryan's signoff" and passes, so
+verify goes on; it waits for the end-of-run name question
+([challenge workflow](../../references/challenge-workflow.md) §9), and only Ryan's answer adds its
+`Docs/NamingSignoffs.txt` line. CI runs the gate with `--require-signoffs`, so an unanswered one
+blocks the merge.
 
 **Naming review.** Once the gate passes, judge what its rules cannot: a mechanism name (`Pump`,
 `Glue`), a synonym of a concept the tree already names, a name that only reads at its declaration.

@@ -274,7 +274,12 @@ Runs per verification point or checkpoint once 4f converges, in the layers' own 
 `main` is never checked out, merged into or committed to: parallel agents share it, and a PR built
 from it carries their commits. First confirm the stack's new names ([challenge
 workflow](../../references/challenge-workflow.md) §9) in one question round; other stacks keep
-working meanwhile. Then integrate main, so one verify covers the renames and the integration:
+working meanwhile. `SIGNOFF` names are not asked here: post the stack's, each `Scope::Name` with
+its sense, as one comment on its challenge (`"$CRUCIBLE" challenge comment --label=<LABEL>
+--body-file=<path>`) and leave them unrecorded. Local verify passes them as pending; CI's naming
+gate (`--require-signoffs`) holds the PR until Ryan answers, and the fixup that follows his answer
+adds each approved record line and renames each rejected name.
+Then integrate main, so one verify covers the renames and the integration:
 
 1. Rebase the stack's bottom onto `origin/main`, then restack each layer above it (`rebase --onto`,
    as in carrying a fix up). Skip when main has not moved since the bottom was created. Check

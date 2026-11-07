@@ -95,7 +95,8 @@ reproduction steps, so the trial exercises the flaw itself
 
 ## 7. Verify
 
-First confirm new names ([challenge workflow](../../references/challenge-workflow.md) §9).
+First confirm new names and the naming gate's `SIGNOFF` names in one round
+([challenge workflow](../../references/challenge-workflow.md) §9).
 
 1. Re-run the reproduction steps: the bug no longer manifests.
 2. Run the bug's verification commands.

@@ -118,6 +118,12 @@ Rules the repository docs do not state, or state as a pattern summarized here.
   before every commit — CI runs it too, and it fails a new name that breaks a ban or a naming rule.
   An `ASK` finding means stop and propose the word to Ryan, or pick an approved word; never edit
   `Docs/ApprovedTerms.txt`, `Docs/NamingExceptions.txt` or `Tools/naming_ledger.txt` to make it pass.
+- A `SIGNOFF` finding names a declaration spelling a word a Lexicon `Signoff:` line allows only in
+  some senses. It never stops the work: keep the name, note the sense you meant, and ask Ryan at the
+  end of the run with the other names (challenge-workflow §9). A local run lists it as pending and
+  passes; CI's `--require-signoffs` fails it until it is recorded or renamed. Add a
+  `Docs/NamingSignoffs.txt` line only from Ryan's answer, and rename what he rejects; never add a
+  `Docs/NamingExceptions.txt` entry to skip it.
 - One owner drives each system through its concrete interface; all other code reaches it through
   a registry-discovered subsystem that names no concrete type (`Docs/Patterns.md` §Ownership
   Tiers). A system without a clear owner gets a designated one or is Tier-2-only.

@@ -231,16 +231,20 @@ modules, flags, JSON keys, refusal text). Names used only in trials need no conf
 1. Collect each name with what it names and its runner-up (an implementer reports them under
    `## Names Pending Confirmation`), and each word in it that is neither approved nor banned
    ([core rules](core-rules.md)) with why it fits and whether to approve it everywhere or for one
-   module.
+   module. Add every `SIGNOFF` the naming gate reports, its `Scope::Name` with the sense the code
+   means; the run never stopped for one, so this is where it is asked.
 2. Optionally dispatch one read-only Sonnet subagent (`model: "sonnet"`) with that list,
    `Docs/StyleGuide.md` §Naming a new symbol and `Docs/Lexicon.md`, to recommend the best name for
    each.
 3. Ask Ryan with AskUserQuestion, public and wire-visible names first, the best candidate as the
-   recommended option.
+   recommended option. The `SIGNOFF` names go in the same round: sign off as written, or a rename.
 4. Apply each rename on the branch by hand, never with a bulk regex, and commit an approved word's
-   `Docs/ApprovedTerms.txt` line on the branch. A name added by a later review fix is confirmed the
+   `Docs/ApprovedTerms.txt` line on the branch. A signed-off name gets its
+   `Scope::Name  # <sense>` line in `Docs/NamingSignoffs.txt`, kept sorted; a rejected one is renamed. A name added by a later review fix is confirmed the
    same way before the push; rebuild and re-run the trials it touches.
    Run `python3 Tools/Audit/naming.py` after every rename and before the commit; a name it flags
    is renamed, or proposed to Ryan if it is an unapproved word, never exempted.
-5. If Ryan does not answer this session, open the PR with `--draft`, comment each name on its
-   challenge as pending Ryan's confirmation, and lead the run's report with them.
+5. If Ryan does not answer this session, open the PR with `--draft`, comment each name (`SIGNOFF`
+   names included, unrecorded) on its challenge as pending Ryan's confirmation, and lead the run's
+   report with them. An unrecorded `SIGNOFF` fails CI (`--require-signoffs`) until his answer is
+   applied.

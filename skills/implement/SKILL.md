@@ -111,7 +111,8 @@ as a general-purpose agent with the absolute worktree path, the diff and the mod
 
 ## 6. Verify
 
-First confirm new names ([challenge workflow](../../references/challenge-workflow.md) §9).
+First confirm new names and the naming gate's `SIGNOFF` names in one round
+([challenge workflow](../../references/challenge-workflow.md) §9).
 
 1. Run the challenge's verification commands.
 2. Run `/phoe:verify` for the profiles its §2a requires.
