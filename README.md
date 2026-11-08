@@ -103,7 +103,7 @@ These set `disable-model-invocation: true`, so they cost no context until you ty
 |------|-------|-------------|
 | `core-rules.py` | SessionStart, SubagentStart | Loads `references/core-rules.md` into context |
 | `branch-worktree-check.py` | PreToolUse (Bash) | Branches are `<type>/<label>`, within 40 characters, created through a worktree |
-| `bash-guard.py` | PreToolUse (Bash) | Denies `cd` + `git`, root-wide sweeps, risky `git grep` forms, and load generators |
+| `bash-guard.py` | PreToolUse (Bash) | Denies a plain `git` after a `cd` (or anywhere with one in a loop or function; `git -C <absolute path>` is allowed), root-wide sweeps, risky `git grep` forms, and load generators |
 | `push-gate.py` | PreToolUse (Bash) | Checks git identity and push credentials before `git push` and `gh pr create` |
 | `attribution-check.py` | PreToolUse (Bash) | Refuses AI attribution trailers and banners in published text |
 | `agent-registry-tracker.py` | PostToolUse (Bash) | Records which session or job created or edited each PR, for the `agents` skill |

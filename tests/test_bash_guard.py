@@ -76,6 +76,12 @@ class CdGitTests(BashGuardTestCase):
 	def test_allows_absolute_dash_c_after_other_global_options(self):
 		self.assertAllowed("cd /tmp && git -c core.pager=cat -C /home/ryan/phoenix log -1")
 
+	def test_allows_absolute_dash_c_after_value_less_option(self):
+		self.assertAllowed("cd /tmp && git --no-pager -C /home/ryan/phoenix log -1")
+
+	def test_denies_value_less_option_without_dash_c(self):
+		self.assertDenied("cd /tmp/x && git --no-pager status")
+
 	def test_denies_cd_then_git_dash_c_relative(self):
 		self.assertDenied("cd /tmp/x && git -C sub status")
 
@@ -93,6 +99,89 @@ class CdGitTests(BashGuardTestCase):
 
 	def test_allows_cd_inside_quoted_message(self):
 		self.assertAllowed("echo 'cd here and git there'")
+
+
+class ReorderedCommandTests(BashGuardTestCase):
+	def test_denies_git_before_cd_in_a_loop(self):
+		self.assertDenied("for d in a b\ndo\ngit status\ncd $d\ndone")
+
+	def test_denies_git_before_cd_in_a_one_line_loop(self):
+		self.assertDenied("for d in a b; do git status; cd $d; done")
+
+	def test_denies_while_loop(self):
+		self.assertDenied("while read d\ndo\ngit status\ncd $d\ndone")
+
+	def test_denies_function_called_after_cd(self):
+		self.assertDenied("f() {\ngit status\n}\ncd /evil\nf")
+
+	def test_denies_function_keyword_called_after_cd(self):
+		self.assertDenied("function f {\ngit status\n}\ncd /evil\nf")
+
+	def test_denies_spaced_function_header(self):
+		self.assertDenied("f () { git status; }; cd /evil; f")
+
+	def test_allows_absolute_dash_c_in_a_loop(self):
+		self.assertAllowed("for d in a b\ndo\ngit -C /home/ryan/phoenix status\ncd $d\ndone")
+
+	def test_allows_loop_without_cd(self):
+		self.assertAllowed("for d in a b; do git status; done")
+
+	def test_conditional_keeps_text_order(self):
+		self.assertAllowed("if git diff --quiet; then cd /tmp/x; fi")
+		self.assertDenied("if true; then cd /tmp/x; fi; git status")
+
+
+class NestedScopeTests(BashGuardTestCase):
+	def test_denies_cd_git_in_double_quoted_substitution(self):
+		self.assertDenied('x="$(echo a; cd /evil; git status; echo b)"')
+
+	def test_denies_cd_git_in_nested_substitution(self):
+		self.assertDenied('x="$(echo "$(cd /evil; git status)")"')
+
+	def test_denies_cd_git_in_double_quoted_backticks(self):
+		self.assertDenied('x="`echo a; cd /evil; git status; echo b`"')
+
+	def test_substitution_cd_does_not_leak_out(self):
+		self.assertAllowed('ROOT="$(cd "$(dirname "$0")" && pwd)"; git status')
+
+	def test_single_quoted_substitution_does_not_run(self):
+		self.assertAllowed("echo '$(cd /evil; git status)'")
+
+	def test_denies_cd_git_in_bash_dash_c(self):
+		self.assertDenied('bash -c "pwd; cd /evil; git status; pwd"')
+		self.assertDenied("zsh -lc 'cd /evil && git status'")
+
+	def test_bash_dash_c_cd_does_not_leak_out(self):
+		self.assertAllowed("bash -c 'cd /evil && pwd'; git status")
+
+	def test_denies_cd_git_in_eval(self):
+		self.assertDenied("eval 'cd /evil; git status'")
+
+	def test_denies_cd_git_in_heredoc_fed_to_a_shell(self):
+		self.assertDenied("bash <<EOF\ncd /evil\ngit status\nEOF")
+
+	def test_rules_other_than_cd_git_reach_nested_scopes(self):
+		self.assertDenied("bash -c 'git grep Symbol -A3'")
+
+
+class HeredocTests(BashGuardTestCase):
+	def test_paired_apostrophes_in_bodies_do_not_hide_commands(self):
+		self.assertDenied("cat <<EOF\nit's\nEOF\ncd /evil && git status\ncat <<EOF\ndon't\nEOF")
+
+	def test_quoted_delimiter_and_tab_stripping(self):
+		self.assertDenied("cat <<'EOF'\nit's\nEOF\ncd /evil && git status\ncat <<-\"END\"\ndon't\n\tEND")
+
+	def test_body_of_a_non_shell_is_not_commands(self):
+		self.assertAllowed("cat > notes <<EOF\ncd /evil\ngit status\nEOF")
+
+	def test_two_heredocs_on_one_line(self):
+		self.assertDenied("cat <<A <<B\nit's\nA\ndon't\nB\ncd /evil && git status")
+
+	def test_here_string_is_not_a_heredoc(self):
+		self.assertDenied("cat <<<EOF\ncd /evil && git status\nEOF")
+
+	def test_shift_without_terminator_hides_nothing(self):
+		self.assertDenied("echo $((1<<n))\ncd /evil && git status")
 
 
 class QuotedSeparatorTests(BashGuardTestCase):
@@ -122,6 +211,12 @@ class QuotedSeparatorTests(BashGuardTestCase):
 	def test_quoted_git_after_cd_is_not_a_command(self):
 		self.assertAllowed("cd /tmp/x && echo 'a; git status'")
 
+	def test_backslash_is_literal_inside_single_quotes(self):
+		self.assertAllowed("echo 'a\\' 'b; cd x; c' && git status")
+
+	def test_hash_after_escaped_space_is_not_a_comment(self):
+		self.assertDenied("echo a\\ #b; cd /tmp/x; git status")
+
 	def test_unquoted_separators_still_split(self):
 		self.assertDenied("echo 'a' ; cd /tmp/x ; git status")
 		self.assertDenied("echo 'a' | cd /tmp/x | git status")
@@ -135,6 +230,13 @@ class QuotedSeparatorTests(BashGuardTestCase):
 
 	def test_unbalanced_quote_still_splits(self):
 		self.assertDenied("cat notes <<EOF\nit's\nEOF\ncd /tmp/x && git status")
+
+	def test_and_chain_continued_on_next_line_stays_a_chain(self):
+		self.assertDenied("git grep a &&\ngit grep b")
+		self.assertDenied("git grep a && # why\n\ngit grep b")
+
+	def test_newline_chain_is_not_an_and_chain(self):
+		self.assertAllowed("git grep a\ngit grep b")
 
 	def test_quoted_separator_does_not_hide_a_git_grep_chain(self):
 		self.assertDenied("git grep 'a;b' && git grep c")
@@ -182,6 +284,14 @@ class SweepTests(BashGuardTestCase):
 	def test_denies_find_from_root(self):
 		self._make_swept_dirs()
 		self.assertDenied("find . -name '*.cppm'")
+
+	def test_denies_find_exec_from_root(self):
+		self._make_swept_dirs()
+		self.assertDenied("find . -name '*.cppm' -exec grep Symbol {} \\;")
+
+	def test_allows_find_exec_on_scoped_path(self):
+		self._make_swept_dirs()
+		self.assertAllowed("find Engine -name '*.cppm' -exec grep Symbol {} \\;")
 
 	def test_allows_sweep_with_all_excludes(self):
 		self._make_swept_dirs()

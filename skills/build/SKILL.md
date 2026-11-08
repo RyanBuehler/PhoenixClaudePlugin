@@ -56,8 +56,8 @@ modification time, or a source is added or removed. The inputs reach well past
 
 - `Applications/Forge/Scripts/bootstrap.py`, `Applications/Forge/Templates/`, and Forge's and
   ForgeCore's own sources;
-- every other module in `CLOSURE_MODULES` in `bootstrap.py`: `Core` (all of `Engine/Core`, including
-  `Engine/Core/Public/Interface`), `Engine`, `Arbiter`, `Json`, `ActionRegistry`, `PhoenixPy` (the
+- every other module in `CLOSURE_MODULES` in `bootstrap.py`: `Core` (`Engine/Core/Public`, including
+  `Public/Interface`, and `Engine/Core/Private`), `Engine`, `Arbiter`, `Json`, `ActionRegistry`, `PhoenixPy` (the
   script cook), `ShaderCatalog`, `ShaderResolution`, `Process`;
 - the `<Name>Manifest.json` and `Applications/Forge/Recipes/<Name>.recipe.json` of every module
   above, and a new recipe file;

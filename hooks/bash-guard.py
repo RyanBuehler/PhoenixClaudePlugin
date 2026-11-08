@@ -17,6 +17,12 @@ SEPARATOR = re.compile(r'(&&|\|\||\||;|\n)')
 REDIRECT_RE = re.compile(r'^[0-9]*[<>]+&?[0-9-]*$|^&>+$')
 ENV_ASSIGNMENT = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*=')
 GIT_OPTIONS_TAKING_VALUE = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env"}
+HEREDOC_START = re.compile(r"""<<<|<<(-?)[ \t]*(?:'([^'\n]+)'|"([^"\n]+)"|\\?([^\s;&|<>()'"]+))""")
+CONTINUING_OPERATORS = ("&&", "||", "|")
+SHELLS = {"bash", "sh", "zsh", "dash"}
+SHELL_COMMAND_FLAG = re.compile(r'^-[A-Za-z]*c$')
+LOOP_WORDS = {"for", "while", "until", "select"}
+WORDS_BEFORE_COMMAND = {"do", "then", "else", "elif", "if", "!", "{"}
 
 FORK_BOMB = re.compile(r':\s*\(\)\s*\{')
 SPINNER = re.compile(r'\bwhile\s+(?::|true|\[\s*1\s*\])\s*;\s*do\s*(?::|true)?\s*;?\s*done\b')
@@ -72,16 +78,67 @@ def split_everywhere(command):
 	return [(parts[index - 1] if index else "", parts[index]) for index in range(0, len(parts), 2)]
 
 
-def split_commands(command):
+def substitution_end(command, index):
+	"""Return the index of the `)` closing a `$(` whose body starts at `index`, or -1."""
+	contexts = ["("]
+	while index < len(command):
+		char = command[index]
+		if char == "\\":
+			index += 2
+			continue
+		if contexts[-1] == '"':
+			if char == '"':
+				contexts.pop()
+			elif command.startswith("$(", index):
+				contexts.append("(")
+				index += 1
+		elif char == "'":
+			index = command.find("'", index + 1)
+			if index < 0:
+				return -1
+		elif char in '"(':
+			contexts.append(char)
+		elif char == ")":
+			contexts.pop()
+			if not contexts:
+				return index
+		index += 1
+	return -1
+
+
+def read_heredoc_bodies(command, index, delimiters):
+	"""Return (index past the bodies starting at `index`, their text), or None.
+
+	A delimiter with no terminator line is not a heredoc this can trust (`$((1<<n))`).
+	"""
+	body = []
+	for strip_tabs, delimiter in delimiters:
+		while True:
+			if index >= len(command):
+				return None
+			line_end = command.find("\n", index)
+			line_end = len(command) if line_end < 0 else line_end
+			line = command[index:line_end]
+			index = line_end + 1
+			if (line.lstrip("\t") if strip_tabs else line) == delimiter:
+				break
+			body.append(line)
+	return index, "\n".join(body)
+
+
+def split_commands(command, nested):
 	"""Return (separator-before, text) pairs, splitting only outside quotes.
 
-	An unbalanced quote is not shell this can read (an apostrophe in a heredoc
-	body), so that command falls back to splitting everywhere.
+	Text that runs in its own shell scope goes to `nested`: substitutions inside
+	double quotes and a heredoc fed to a shell. Other heredoc bodies are skipped.
+	An unbalanced quote is not shell this can read, so that command falls back
+	to splitting everywhere.
 	"""
 	commands = []
 	separator = ""
 	current = []
 	quote = None
+	heredocs = []
 	index = 0
 	while index < len(command):
 		char = command[index]
@@ -90,24 +147,51 @@ def split_commands(command):
 				current.append(command[index:index + 2])
 			index += 2
 			continue
+		if quote == '"' and (command.startswith("$(", index) or char == "`"):
+			body_start = index + (1 if char == "`" else 2)
+			body_end = command.find("`", body_start) if char == "`" else substitution_end(command, body_start)
+			if body_end >= 0:
+				nested.append(command[body_start:body_end])
+				current.append(command[index:body_end + 1])
+				index = body_end + 1
+				continue
 		if quote:
 			if char == quote:
 				quote = None
 		elif char in "'\"":
 			quote = char
-		elif char == "#" and (not current or current[-1][-1:].isspace()):
+		elif char == "#" and (not current or (len(current[-1]) == 1 and current[-1].isspace())):
 			end_of_comment = command.find("\n", index)
 			if end_of_comment < 0:
 				break
 			index = end_of_comment
 			continue
 		else:
+			redirect = HEREDOC_START.match(command, index)
+			if redirect:
+				delimiter = redirect.group(2) or redirect.group(3) or redirect.group(4)
+				if delimiter:
+					heredocs.append((redirect.group(1) == "-", delimiter))
+				current.append(redirect.group())
+				index = redirect.end()
+				continue
 			match = SEPARATOR.match(command, index)
 			if match:
-				commands.append((separator, "".join(current)))
+				text = "".join(current)
+				index = match.end()
+				if match.group() == "\n" and not text.strip() and separator in CONTINUING_OPERATORS:
+					current = []
+					continue
+				commands.append((separator, text))
 				separator = match.group()
 				current = []
-				index = match.end()
+				if match.group() == "\n" and heredocs:
+					bodies = read_heredoc_bodies(command, index, heredocs)
+					heredocs = []
+					if bodies:
+						index, body = bodies
+						if text.split()[:1] and text.split()[0] in SHELLS:
+							nested.append(body)
 				continue
 		current.append(char)
 		index += 1
@@ -117,16 +201,12 @@ def split_commands(command):
 	return commands
 
 
-def split_pieces(command):
+def split_pieces(command, nested):
 	"""Yield (separator-before, tokens) for each simple command in `command`."""
 	pieces = []
-	carried_separator = ""
-	for separator, text in split_commands(command):
-		separator = separator or carried_separator
-		carried_separator = ""
+	for separator, text in split_commands(command, nested):
 		piece = text.strip().lstrip("({").strip()
 		if not piece:
-			carried_separator = separator
 			continue
 		try:
 			tokens = shlex.split(piece)
@@ -150,14 +230,57 @@ def git_targets_absolute_path(tokens):
 	return False
 
 
+def strip_compound_openers(tokens):
+	"""Return (the command `tokens` runs, whether an opener repeats or defers it)."""
+	reordered = False
+	while tokens:
+		if tokens[0] in LOOP_WORDS:
+			reordered = True
+			tokens = tokens[1:]
+		elif tokens[0] in WORDS_BEFORE_COMMAND:
+			tokens = tokens[1:]
+		elif tokens[0] == "function":
+			reordered = True
+			tokens = tokens[2:]
+		elif tokens[0].endswith("()"):
+			reordered = True
+			tokens = tokens[1:]
+		elif tokens[1:2] == ["()"]:
+			reordered = True
+			tokens = tokens[2:]
+		else:
+			break
+	return tokens, reordered
+
+
 def check_cd_git(pieces):
-	"""Deny a git command that reads the directory an earlier `cd` entered."""
-	changed_directory = False
-	for _, tokens in pieces:
-		if tokens[0] in ("cd", "pushd"):
+	"""Deny a git command that reads the directory a `cd` entered.
+
+	Loops and functions run in a different order than they read, so any `cd`
+	there counts as coming first.
+	"""
+	commands = [strip_compound_openers(tokens) for _, tokens in pieces]
+	changed_directory = any(reordered for _, reordered in commands) and any(
+		words[:1] in (["cd"], ["pushd"]) for words, _ in commands)
+	for words, _ in commands:
+		if words[:1] in (["cd"], ["pushd"]):
 			changed_directory = True
-		elif tokens[0] == "git" and changed_directory and not git_targets_absolute_path(tokens):
+		elif words[:1] == ["git"] and changed_directory and not git_targets_absolute_path(words):
 			deny(MSG_CD_GIT)
+
+
+def shell_argument_texts(pieces):
+	"""Return the text each `bash -c` or `eval` in `pieces` hands to a shell."""
+	texts = []
+	for _, tokens in pieces:
+		if tokens[0] == "eval":
+			texts.append(" ".join(tokens[1:]))
+		elif tokens[0] in SHELLS:
+			for index, token in enumerate(tokens[:-1]):
+				if index and SHELL_COMMAND_FLAG.match(token):
+					texts.append(tokens[index + 1])
+					break
+	return texts
 
 
 def check_load(command, pieces):
@@ -277,15 +400,24 @@ def check_git_grep(pieces):
 			seen_pattern = True
 
 
-def main():
-	data = json.load(sys.stdin)
-	command = data.get("tool_input", {}).get("command", "")
-	cwd = data.get("cwd") or os.getcwd()
-	pieces = split_pieces(command)
+def check_scope(command, cwd):
+	"""Apply every rule to one shell scope; return the scopes nested in it."""
+	nested = []
+	pieces = split_pieces(command, nested)
 	check_cd_git(pieces)
 	check_load(command, pieces)
 	check_sweep(pieces, cwd)
 	check_git_grep(pieces)
+	return nested + shell_argument_texts(pieces)
+
+
+def main():
+	data = json.load(sys.stdin)
+	command = data.get("tool_input", {}).get("command", "")
+	cwd = data.get("cwd") or os.getcwd()
+	scopes = [command]
+	for scope in scopes:
+		scopes.extend(check_scope(scope, cwd))
 	print("{}")
 	sys.exit(0)
 

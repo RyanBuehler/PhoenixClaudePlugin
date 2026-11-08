@@ -153,8 +153,12 @@ preamble has them read the file.
 > **The command guard.** A background session's guard reads the literal command text and refuses a
 > form it cannot verify, whatever the command would have done. Each refused form has a working one:
 >
-> - A path segment named `Source`, read as the shell's `source` builtin: use a quoted glob as the
->   pathspec (`'*/Sourc?/*'`, `'*/Private/*'`) or a literal absolute path.
+> - A path segment named `Source`, read as the shell's `source` builtin. Most reliable first:
+>   truncate the path above that segment and filter afterwards (`-- 'Engine/Modules/Rendering/Mirage'`);
+>   use a quoted glob as the pathspec (`'*/Sourc?/*'`, `'*/Private/*'`); or give a literal absolute
+>   path. Broadening a pathspec changes what you searched, so say which shape you ran. To read a file
+>   under `Source` out of a commit when `git show <SHA>:<path>` is refused, run
+>   `git ls-tree -r <SHA> | grep <leafdir>`, then `git cat-file -p <blob>` on the blob it lists.
 > - A shell variable used as a command or path (`"$FORGE" build`, `cat "$TREE/file"`): write the
 >   literal absolute path.
 > - `for` and `while` loops, heredocs, and command substitution (`$(...)`): run one command per
@@ -162,8 +166,10 @@ preamble has them read the file.
 >   and run that file.
 > - `python -c` text naming `git`: use a script file under the job tmp directory.
 > - A pipe into `xargs`: pass the paths literally, one command per call, or use a script file.
-> - `git -C` into another worktree: run git from the worktree you were given, and read another tree
->   by literal absolute path.
+> - `git -C` reaching any tree other than the one you were assigned: read that tree by literal
+>   absolute path instead. `git -C <assigned absolute path>` is the correct form for your assigned
+>   tree, including after a `cd`. The plugin's cd-plus-git hook is a separate guard: it refuses a
+>   plain `git` after a `cd`, and its refusal says so.
 >
 > A refused command's empty output is not a negative result: nothing ran, so it says nothing about
 > the code. Quote the refusal. Take the working form above once; if there is none, or that is
