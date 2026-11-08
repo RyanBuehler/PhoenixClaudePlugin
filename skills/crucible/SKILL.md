@@ -102,6 +102,7 @@ crucible challenge list                                    # active challenges
 crucible challenge list --status=todo --priority=high
 crucible challenge list --tag=drag-drop                    # filter by single tag
 crucible challenge list --no-saga                          # orphans (no saga membership)
+crucible challenge list --saga=<id|label>                  # one saga, in saga order; combines with --status, --priority, --tag; refused with --no-saga
 crucible challenge list-archive                            # merged/canceled
 crucible challenge show <id|--label=X> [--include-archived]
 
@@ -180,7 +181,7 @@ crucible bug create \
   --references="..."
 ```
 
-Pipe-separated lists (`a|b|c`) are accepted on create for any list-valued field. The server also accepts `,` as a separator. The CLI emits a deprecation warning on `update` for pipe-separated forms (see below).
+Pipe-separated lists (`a|b|c`) are accepted on create for any list-valued field. Only `--affected-files` also splits on `,`; every other field, `--references` included, keeps commas inside an item. For an item that contains a pipe, use `--<base>-from-json=<path>` (a JSON array of strings), accepted on create and update for challenges and bugs; on create it cannot be combined with the scalar flag. The CLI emits a deprecation warning on `update` for pipe-separated forms (see below).
 
 **`Warning: affected_files path does not exist` is unreliable — ignore it, and check the paths
 yourself.** The existence check runs against the *server's* notion of the project root, not the
@@ -218,9 +219,10 @@ So you append a new acceptance criterion with `--append-acceptance="..."`, repla
 For sagas, `update` exposes `--append-validation-criteria=` and `--remove-validation-criteria=` directly.
 
 **The `--append-*` / `--replace-*` / `--clear-*` family is a *challenge* feature. `bug update` does
-not have it.** A bug's list fields (`--tags`, `--acceptance-criteria`, `--verification`,
-`--affected-files`, `--references`) accept only the pipe-separated whole-list form, which **replaces**
-the list — to add one tag you must restate every tag. Reaching for the challenge form fails with
+not have it.** A bug's list fields (`--reproduction-steps`, `--tags`, `--acceptance-criteria`, `--verification`,
+`--affected-files`, `--references`) accept the pipe-separated whole-list form or
+`--<base>-from-json=<path>` (bases `reproduction-steps`, `tags`, `acceptance`, `verification`,
+`files`, `references`); both **replace** the list — to add one tag you must restate every tag. Reaching for the challenge form fails with
 `Error: Unknown flag: --append-tags`, which reads like a typo rather than an entity difference. Read
 the current list off `bug show` first, then send the full replacement:
 
@@ -236,7 +238,7 @@ one is a scalar, not a list.)
 ```
 crucible saga add <saga_id|saga_label> <challenge_id|challenge_label>
 crucible saga remove <saga> <challenge>
-crucible saga reorder <saga> <challenge> <position>
+crucible saga reorder <saga> <challenge> <position>  # <position> starts at 0
 ```
 
 To "promote saga X to todo", since saga has no status flag, move its constituent challenges:
@@ -344,7 +346,6 @@ If still in doubt, the source of truth is `Applications/Crucible/Source/Private/
 ## Common failure modes
 
 - **`Error: Unknown flag: --status` on `saga update`** — saga has no status flag. Move challenges instead.
-- **`Error: Unknown flag: --saga`** on `challenge list` — there is no `--saga` filter. Use `crucible saga show <id>` to enumerate a saga's challenges, or filter list by `--tag` if you tagged consistently.
 - **`saga create --challenges=a|b|c` succeeded but saga is empty** — known quirk; `--challenges` is silently dropped on create. Use `crucible saga add` after creation.
 - **`Failed to load challenge N: Failed to read file: .../N.json`** — challenge IDs are sparse. The number you tried is unallocated or archived. Use `crucible challenge list` / `list-archive` to find real IDs.
 - **`crucible: command not found`** — the binary is not on PATH. Resolve it with the script in **Hard rules** above, or build it via `/phoe:build crucible`.
