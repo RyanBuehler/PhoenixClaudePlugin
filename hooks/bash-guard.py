@@ -21,8 +21,10 @@ HEREDOC_START = re.compile(r"""<<<|<<(-?)[ \t]*(?:'([^'\n]+)'|"([^"\n]+)"|\\?([^
 CONTINUING_OPERATORS = ("&&", "||", "|")
 SHELLS = {"bash", "sh", "zsh", "dash"}
 SHELL_COMMAND_FLAG = re.compile(r'^-[A-Za-z]*c$')
+SHELL_OPTION_TAKING_VALUE = re.compile(r'^[-+][A-Za-z]*[oO]$')
 LOOP_WORDS = {"for", "while", "until", "select"}
 WORDS_BEFORE_COMMAND = {"do", "then", "else", "elif", "if", "!", "{"}
+REORDERED_MARKER = ["<loop or function opener>"]
 
 FORK_BOMB = re.compile(r':\s*\(\)\s*\{')
 SPINNER = re.compile(r'\bwhile\s+(?::|true|\[\s*1\s*\])\s*;\s*do\s*(?::|true)?\s*;?\s*done\b')
@@ -78,14 +80,33 @@ def split_everywhere(command):
 	return [(parts[index - 1] if index else "", parts[index]) for index in range(0, len(parts), 2)]
 
 
+def heredoc_at(redirect):
+	"""Return (strip-tabs, delimiter) for a HEREDOC_START match, or None for `<<<`."""
+	delimiter = redirect.group(2) or redirect.group(3) or redirect.group(4)
+	return (redirect.group(1) == "-", delimiter) if delimiter else None
+
+
 def substitution_end(command, index):
 	"""Return the index of the `)` closing a `$(` whose body starts at `index`, or -1."""
 	contexts = ["("]
+	heredocs = []
 	while index < len(command):
 		char = command[index]
 		if char == "\\":
 			index += 2
 			continue
+		redirect = HEREDOC_START.match(command, index) if contexts[-1] == "(" else None
+		if redirect:
+			if heredoc_at(redirect):
+				heredocs.append(heredoc_at(redirect))
+			index = redirect.end()
+			continue
+		if char == "\n" and heredocs and contexts[-1] == "(":
+			bodies = read_heredoc_bodies(command, index + 1, heredocs)
+			heredocs = []
+			if bodies:
+				index = bodies[0]
+				continue
 		if contexts[-1] == '"':
 			if char == '"':
 				contexts.pop()
@@ -139,6 +160,7 @@ def split_commands(command, nested):
 	current = []
 	quote = None
 	heredocs = []
+	heredoc_owners = []
 	index = 0
 	while index < len(command):
 		char = command[index]
@@ -150,11 +172,14 @@ def split_commands(command, nested):
 		if quote == '"' and (command.startswith("$(", index) or char == "`"):
 			body_start = index + (1 if char == "`" else 2)
 			body_end = command.find("`", body_start) if char == "`" else substitution_end(command, body_start)
-			if body_end >= 0:
-				nested.append(command[body_start:body_end])
-				current.append(command[index:body_end + 1])
-				index = body_end + 1
-				continue
+			if body_end < 0:
+				current.append(command[index:])
+				quote = None
+				break
+			nested.append(command[body_start:body_end])
+			current.append(command[index:body_end + 1])
+			index = body_end + 1
+			continue
 		if quote:
 			if char == quote:
 				quote = None
@@ -169,9 +194,9 @@ def split_commands(command, nested):
 		else:
 			redirect = HEREDOC_START.match(command, index)
 			if redirect:
-				delimiter = redirect.group(2) or redirect.group(3) or redirect.group(4)
-				if delimiter:
-					heredocs.append((redirect.group(1) == "-", delimiter))
+				if heredoc_at(redirect):
+					heredocs.append(heredoc_at(redirect))
+					heredoc_owners.append(len(commands))
 				current.append(redirect.group())
 				index = redirect.end()
 				continue
@@ -179,19 +204,18 @@ def split_commands(command, nested):
 			if match:
 				text = "".join(current)
 				index = match.end()
-				if match.group() == "\n" and not text.strip() and separator in CONTINUING_OPERATORS:
-					current = []
-					continue
-				commands.append((separator, text))
-				separator = match.group()
+				at_newline = match.group() == "\n"
+				if not (at_newline and not text.strip() and separator in CONTINUING_OPERATORS):
+					commands.append((separator, text))
+					separator = match.group()
 				current = []
-				if match.group() == "\n" and heredocs:
+				if at_newline and heredocs:
 					bodies = read_heredoc_bodies(command, index, heredocs)
-					heredocs = []
 					if bodies:
 						index, body = bodies
-						if text.split()[:1] and text.split()[0] in SHELLS:
+						if any(pipeline_runs_shell(commands, owner) for owner in heredoc_owners):
 							nested.append(body)
+					heredocs, heredoc_owners = [], []
 				continue
 		current.append(char)
 		index += 1
@@ -205,16 +229,9 @@ def split_pieces(command, nested):
 	"""Yield (separator-before, tokens) for each simple command in `command`."""
 	pieces = []
 	for separator, text in split_commands(command, nested):
-		piece = text.strip().lstrip("({").strip()
-		if not piece:
-			continue
-		try:
-			tokens = shlex.split(piece)
-		except ValueError:
-			continue
-		tokens = [token for token in tokens if not REDIRECT_RE.match(token)]
-		while tokens and ENV_ASSIGNMENT.match(tokens[0]):
-			tokens = tokens[1:]
+		tokens, reordered = simple_command(text)
+		if reordered:
+			pieces.append(("", REORDERED_MARKER))
 		if tokens:
 			pieces.append((separator, tokens))
 	return pieces
@@ -234,10 +251,10 @@ def strip_compound_openers(tokens):
 	"""Return (the command `tokens` runs, whether an opener repeats or defers it)."""
 	reordered = False
 	while tokens:
-		if tokens[0] in LOOP_WORDS:
-			reordered = True
+		if ENV_ASSIGNMENT.match(tokens[0]) or tokens[0] in WORDS_BEFORE_COMMAND:
 			tokens = tokens[1:]
-		elif tokens[0] in WORDS_BEFORE_COMMAND:
+		elif tokens[0] in LOOP_WORDS:
+			reordered = True
 			tokens = tokens[1:]
 		elif tokens[0] == "function":
 			reordered = True
@@ -245,27 +262,52 @@ def strip_compound_openers(tokens):
 		elif tokens[0].endswith("()"):
 			reordered = True
 			tokens = tokens[1:]
-		elif tokens[1:2] == ["()"]:
+		elif tokens[1:2] == ["()"] and (len(tokens) == 2 or tokens[2] in ("{", "(")):
 			reordered = True
 			tokens = tokens[2:]
+		elif tokens[0].startswith("("):
+			tokens = ([tokens[0][1:]] if len(tokens[0]) > 1 else []) + tokens[1:]
 		else:
 			break
 	return tokens, reordered
 
 
+def simple_command(text):
+	"""Return (the tokens `text` runs, whether an opener repeats or defers them)."""
+	try:
+		tokens = shlex.split(text.strip().lstrip("({").strip())
+	except ValueError:
+		return [], False
+	return strip_compound_openers([token for token in tokens if not REDIRECT_RE.match(token)])
+
+
+def is_shell(tokens):
+	return bool(tokens) and os.path.basename(tokens[0]) in SHELLS
+
+
+def pipeline_runs_shell(commands, owner):
+	"""True when the pipeline starting at `commands[owner]` contains a shell."""
+	for position in range(owner, len(commands)):
+		if position > owner and commands[position][0] != "|":
+			return False
+		if is_shell(simple_command(commands[position][1])[0]):
+			return True
+	return False
+
+
 def check_cd_git(pieces):
 	"""Deny a git command that reads the directory a `cd` entered.
 
-	Loops and functions run in a different order than they read, so any `cd`
-	there counts as coming first.
+	A plain git is safe only before the first `cd` and before any loop or
+	function, whose commands run in a different order than they read.
 	"""
-	commands = [strip_compound_openers(tokens) for _, tokens in pieces]
-	changed_directory = any(reordered for _, reordered in commands) and any(
-		words[:1] in (["cd"], ["pushd"]) for words, _ in commands)
-	for words, _ in commands:
-		if words[:1] in (["cd"], ["pushd"]):
-			changed_directory = True
-		elif words[:1] == ["git"] and changed_directory and not git_targets_absolute_path(words):
+	if not any(tokens[0] in ("cd", "pushd") for _, tokens in pieces):
+		return
+	unsafe = False
+	for _, tokens in pieces:
+		if tokens == REORDERED_MARKER or tokens[0] in ("cd", "pushd"):
+			unsafe = True
+		elif tokens[0] == "git" and unsafe and not git_targets_absolute_path(tokens):
 			deny(MSG_CD_GIT)
 
 
@@ -275,11 +317,13 @@ def shell_argument_texts(pieces):
 	for _, tokens in pieces:
 		if tokens[0] == "eval":
 			texts.append(" ".join(tokens[1:]))
-		elif tokens[0] in SHELLS:
-			for index, token in enumerate(tokens[:-1]):
-				if index and SHELL_COMMAND_FLAG.match(token):
+		elif is_shell(tokens):
+			index = 1
+			while index < len(tokens) - 1 and tokens[index][:1] in ("-", "+"):
+				if SHELL_COMMAND_FLAG.match(tokens[index]):
 					texts.append(tokens[index + 1])
 					break
+				index += 2 if SHELL_OPTION_TAKING_VALUE.match(tokens[index]) else 1
 	return texts
 
 

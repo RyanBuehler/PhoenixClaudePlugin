@@ -101,6 +101,49 @@ class CdGitTests(BashGuardTestCase):
 		self.assertAllowed("echo 'cd here and git there'")
 
 
+class PinnedCommandTests(BashGuardTestCase):
+	EVIL_BODY = "\ncd /evil\ngit status\nEOF"
+
+	ALLOWED = (
+		"git commit -m \"$(cat <<'EOF'\nIt doesn't run `cd x; git status` any more\nEOF\n)\"",
+		"git commit -m \"$(cat <<'EOF'\nRuns $(cd x; git status) in the text\nEOF\n)\"",
+		"gh pr create --body \"$(cat <<'EOF'\nThe hook's rule denies `cd /x && git status`.\nEOF\n)\"",
+		"git commit -m \"$(cat <<'EOF'\n1) first `cd x; git status`\nEOF\n)\"",
+		"git commit -m \"$(cat <<'EOF'\nno terminator; cd x; git status",
+		"git status; for f in a b; do echo $f; done; cd /tmp; ls",
+		"git status; f() { echo hi; }; cd /tmp; ls",
+		"sh run.sh -c 'cd a; git status'",
+		"grep '()' x.cpp; git status; cd /tmp",
+		'ROOT="$(cd x && pwd)"; git status',
+	)
+
+	DENIED = (
+		"x=\"$(cat <<EOF\nit's\nEOF\ncd /evil; git status\n)\"",
+		"bash <<'EOF' 2>&1 | tail -20" + EVIL_BODY,
+		"bash <<EOF | cat" + EVIL_BODY,
+		"bash <<EOF && echo ok" + EVIL_BODY,
+		"cat <<EOF | bash | tee log" + EVIL_BODY,
+		"FOO=1 bash <<EOF" + EVIL_BODY,
+		"/bin/bash <<EOF" + EVIL_BODY,
+		'for d in a b; do (cd "$d" && git status); done',
+		"if true; then (cd /evil; git status); fi",
+		"for d in a; do bash -c 'cd $d; git status'; done",
+		"for d in a; do git grep x -A3; done",
+		"bash -o pipefail -c 'cd x; git status'",
+		"/bin/sh -c 'cd x; git status'",
+	)
+
+	def test_allowed_commands(self):
+		for command in self.ALLOWED:
+			with self.subTest(command=command):
+				self.assertAllowed(command)
+
+	def test_denied_commands(self):
+		for command in self.DENIED:
+			with self.subTest(command=command):
+				self.assertDenied(command)
+
+
 class ReorderedCommandTests(BashGuardTestCase):
 	def test_denies_git_before_cd_in_a_loop(self):
 		self.assertDenied("for d in a b\ndo\ngit status\ncd $d\ndone")
