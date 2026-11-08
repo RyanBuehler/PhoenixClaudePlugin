@@ -49,6 +49,9 @@ that needs a build; list those under Verification in your report.">
 ## Waiting on a build
 <BUILD only: the quoted block from dispatch-briefs.md §5, verbatim>
 
+## Shell traps and the command guard
+<the **Shell traps.** and **The command guard.** blocks from dispatch-briefs.md §3, verbatim>
+
 ## Your Job
 1. Build first, before exploring. The worktree's `Applications/Forge/.forge/` tree is empty; built
    C++23 module artifacts make exploration accurate and later builds incremental. Configure and

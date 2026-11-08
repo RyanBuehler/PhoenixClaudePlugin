@@ -46,10 +46,23 @@ python3 Applications/Forge/Scripts/bootstrap.py
 This produces `Applications/Forge/.bootstrap-out/forge` and shells out only to `clang++`,
 `clang-scan-deps`, `ar`, `git`, and Python 3.10+ (plus `wayland-scanner` + `pkg-config` for the
 Linux pane closure). `ccache` is used automatically if present. It is content-keyed: a no-op when
-Forge's own sources are unchanged, a rebuild otherwise. **Re-run it after pulling changes that touch
-`Applications/Forge/`** — a stale bootstrap binary lags its own source and fails cold configures
-with cryptic errors. From there, the bootstrapped binary rebuilds itself and the rest of Phoenix
-through the regular in-process pipeline.
+Forge's own sources are unchanged, a rebuild otherwise. From there, the bootstrapped binary rebuilds
+itself and the rest of Phoenix through the regular in-process pipeline.
+
+**Re-bootstrap before the next `forge` command after any edit to a bootstrap input.** A bootstrapped
+binary records the files it was compiled from and refuses to run once one changes size or
+modification time, or a source is added or removed. The inputs reach well past
+`Applications/Forge/`:
+
+- `Applications/Forge/Scripts/bootstrap.py`, `Applications/Forge/Templates/`, and Forge's and
+  ForgeCore's own sources;
+- every other module in `CLOSURE_MODULES` in `bootstrap.py`: `Core` (all of `Engine/Core`, including
+  `Engine/Core/Public/Interface`), `Engine`, `Arbiter`, `Json`, `ActionRegistry`, `PhoenixPy` (the
+  script cook), `ShaderCatalog`, `ShaderResolution`, `Process`;
+- the `<Name>Manifest.json` and `Applications/Forge/Recipes/<Name>.recipe.json` of every module
+  above, and a new recipe file;
+- `Tools/generate_bindings.py`, `Tools/cpp_text.py` and `Tools/git_utils.py`;
+- any of the above rewritten by `forge format`, or restamped by a checkout or rebase.
 
 ---
 

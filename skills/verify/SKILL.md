@@ -33,9 +33,8 @@ forge_bin() {
 FORGE=$(forge_bin) || { python3 Applications/Forge/Scripts/bootstrap.py && FORGE=$(forge_bin); }
 ```
 
-Re-run `python3 Applications/Forge/Scripts/bootstrap.py` after pulling changes under
-`Applications/Forge/` — a stale bootstrap binary fails cold configures cryptically. See `/phoe:build`
-for bootstrap details.
+Re-run `python3 Applications/Forge/Scripts/bootstrap.py` after any edit that makes the bootstrap
+stale — `/phoe:build` §1 lists them; they reach well past `Applications/Forge/`.
 
 ## 2. Verify
 
@@ -107,14 +106,34 @@ Forge's own trials**, so a change under `Applications/Forge/` can be green here 
 
 - **The local set is `editor`, plus what the change owns.** Always `editor` — it is the coverage
   hub for engine trials. Add the app profile whose own directory you changed (`vigil`,
-  `crucible`, `forgegui`; `vigil-gui` for `Applications/Vigil/Modules/VigilGUI/`), and `forge` when
-  the builder changed. A PR runs a `Test:` workflow only when it touches that workflow's paths, and
-  `vigil-gui` builds only in `Nightly`, so a change to it has its local verify as its only check
-  before merge.
+  `crucible`, `forgegui`; `vigil-gui` for `Applications/Vigil/Modules/VigilGUI/`), the plugin
+  profile below for an Editor plugin, and `forge` when the builder, a recipe
+  (`Applications/Forge/Recipes/*.recipe.json`) or a module manifest changed. A PR runs a `Test:`
+  workflow only when it touches that workflow's paths, and `vigil-gui` builds only in `Nightly`, so
+  a change to it has its local verify as its only check before merge.
   **Do not mirror CI's workflows** — repeating them locally costs a cold build per profile.
   `minimal` stays CI's: it is a cold build in its own tree, and it fails only for a missing
   dependency declaration, which `Nightly` catches.
-- A change touching the builder needs `"$FORGE" verify forge` explicitly, in addition to `editor`.
+- **`editor` lists no plugins** (`"plugins": []`), so an agent plugin's trials need the profile
+  that carries it. `InputEditor` is the exception: the Editor manifest requires it, so every Editor
+  profile builds it. Map each `Applications/Editor/Plugins/<Name>` directory to:
+
+  | Directory        | Profile           |
+  |------------------|-------------------|
+  | `EditorDispatch` | `editor-dispatch` |
+  | `EditorGhost`    | `editor-dispatch` |
+  | `EditorVigil`    | `editor-dispatch` |
+  | `Symbiote`       | `editor-symbiote` |
+  | `Dojo`           | `editor-dojo`     |
+  | `InputEditor`    | `editor`          |
+
+  `EditorGhost` and `EditorVigil` have no profile of their own; `editor-dispatch` carries both. A
+  change that **adds or renames a binding**, or touches `EditorDispatch`, also verifies
+  `editor-dispatch`: `verify editor` does not build `DispatchBindingTrials`, so it stays green and
+  CI reds. CI's `Test: Agent Plugins` workflow builds `editor-dojo`, which carries every plugin
+  above.
+- A change touching the builder, a recipe or a module manifest needs `"$FORGE" verify forge`
+  explicitly, in addition to `editor`: Forge's own trials read them.
 - **Adding a module manifest, or an application `requires_module` entry, invalidates Forge's
   module-metadata fixtures** (`Applications/Forge/Trials/CodeGen/Fixtures/expected_modulemetadata_forge_*.cpp`).
   Only `verify forge` builds those trials, so the editor profile reports green while CI reds.

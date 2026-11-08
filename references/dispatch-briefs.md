@@ -123,7 +123,7 @@ preamble has them read the file.
 >
 > 1. A pathspec matching nothing makes `git diff`/`git show` exit 0 silently; `git grep` exits 1 for
 >    both a dead pathspec and an absent pattern.
-> 2. A shell trap (below) aborts the command before it runs.
+> 2. A shell trap or the command guard (both below) stops the command before it runs.
 > 3. A misspelled revision in `git grep <sha>` prints nothing and exits 0.
 > 4. A pipe replaces the exit status (`git grep ... | cat` exits 0). Run absence checks unpiped.
 > 5. A no-match exits 1, so `git grep A && git grep B` never runs B. Chain with `;`.
@@ -143,6 +143,33 @@ preamble has them read the file.
 > - `git grep` has no `--include`; give a pathspec after `--`.
 > - A pattern like `->Method` needs quoting (an unquoted `>` redirects and creates a file) and `-e`
 >   (a leading `-` reads as a flag): `git grep -n -e '->Method' -- '<pathspec>'`.
+> - `gh pr checks` fails when the token lacks status-check scope. Use `gh run list --branch <branch>`
+>   and `gh run view <id> --log-failed`.
+> - `gh run view --json jobs` has no runner name. Use `gh api repos/<owner>/<repo>/actions/runs/<id>/jobs`
+>   and read `runner_name`.
+> - `gh run watch --exit-status` can exit 0 on a failed run. Read the conclusion afterwards:
+>   `gh run view <id> --json conclusion`.
+>
+> **The command guard.** A background session's guard reads the literal command text and refuses a
+> form it cannot verify, whatever the command would have done. Each refused form has a working one:
+>
+> - A path segment named `Source`, read as the shell's `source` builtin: use a quoted glob as the
+>   pathspec (`'*/Sourc?/*'`, `'*/Private/*'`) or a literal absolute path.
+> - A shell variable used as a command or path (`"$FORGE" build`, `cat "$TREE/file"`): write the
+>   literal absolute path.
+> - `for` and `while` loops, heredocs, and command substitution (`$(...)`): run one command per
+>   call, or put the logic in a script file under the job tmp directory (`~/.claude/jobs/<id>/tmp/`)
+>   and run that file.
+> - `python -c` text naming `git`: use a script file under the job tmp directory.
+> - A pipe into `xargs`: pass the paths literally, one command per call, or use a script file.
+> - `git -C` into another worktree: run git from the worktree you were given, and read another tree
+>   by literal absolute path.
+>
+> A refused command's empty output is not a negative result: nothing ran, so it says nothing about
+> the code. Quote the refusal. Take the working form above once; if there is none, or that is
+> refused too, report the quoted refusal and stop. Do not retry the same form, split a string to
+> slip past the check, or work around a read-only rule (no `sed -i` on a file you were told only to
+> read).
 >
 > **Verify every citation.** Each path and symbol in a finding must resolve against the reviewed
 > commit (`git show <SHA>:<path>`, `git grep`). Unresolvable citations are the most reported defect in

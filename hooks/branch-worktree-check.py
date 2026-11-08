@@ -29,7 +29,8 @@ TRAILING_FILLER = {
 # Registry of opt-in path-override mappings. A file at
 # .claude/worktrees/.branches/<basename> whose contents equal a target branch
 # tells the hook to permit `git worktree add .claude/worktrees/<basename> -b
-# <target-branch>` even when <basename> != <branch>.replace('/', '-').
+# <target-branch>` even when <basename> != <branch>.replace('/', '-'). The
+# directory is relative to the main checkout, wherever the command runs.
 # The file lives outside the to-be-created worktree directory so it doesn't
 # collide with `git worktree add`'s requirement of an empty target dir.
 BRANCH_REGISTRY_DIR = ".claude/worktrees/.branches"
@@ -79,7 +80,7 @@ MSG_MISMATCH = (
 	"Worktree path and branch do not match.\n"
 	"Branch {branch} must live at {expected}.\n"
 	"To opt a shortened/combined path in, write the branch name into\n"
-	"  .claude/worktrees/.branches/<basename>\n"
+	"  {registry}/<basename>\n"
 	"before running `git worktree add`."
 )
 
@@ -129,19 +130,42 @@ def expected_path(branch):
 	return ".claude/worktrees/" + branch.replace("/", "-")
 
 
-def registered_branch_for_path(path):
+def main_checkout_root(cwd):
+	"""Return the repository's main checkout, or `cwd` outside a repository.
+
+	`git worktree list` names the main checkout first from every worktree.
+	"""
+	try:
+		listing = subprocess.run(
+			["git", "worktree", "list", "--porcelain"],
+			capture_output=True, text=True, check=False, cwd=cwd,
+		)
+	except (OSError, subprocess.SubprocessError):
+		return cwd
+	first_line = listing.stdout.split("\n", 1)[0]
+	if listing.returncode != 0 or not first_line.startswith("worktree "):
+		return cwd
+	return first_line[len("worktree "):]
+
+
+def resolved(base, path):
+	"""Return `path` as an absolute real path, read relative to `base`."""
+	return os.path.realpath(os.path.join(base, os.path.expanduser(path)))
+
+
+def registered_branch_for_path(path, root):
 	"""Return the branch this worktree path is opted in to, or None.
 
-	Reads BRANCH_REGISTRY_DIR/<basename(path)> if present and returns its
-	stripped contents. Any I/O error returns None — the hook then falls back
-	to strict basename↔branch matching.
+	Reads BRANCH_REGISTRY_DIR/<basename(path)> under the main checkout if
+	present and returns its stripped contents. Any I/O error returns None — the
+	hook then falls back to strict basename↔branch matching.
 	"""
 	if not path:
 		return None
 	basename = os.path.basename(path.rstrip("/"))
 	if not basename:
 		return None
-	registry_file = os.path.join(BRANCH_REGISTRY_DIR, basename)
+	registry_file = os.path.join(root, BRANCH_REGISTRY_DIR, basename)
 	try:
 		with open(registry_file, "r", encoding="utf-8") as handle:
 			return handle.read().strip()
@@ -149,16 +173,21 @@ def registered_branch_for_path(path):
 		return None
 
 
-def path_matches_branch(path, branch):
+def path_matches_branch(path, branch, root, cwd):
 	"""True when `path` is an acceptable worktree location for `branch`.
 
-	Default rule: basename equals branch.replace('/', '-'). Opt-in: a registry
-	file at .claude/worktrees/.branches/<basename> whose contents equal the
-	branch name unblocks shortened or combined-branch paths.
+	`path` is read against `cwd`, as git reads it, and must land in the main
+	checkout's worktrees directory. Default rule: the folder is
+	branch.replace('/', '-'). Opt-in: a registry file at
+	.claude/worktrees/.branches/<basename> in the main checkout whose contents
+	equal the branch name unblocks shortened or combined-branch paths.
 	"""
-	if path == expected_path(branch):
+	location = resolved(cwd, path)
+	if location == resolved(root, expected_path(branch)):
 		return True
-	registered = registered_branch_for_path(path)
+	if os.path.dirname(location) != resolved(root, WORKTREES_DIR):
+		return False
+	registered = registered_branch_for_path(path, root)
 	return registered is not None and registered == branch
 
 
@@ -173,7 +202,7 @@ def check_create(branch):
 	block(MSG_USE_WORKTREE)
 
 
-def check_worktree_add(tokens):
+def check_worktree_add(tokens, cwd):
 	"""Validate `git worktree add` — cap the folder, and require a matching
 	path and a short valid branch when -b is used."""
 	path = None
@@ -198,8 +227,12 @@ def check_worktree_add(tokens):
 	check_worktree_folder(path)
 	if branch is None:
 		return
-	if path is None or not path_matches_branch(path, branch):
-		block(MSG_MISMATCH.format(branch=branch, expected=expected_path(branch)))
+	root = main_checkout_root(cwd)
+	if path is None or not path_matches_branch(path, branch, root, cwd):
+		block(MSG_MISMATCH.format(
+			branch=branch,
+			expected=os.path.join(root, expected_path(branch)),
+			registry=os.path.join(root, BRANCH_REGISTRY_DIR)))
 
 
 def is_branch_fast_forward(branch, commit):
@@ -247,7 +280,7 @@ def check_git_branch(tokens):
 	check_create(positional[0])
 
 
-def inspect_git(tokens):
+def inspect_git(tokens, cwd):
 	if not tokens:
 		return
 	subcommand = tokens[0]
@@ -268,7 +301,7 @@ def inspect_git(tokens):
 		check_git_branch(rest)
 		return
 	if subcommand == "worktree" and rest and rest[0] == "add":
-		check_worktree_add(rest[1:])
+		check_worktree_add(rest[1:], cwd)
 		return
 	if subcommand == "worktree" and rest and rest[0] == "move":
 		positional = [token for token in rest[1:] if not token.startswith("-")]
@@ -280,6 +313,7 @@ def inspect_git(tokens):
 def main():
 	data = json.load(sys.stdin)
 	command = data.get("tool_input", {}).get("command", "")
+	cwd = data.get("cwd") or os.getcwd()
 	for piece in SEPARATOR.split(command):
 		piece = piece.strip()
 		if not piece:
@@ -291,7 +325,7 @@ def main():
 		tokens = [token for token in tokens if not REDIRECT_RE.match(token)]
 		if not tokens or tokens[0] != "git":
 			continue
-		inspect_git(tokens[1:])
+		inspect_git(tokens[1:], cwd)
 	print("{}")
 	sys.exit(0)
 

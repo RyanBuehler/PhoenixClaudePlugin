@@ -49,11 +49,41 @@ class CdGitTests(BashGuardTestCase):
 	def test_denies_cd_then_git(self):
 		self.assertDenied("cd /tmp/x && git status")
 
-	def test_denies_git_then_cd(self):
-		self.assertDenied("git status; cd /tmp/x")
+	def test_denial_keeps_the_existing_message(self):
+		payload = json.dumps({"tool_input": {"command": "cd /tmp/x && git status"}, "cwd": self.cwd})
+		out = io.StringIO()
+		with mock.patch.object(sys, "stdin", io.StringIO(payload)), redirect_stdout(out):
+			with self.assertRaises(SystemExit):
+				hook.main()
+		self.assertEqual(
+			json.loads(out.getvalue())["hookSpecificOutput"]["permissionDecisionReason"], hook.MSG_CD_GIT)
+
+	def test_allows_git_before_cd(self):
+		self.assertAllowed("git status; cd /tmp/x")
+
+	def test_denies_git_on_both_sides_of_cd(self):
+		self.assertDenied("git status; cd /tmp/x; git log")
 
 	def test_denies_subshell(self):
 		self.assertDenied("(cd /tmp/x && git log)")
+
+	def test_denies_pushd_then_git(self):
+		self.assertDenied("pushd /tmp/x && git log")
+
+	def test_allows_cd_then_git_dash_c_absolute(self):
+		self.assertAllowed("cd /tmp && git -C /home/ryan/phoenix status")
+
+	def test_allows_absolute_dash_c_after_other_global_options(self):
+		self.assertAllowed("cd /tmp && git -c core.pager=cat -C /home/ryan/phoenix log -1")
+
+	def test_denies_cd_then_git_dash_c_relative(self):
+		self.assertDenied("cd /tmp/x && git -C sub status")
+
+	def test_denies_cd_then_dash_c_that_is_a_subcommand_flag(self):
+		self.assertDenied("cd /tmp/x && git log -C /home/ryan/phoenix")
+
+	def test_denies_cd_then_config_value_that_looks_like_dash_c(self):
+		self.assertDenied("cd /tmp/x && git -c -C /home/ryan/phoenix status")
 
 	def test_allows_git_dash_c(self):
 		self.assertAllowed("git -C /tmp/x status")
@@ -63,6 +93,52 @@ class CdGitTests(BashGuardTestCase):
 
 	def test_allows_cd_inside_quoted_message(self):
 		self.assertAllowed("echo 'cd here and git there'")
+
+
+class QuotedSeparatorTests(BashGuardTestCase):
+	def test_single_quoted_semicolon_does_not_split(self):
+		self.assertAllowed("grep -e 'a; cd x' file.txt && git -C /home/ryan/phoenix log -1")
+		self.assertAllowed("grep -e 'a; cd x' file.txt && git log -1")
+
+	def test_separators_inside_quotes_do_not_fake_a_cd(self):
+		self.assertAllowed("grep -e 'a; cd x; b' file.txt && git log -1")
+		self.assertAllowed('grep "a | cd x | b" file.txt && git log -1')
+
+	def test_double_quoted_pipe_does_not_split(self):
+		self.assertAllowed('grep "a | cd x" file.txt && git log -1')
+
+	def test_quoted_and_chain_does_not_split(self):
+		self.assertAllowed("echo 'x && cd y' && git status")
+
+	def test_quoted_newline_does_not_split(self):
+		self.assertAllowed("python3 -c 'a = 1\ncd = 2' && git status")
+
+	def test_escaped_quote_does_not_end_double_quotes(self):
+		self.assertAllowed('echo "a \\" ; cd x" && git status')
+
+	def test_escaped_separator_does_not_split(self):
+		self.assertAllowed("echo a \\; cd x && git status")
+
+	def test_quoted_git_after_cd_is_not_a_command(self):
+		self.assertAllowed("cd /tmp/x && echo 'a; git status'")
+
+	def test_unquoted_separators_still_split(self):
+		self.assertDenied("echo 'a' ; cd /tmp/x ; git status")
+		self.assertDenied("echo 'a' | cd /tmp/x | git status")
+		self.assertDenied("cd /tmp/x\ngit status")
+
+	def test_line_continuation_joins_the_command(self):
+		self.assertDenied("cd /tmp/x && git \\\n  status")
+
+	def test_comment_apostrophes_do_not_hide_commands(self):
+		self.assertDenied("# don't\ncd /tmp/x && git status # won't")
+
+	def test_unbalanced_quote_still_splits(self):
+		self.assertDenied("cat notes <<EOF\nit's\nEOF\ncd /tmp/x && git status")
+
+	def test_quoted_separator_does_not_hide_a_git_grep_chain(self):
+		self.assertDenied("git grep 'a;b' && git grep c")
+		self.assertAllowed("git grep 'a && b'")
 
 
 class LoadTests(BashGuardTestCase):

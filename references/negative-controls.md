@@ -15,6 +15,8 @@ the same observable behavior proves them; do not add redundant control legs.
    expected match count before writing. Inspect the mutation diff. For generator claims, mutate
    the producer and regenerate through its real invocation; changing only its output proves
    artifact checking, not producer behavior. Rebootstrap if the producer is compiled into Forge.
+   Run a Python mutation test with `PYTHONDONTWRITEBYTECODE=1` or `python3 -B`: a stale `.pyc`
+   whose source has the same size and mtime gives a false pass.
 3. Build the mutated code successfully in the correct profile. A failed edit, configure,
    compiler, or stale-binary refusal is unavailable behavioral proof, not a successful control.
 4. Run the named binary with `--list-cases --output-on-failure --require-executed-cases`.

@@ -5,6 +5,7 @@ import importlib.util
 import io
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -112,6 +113,105 @@ class TestRegistryOverride(HookTestCase):
 		)
 		self.assertEqual(code, 0)
 		self.assertEqual(output.strip(), "{}")
+
+
+class TestPathsResolveAgainstMainCheckout(unittest.TestCase):
+	"""The registry and the expected path are anchored at the main checkout,
+	found from git, however the path is spelled and wherever the command runs."""
+
+	BRANCH = "bug/x"
+	FOLDER = "bug-x"
+	LONG_BRANCH = "challenge/combined-saga-label"
+	SHORT_FOLDER = "short-name"
+
+	def setUp(self):
+		self._tmp = tempfile.TemporaryDirectory()
+		self.addCleanup(self._tmp.cleanup)
+		self.root = os.path.realpath(self._tmp.name)
+		self._git(self.root, "init", "-q")
+		self._git(
+			self.root, "-c", "user.name=t", "-c", "user.email=t@example.com",
+			"commit", "-q", "--allow-empty", "-m", "base")
+		self.worktree = os.path.join(self.root, ".claude", "worktrees", "bug-existing")
+		self._git(self.root, "worktree", "add", "-q", self.worktree, "-b", "bug/existing")
+		self.registry = Path(self.root) / hook.BRANCH_REGISTRY_DIR
+		self.registry.mkdir(parents=True, exist_ok=True)
+
+	@staticmethod
+	def _git(cwd, *args):
+		subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)
+
+	def _absolute(self, folder):
+		return os.path.join(self.root, ".claude", "worktrees", folder)
+
+	def _register(self):
+		(self.registry / self.SHORT_FOLDER).write_text(self.LONG_BRANCH + "\n", encoding="utf-8")
+
+	def _run(self, command, cwd):
+		payload = json.dumps({"tool_input": {"command": command}, "cwd": cwd})
+		out = io.StringIO()
+		with mock.patch.object(sys, "stdin", io.StringIO(payload)), redirect_stdout(out):
+			try:
+				hook.main()
+			except SystemExit as exit_value:
+				return exit_value.code, out.getvalue()
+		return 0, out.getvalue()
+
+	def assertAccepted(self, path, branch, cwd):
+		code, output = self._run(f"git worktree add {path} -b {branch}", cwd)
+		self.assertEqual((code, output.strip()), (0, "{}"), path)
+
+	def assertRejected(self, path, branch, cwd):
+		code, output = self._run(f"git worktree add {path} -b {branch}", cwd)
+		self.assertEqual(code, 2, path)
+		self.assertIn("path and branch do not match", json.loads(output)["reason"])
+
+	def test_relative_expected_path_from_root(self):
+		self.assertAccepted(".claude/worktrees/" + self.FOLDER, self.BRANCH, self.root)
+
+	def test_absolute_expected_path_from_root(self):
+		self.assertAccepted(self._absolute(self.FOLDER), self.BRANCH, self.root)
+
+	def test_absolute_expected_path_from_worktree(self):
+		self.assertAccepted(self._absolute(self.FOLDER), self.BRANCH, self.worktree)
+
+	def test_relative_path_reaching_expected_location_from_worktree(self):
+		self.assertAccepted("../" + self.FOLDER, self.BRANCH, self.worktree)
+
+	def test_relative_path_that_would_nest_inside_a_worktree_is_rejected(self):
+		self.assertRejected(".claude/worktrees/" + self.FOLDER, self.BRANCH, self.worktree)
+
+	def test_absolute_path_with_wrong_folder_is_rejected(self):
+		self.assertRejected(self._absolute("bug-y"), self.BRANCH, self.root)
+
+	def test_absolute_path_outside_the_repository_is_rejected(self):
+		self.assertRejected("/tmp/worktrees/" + self.FOLDER, self.BRANCH, self.root)
+
+	def test_mismatch_names_the_main_checkout_location(self):
+		_, output = self._run(f"git worktree add ../elsewhere -b {self.BRANCH}", self.worktree)
+		reason = json.loads(output)["reason"]
+		self.assertIn(self._absolute(self.FOLDER), reason)
+		self.assertIn(str(self.registry), reason)
+
+	def test_registry_from_root_relative_and_absolute(self):
+		self._register()
+		self.assertAccepted(".claude/worktrees/" + self.SHORT_FOLDER, self.LONG_BRANCH, self.root)
+		self.assertAccepted(self._absolute(self.SHORT_FOLDER), self.LONG_BRANCH, self.root)
+
+	def test_registry_from_worktree_relative_and_absolute(self):
+		self._register()
+		self.assertAccepted("../" + self.SHORT_FOLDER, self.LONG_BRANCH, self.worktree)
+		self.assertAccepted(self._absolute(self.SHORT_FOLDER), self.LONG_BRANCH, self.worktree)
+
+	def test_registry_is_read_from_main_checkout_not_the_worktree(self):
+		stray = Path(self.worktree) / hook.BRANCH_REGISTRY_DIR
+		stray.mkdir(parents=True)
+		(stray / self.SHORT_FOLDER).write_text(self.LONG_BRANCH + "\n", encoding="utf-8")
+		self.assertRejected(self._absolute(self.SHORT_FOLDER), self.LONG_BRANCH, self.worktree)
+
+	def test_registry_does_not_admit_a_path_outside_the_worktrees_directory(self):
+		self._register()
+		self.assertRejected("/tmp/" + self.SHORT_FOLDER, self.LONG_BRANCH, self.root)
 
 
 class TestForceBranchFastForward(HookTestCase):

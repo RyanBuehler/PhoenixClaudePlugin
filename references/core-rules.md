@@ -48,7 +48,8 @@ below are under `${CLAUDE_PLUGIN_ROOT}`; `Docs/` paths are in the Phoenix reposi
   module keyword), confirm it is on or near the cited line; if it is not, ask the reviewer what
   they meant — line numbers drift across PR updates.
 - Give every Bash call absolute paths, or a `cd` in the same call — a subagent's shell resets its
-  directory, and a worktree and the main checkout are separate trees.
+  directory, and a worktree and the main checkout are separate trees. A git command after a `cd`
+  takes `git -C <absolute path>`; the hook refuses a plain one.
 - Ask before each instance of machine load — CPU spinners, `stress`, memory balloons, disk
   fillers, fork storms, `-j` above the core count — because the host is shared with the user and
   other agents, and orphaned load is blamed on whoever runs next.
