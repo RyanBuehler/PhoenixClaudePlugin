@@ -12,6 +12,9 @@ KEBAB = r'[a-z0-9][a-z0-9-]*'
 BRANCH_RE = re.compile(r'^(' + KEBAB + r')/(' + KEBAB + r')$')
 SEPARATOR = re.compile(r'&&|\|\|?|;|\n')
 REDIRECT_RE = re.compile(r'^[0-9]*[<>]+&?[0-9-]*$|^&>+$')
+GIT_OPTIONS_TAKING_VALUE = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env"}
+SHELLS = {"sh", "bash", "zsh", "dash"}
+SHELL_COMMAND_FLAG = re.compile(r'^-[a-z]*c$')
 
 # Longest branch name, and so longest worktree folder name (the folder is the
 # branch with '/' as '-'). Forge on Windows is not long-path aware, and its
@@ -235,7 +238,7 @@ def check_worktree_add(tokens, cwd):
 			registry=os.path.join(root, BRANCH_REGISTRY_DIR)))
 
 
-def is_branch_fast_forward(branch, commit):
+def is_branch_fast_forward(branch, commit, cwd):
 	"""True when `branch` already exists locally AND `commit` is a descendant of it.
 
 	A descendant relationship means moving `branch` to `commit` is a true
@@ -246,20 +249,20 @@ def is_branch_fast_forward(branch, commit):
 	try:
 		exists = subprocess.run(
 			["git", "rev-parse", "--verify", "--quiet", "refs/heads/" + branch],
-			capture_output=True, text=True, check=False,
+			capture_output=True, text=True, check=False, cwd=cwd,
 		)
 		if exists.returncode != 0:
 			return False
 		ff = subprocess.run(
 			["git", "merge-base", "--is-ancestor", branch, commit],
-			capture_output=True, text=True, check=False,
+			capture_output=True, text=True, check=False, cwd=cwd,
 		)
 		return ff.returncode == 0
 	except (OSError, subprocess.SubprocessError):
 		return False
 
 
-def check_git_branch(tokens):
+def check_git_branch(tokens, cwd):
 	"""`git branch` — only intervene when a new branch is being created."""
 	for token in tokens:
 		if token in NON_CREATE_BRANCH_FLAGS:
@@ -275,12 +278,23 @@ def check_git_branch(tokens):
 	if has_force and len(positional) >= 1:
 		branch = positional[0]
 		commit = positional[1] if len(positional) >= 2 else "HEAD"
-		if is_branch_fast_forward(branch, commit):
+		if is_branch_fast_forward(branch, commit, cwd):
 			return
 	check_create(positional[0])
 
 
+def strip_global_options(tokens, cwd):
+	"""Return (tokens from the subcommand on, the directory git runs in after any `-C`)."""
+	index = 0
+	while index < len(tokens) and tokens[index].startswith("-"):
+		if tokens[index] == "-C" and index + 1 < len(tokens):
+			cwd = resolved(cwd, tokens[index + 1])
+		index += 2 if tokens[index] in GIT_OPTIONS_TAKING_VALUE else 1
+	return tokens[index:], cwd
+
+
 def inspect_git(tokens, cwd):
+	tokens, cwd = strip_global_options(tokens, cwd)
 	if not tokens:
 		return
 	subcommand = tokens[0]
@@ -298,7 +312,7 @@ def inspect_git(tokens, cwd):
 				return
 		return
 	if subcommand == "branch":
-		check_git_branch(rest)
+		check_git_branch(rest, cwd)
 		return
 	if subcommand == "worktree" and rest and rest[0] == "add":
 		check_worktree_add(rest[1:], cwd)
@@ -310,11 +324,37 @@ def inspect_git(tokens, cwd):
 		return
 
 
-def main():
-	data = json.load(sys.stdin)
-	command = data.get("tool_input", {}).get("command", "")
-	cwd = data.get("cwd") or os.getcwd()
-	for piece in SEPARATOR.split(command):
+def split_commands(command):
+	"""Split `command` at separators outside quotes; an unbalanced quote splits everywhere."""
+	commands = []
+	start = 0
+	quote = None
+	index = 0
+	while index < len(command):
+		char = command[index]
+		if char == "\\" and quote != "'":
+			index += 2
+			continue
+		if quote:
+			if char == quote:
+				quote = None
+		elif char in "'\"":
+			quote = char
+		else:
+			match = SEPARATOR.match(command, index)
+			if match:
+				commands.append(command[start:index])
+				index = start = match.end()
+				continue
+		index += 1
+	if quote:
+		return SEPARATOR.split(command)
+	commands.append(command[start:])
+	return commands
+
+
+def inspect_command(command, cwd):
+	for piece in split_commands(command):
 		piece = piece.strip()
 		if not piece:
 			continue
@@ -323,9 +363,25 @@ def main():
 		except ValueError:
 			continue
 		tokens = [token for token in tokens if not REDIRECT_RE.match(token)]
-		if not tokens or tokens[0] != "git":
+		if not tokens:
 			continue
-		inspect_git(tokens[1:], cwd)
+		# A quoted script no longer splits, so `sh -c` and `eval` are read as commands.
+		if tokens[0] == "eval":
+			inspect_command(" ".join(tokens[1:]), cwd)
+			continue
+		if os.path.basename(tokens[0]) in SHELLS:
+			for index, token in enumerate(tokens[:-1]):
+				if SHELL_COMMAND_FLAG.match(token):
+					inspect_command(tokens[index + 1], cwd)
+			continue
+		if tokens[0] == "git":
+			inspect_git(tokens[1:], cwd)
+
+
+def main():
+	data = json.load(sys.stdin)
+	command = data.get("tool_input", {}).get("command", "")
+	inspect_command(command, data.get("cwd") or os.getcwd())
 	print("{}")
 	sys.exit(0)
 

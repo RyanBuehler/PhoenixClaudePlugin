@@ -213,6 +213,109 @@ class TestPathsResolveAgainstMainCheckout(unittest.TestCase):
 		self._register()
 		self.assertRejected("/tmp/" + self.SHORT_FOLDER, self.LONG_BRANCH, self.root)
 
+	def _add(self, prefix, path, branch, cwd):
+		return self._run(f"git {prefix} worktree add {path} -b {branch}", cwd)
+
+	def assertAllowed(self, result):
+		self.assertEqual((result[0], result[1].strip()), (0, "{}"))
+
+	def test_dash_c_root_with_relative_expected_path(self):
+		self.assertAllowed(self._add(f"-C {self.root}", ".claude/worktrees/" + self.FOLDER, self.BRANCH, "/"))
+
+	def test_dash_c_worktree_with_relative_path_reaching_expected_location(self):
+		self.assertAllowed(self._add(f"-C {self.worktree}", "../" + self.FOLDER, self.BRANCH, self.root))
+
+	def test_relative_dash_c_is_read_against_cwd(self):
+		self.assertAllowed(self._add("-C .claude/worktrees/bug-existing", "../" + self.FOLDER, self.BRANCH, self.root))
+
+	def test_dash_c_worktree_nested_path_is_rejected(self):
+		code, output = self._add(f"-C {self.worktree}", ".claude/worktrees/" + self.FOLDER, self.BRANCH, self.root)
+		self.assertEqual(code, 2)
+		self.assertIn("path and branch do not match", json.loads(output)["reason"])
+
+	def test_dash_c_wrong_folder_is_rejected(self):
+		code, _ = self._add(f"-C {self.root}", ".claude/worktrees/bug-y", self.BRANCH, "/")
+		self.assertEqual(code, 2)
+
+	def test_dash_c_reads_the_registry_of_that_repository(self):
+		self._register()
+		self.assertAllowed(self._add(f"-C {self.root}", ".claude/worktrees/" + self.SHORT_FOLDER, self.LONG_BRANCH, "/"))
+
+	def test_config_option_before_worktree_add_is_checked(self):
+		code, _ = self._add("-c a=b", ".claude/worktrees/bug-y", self.BRANCH, self.root)
+		self.assertEqual(code, 2)
+
+	def test_value_less_option_before_branch_is_checked(self):
+		code, _ = self._run("git --no-pager branch feature/x", self.root)
+		self.assertEqual(code, 2)
+
+	def test_dash_c_does_not_hide_checkout_create(self):
+		code, output = self._run(f"git -C {self.root} checkout -b feature/x", "/")
+		self.assertEqual(code, 2)
+		self.assertIn("Create branches via worktree only", json.loads(output)["reason"])
+
+	def test_dash_c_does_not_hide_switch_create_or_branch_create(self):
+		code, _ = self._run(f"git -C {self.root} switch -c feature/x", "/")
+		self.assertEqual(code, 2)
+		code, _ = self._run(f"git -C {self.root} branch feature/x", "/")
+		self.assertEqual(code, 2)
+
+	def test_dash_c_read_only_commands_pass(self):
+		self.assertAllowed(self._run(f"git -C {self.root} branch -a", "/"))
+		self.assertAllowed(self._run(f"git -C {self.root} status", "/"))
+
+	def test_fast_forward_is_judged_in_the_dash_c_repository(self):
+		self._git(self.root, "branch", "bug/behind")
+		self._git(
+			self.root, "-c", "user.name=t", "-c", "user.email=t@example.com",
+			"commit", "-q", "--allow-empty", "-m", "ahead")
+		self.assertAllowed(self._run(f"git -C {self.root} branch -f bug/behind HEAD", "/"))
+
+
+class TestQuotedSeparators(HookTestCase):
+	"""A separator inside quotes does not start a new command."""
+
+	def assertAllowed(self, command):
+		code, output = self._run(command)
+		self.assertEqual((code, output.strip()), (0, "{}"), command)
+
+	def assertBlocked(self, command):
+		code, _ = self._run(command)
+		self.assertEqual(code, 2, command)
+
+	def test_quoted_semicolon_is_not_a_command(self):
+		self.assertAllowed('git commit -m "note; git checkout -b feature/x; end"')
+
+	def test_quoted_newline_is_not_a_command(self):
+		self.assertAllowed("git commit -m 'first\ngit branch feature/x\nlast'")
+
+	def test_escaped_quote_does_not_end_double_quotes(self):
+		self.assertAllowed('git commit -m "a \\" ; git checkout -b feature/x ; b"')
+
+	def test_backslash_is_literal_inside_single_quotes(self):
+		self.assertAllowed("echo 'a\\' 'b; git checkout -b feature/x; c'")
+
+	def test_unquoted_separator_still_splits(self):
+		self.assertBlocked("echo 'a' ; git checkout -b feature/x")
+
+	def test_unbalanced_quote_still_splits(self):
+		self.assertBlocked("echo it's ; git checkout -b feature/x")
+
+	def test_shell_script_argument_is_read_as_commands(self):
+		self.assertBlocked('bash -c "echo a; git checkout -b feature/x; echo b"')
+		self.assertBlocked("/bin/sh -lc 'git checkout -b feature/x'")
+
+	def test_harmless_shell_script_passes(self):
+		self.assertAllowed("bash -c 'git status; echo done'")
+
+	def test_eval_arguments_are_read_as_commands(self):
+		self.assertBlocked('eval "a; git checkout -b x/y; b"')
+		self.assertBlocked("eval 'git branch feature/x'")
+		self.assertBlocked("eval git checkout -b feature/x")
+
+	def test_harmless_eval_passes(self):
+		self.assertAllowed('eval "git status; echo done"')
+
 
 class TestForceBranchFastForward(HookTestCase):
 	"""Regression guard for bug pretooluse-hook-blocks-legitimate-fast-forward-branch-update:
@@ -221,7 +324,7 @@ class TestForceBranchFastForward(HookTestCase):
 
 	def _patch_git(self, exists, is_ancestor):
 		"""Make subprocess.run mimic `git rev-parse --verify` and `git merge-base --is-ancestor`."""
-		def fake_run(cmd, capture_output, text, check):
+		def fake_run(cmd, capture_output, text, check, cwd=None):
 			if cmd[:3] == ["git", "rev-parse", "--verify"]:
 				class R: returncode = 0 if exists else 1
 				return R()
