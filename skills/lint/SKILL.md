@@ -3,9 +3,9 @@ name: lint
 description: Run clang-tidy on changed files through Forge.
 ---
 
-Run clang-tidy on branch-changed C++ files through Forge's `lint` command. It resolves the
-compilation context from the in-process build graph itself, so there's no separate compile-database
-step — the graph already knows every TU's exact flags and module imports.
+Run clang-tidy on branch-changed C++ files through Forge's `lint` command. It reads the compile
+database that `forge configure` and `forge build` emit for the profile, not the build graph. If that
+database is missing or stale, run `"$FORGE" build <profile>` first.
 
 ## 1. Locate the Builder
 
@@ -20,11 +20,17 @@ FORGE=$(forge_bin) || { python3 Applications/Forge/Scripts/bootstrap.py && FORGE
 ## 2. Lint
 
 ```bash
-"$FORGE" lint
+"$FORGE" lint <profile> [--base=<ref>] [--no-fail-on-uncompiled]
 ```
 
-This lints the **branch** surface — every C++ file differing from `main`, staged or not. That is
-the default (`--files=branch`); `--all` lints the whole repo and `--staged` narrows to the index.
+This lints the **branch** surface — every C++ file differing from its merge-base with `origin/main`,
+staged or not. That is the default (`--files=branch`); `--all` lints the whole repo and `--staged`
+narrows to the index. `--base=<ref>` diffs the branch selection against that commit instead of the
+merge-base, for example the tip of the PR a stacked branch sits on.
+
+`<profile>` selects that profile's own compile database, `forge-<profile>.compile_commands.json` in
+a shared tree, and a profile that has not been configured is refused. Without a profile, lint
+resolves the sole database; once more than one tree is configured it needs `--build-dir`.
 
 **An empty run is not a pass.** A `--files=branch` selection holding no C++ reports `SKIPPED`, and
 `--staged` over an empty index now *fails* outright ("the index is empty, so no file was
@@ -32,9 +38,19 @@ analyzed"). Neither means clean — nothing was examined. Read the file count in
 check it against how many files you touched; if it is zero and you changed C++, find out why
 before reporting a clean run.
 
-Files the profile does not compile are reported as `skipped N files absent from the compilation
-database`. Treat that line as a coverage report, not noise — a module excluded by manifest is
-silently linted by nothing.
+**A changed file the profile does not compile fails the run** when another configured profile
+compiles it, and the failure names that profile: run `"$FORGE" configure <profile>` if needed, then
+`"$FORGE" lint <profile>` for it (`--path-include` scopes the run to its files). If the file is this
+profile's own source, the database is stale; regenerate it with `"$FORGE" build <profile>`. A file
+no configured profile compiles, such as another platform's source or a fixture, is named and does
+not fail. A whole-tree lint neither reports these files nor fails on them.
+
+`--no-fail-on-uncompiled` prints the same report without failing, for linting one profile of
+several over the same change. `forge verify` and CI pass it, because one profile cannot compile a
+cross-profile change.
+
+CI lint is a read-only gate on a pull request's changed files: every lane that builds lints them
+against its own profile's compile database, and a finding fails the job.
 
 ## 3. Report
 
