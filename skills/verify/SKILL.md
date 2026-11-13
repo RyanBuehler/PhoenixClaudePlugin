@@ -3,20 +3,23 @@ name: verify
 description: Full CI-mirror verification sequence — configure, build, format check, lint, policy audits, and test through Forge. The mandatory check before a PR opens.
 ---
 
-Run the full CI-mirror verification sequence. Stop on the first failure.
+Run the full CI-mirror verification sequence. One run reports every failing phase.
 
 Run this before a PR opens. One run may cover several commits, such as a stack's layers.
 
-`forge verify <profile>` *is* the CI mirror. The phases run **audits → tool-tests → configure →
-build → format-check → lint → test**, and the audits lead deliberately: none of them reads build
-output, so a drifted environment aborts in seconds instead of after a build and a clang-tidy pass.
-Any non-zero phase short-circuits the rest. That single command is the gate; the sub-skills
+`forge verify <profile>` *is* the CI mirror. The phases run **audits → tool-tests → format-check →
+configure → build → runic-format-check → lint → test**. The first three read no build output, so a
+drifted environment or a format error shows in seconds. A failing phase stops only the phases that
+read what it broke: a configure or build failure stops runic-format-check, lint and test; every other
+failure lets the rest run. A profile with no Editor skips runic-format-check, which is listed as not
+run but fails nothing. That single command is the gate; the sub-skills
 (`/phoe:build`, `/phoe:format`, `/phoe:lint`, `/phoe:test`) exist for debugging one phase in
 isolation, not for re-assembling the sequence by hand.
 
 **Read the phase lines, not the exit code, and never `$?` alone.** Each phase prints its own tally,
-and an abort prints `verify stopped at <phase>, so these phases did not run: …`. That line is the
-authoritative statement of what was and was not checked. A run whose output carries no `test` tally
+and the run closes with `verify failed in these phases: …` and `these phases did not run: …`. Those
+lines are the authoritative statement of what failed and what was not checked; verify exits non-zero
+if any phase failed or a build failure stopped one. A run whose output carries no `test` tally
 has tested nothing, however it exited.
 
 **It verifies one profile, not the project** — see §2a for which profiles a change needs.
