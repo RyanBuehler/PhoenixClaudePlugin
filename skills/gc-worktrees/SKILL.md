@@ -56,6 +56,11 @@ A landed worktree is still kept when any of these holds. Each is reported by nam
 is never a silent skip:
 
 - **`locked`** — someone marked it with `git worktree lock`.
+- **`active Nh ago (under 24h)`** — the worktree was created, or its HEAD moved (commit,
+  checkout, reset), within `--min-age-hours` (default 24). A session's just-created worktree has a
+  branch that is still on main, so without this guard it reads as landed; and because `--apply`
+  classifies again, a tree created after the dry run would be swept with it. `git status` does not
+  count as activity, so a dry run never makes trees look fresh.
 - **`in use by pid N`** — a live process has its cwd inside the tree. This is what protects a
   running background session from having its checkout deleted underneath it.
 - **`build lock held`** — a `forge.lock` exists under `Applications/Forge/`. A killed build leaves
@@ -77,6 +82,8 @@ python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gc_worktrees.py --repo <main-checkout> --a
 Useful flags:
 
 - `--limit N` — act on at most N. Use it to prove the removal path before a large sweep.
+- `--min-age-hours N` — the age guard's threshold. Raise it for a "keep anything touched in the
+  last N days" sweep; never lower it to clear a backlog.
 - `--keep-branches` — remove the worktree, leave the landed branch.
 - `--sizes` — measure disk per candidate, so the report can state what was reclaimed. Slow.
 - `--json` — machine-readable output.

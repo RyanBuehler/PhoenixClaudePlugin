@@ -12,6 +12,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 # The remote-tracking ref a branch must have reached to count as landed.
@@ -26,6 +27,17 @@ PORCELAIN_FLAGS = {"bare", "detached", "locked", "prunable"}
 # knob, not a correctness one.
 MERGED_PR_WINDOW = 1000
 
+# A worktree touched more recently than this is kept whatever its branch says.
+# A session that has just created a worktree off main has a branch that is
+# already an ancestor of main, so without this guard it reads as landed.
+DEFAULT_MIN_AGE_HOURS = 24
+
+# Files in a worktree's private git directory that record when it was created
+# and when its HEAD last moved (commit, checkout, reset). `git status` rewrites
+# the index, so the index is deliberately absent: a dry run must not make every
+# tree look fresh.
+ACTIVITY_FILES = ("gitdir", "commondir", "HEAD", "logs/HEAD")
+
 # Reasons a worktree is removable. Ordered by strength of evidence.
 LANDED_ANCESTOR = "landed: merged into {upstream}"
 LANDED_PR = "landed: PR #{number} merged"
@@ -34,6 +46,8 @@ LANDED_GONE = "landed: upstream gone (unverified)"
 # Reasons a worktree is kept. A worktree is kept on the first that applies.
 KEEP_MAIN = "main checkout"
 KEEP_LOCKED = "locked"
+KEEP_RECENT = "active {hours:.1f}h ago (under {limit:g}h)"
+KEEP_AGE_UNKNOWN = "activity time unreadable"
 KEEP_IN_USE = "in use by pid {pid}"
 KEEP_BUILD_LOCK = "build lock held ({lock})"
 KEEP_DIRTY = "{count} uncommitted change(s)"
@@ -125,6 +139,22 @@ def FindBuildLock(path):
 	return None
 
 
+def GetHoursSinceActivity(path):
+	"""Hours since the worktree was created or its HEAD last moved; None if unknown."""
+	code, git_dir = Run(["git", "-C", path, "rev-parse", "--absolute-git-dir"])
+	if code != 0:
+		return None
+	stamps = []
+	for name in ACTIVITY_FILES:
+		try:
+			stamps.append((Path(git_dir.strip()) / name).stat().st_mtime)
+		except OSError:
+			continue
+	if not stamps:
+		return None
+	return max(0.0, (time.time() - max(stamps)) / 3600)
+
+
 def IsAncestor(repo, ref, upstream):
 	code, _ = Run(["git", "-C", repo, "merge-base", "--is-ancestor", ref, upstream])
 	return code == 0
@@ -170,13 +200,18 @@ def GetMergedPullRequest(repo, branch):
 	return found[0]["number"] if found else None
 
 
-def Classify(repo, entry, upstream, live, merged_heads, trust_gone):
+def Classify(repo, entry, upstream, live, merged_heads, trust_gone, min_age_hours):
 	"""Return (removable, reason) for one worktree entry."""
 	path = entry["worktree"]
 	if Path(path).resolve() == Path(repo).resolve():
 		return False, KEEP_MAIN
 	if "locked" in entry:
 		return False, KEEP_LOCKED
+	hours = GetHoursSinceActivity(path)
+	if hours is None:
+		return False, KEEP_AGE_UNKNOWN
+	if hours < min_age_hours:
+		return False, KEEP_RECENT.format(hours=hours, limit=min_age_hours)
 	for cwd, pid in live.items():
 		if cwd == path or cwd.startswith(path.rstrip("/") + "/"):
 			return False, KEEP_IN_USE.format(pid=pid)
@@ -266,6 +301,9 @@ def main():
 	parser.add_argument("--trust-gone", action="store_true",
 	                    help="treat a deleted remote branch as proof of landing, "
 	                         "without a merged PR to confirm it")
+	parser.add_argument("--min-age-hours", type=float, default=DEFAULT_MIN_AGE_HOURS,
+	                    help="keep a worktree created or moved more recently than this "
+	                         f"(default: {DEFAULT_MIN_AGE_HOURS})")
 	parser.add_argument("--keep-branches", action="store_true",
 	                    help="remove the worktree but leave its landed branch")
 	parser.add_argument("--sizes", action="store_true",
@@ -303,7 +341,8 @@ def main():
 		if "bare" in entry:
 			continue
 		removable, reason = Classify(repo, entry, args.upstream, live,
-		                             merged_heads, args.trust_gone)
+		                             merged_heads, args.trust_gone,
+		                             args.min_age_hours)
 		rows.append({
 			"path": entry["worktree"],
 			"branch": entry.get("branch", ""),

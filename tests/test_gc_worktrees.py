@@ -9,6 +9,7 @@ import json
 import os
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -50,6 +51,14 @@ class GcTestCase(unittest.TestCase):
 		Git(self.repo, "worktree", "add", str(path), "-b", branch, "origin/main")
 		return path
 
+	def Age(self, worktree, hours):
+		"""Backdate the files that record a worktree's creation and HEAD moves."""
+		git_dir = Path(Git(worktree, "rev-parse", "--absolute-git-dir").strip())
+		stamp = time.time() - hours * 3600
+		for name in ("gitdir", "commondir", "HEAD", "logs/HEAD"):
+			if (git_dir / name).exists():
+				os.utime(git_dir / name, (stamp, stamp))
+
 	def Commit(self, worktree, text):
 		(worktree / "work.txt").write_text(text)
 		Git(worktree, "add", "work.txt")
@@ -62,8 +71,12 @@ class GcTestCase(unittest.TestCase):
 			capture_output=True, text=True)
 
 	def Gc(self, *extra):
-		"""Run with GitHub disabled — the fixture remote is a local bare repo."""
-		result = self.Run("--no-gh", *extra)
+		"""Run with GitHub disabled — the fixture remote is a local bare repo.
+
+		Fixture worktrees are seconds old, so the age guard is off unless a test
+		passes its own --min-age-hours (the last one given wins).
+		"""
+		result = self.Run("--no-gh", "--min-age-hours=0", *extra)
 		self.assertIn(result.returncode, (0, 1), result.stderr)
 		return json.loads(result.stdout)
 
@@ -171,6 +184,47 @@ class ClassificationTests(GcTestCase):
 		           if Path(r["path"]).resolve() == self.repo.resolve())
 		self.assertFalse(row["removable"])
 		self.assertEqual(row["reason"], "main checkout")
+
+
+class AgeTests(GcTestCase):
+
+	def test_fresh_worktree_off_main_is_kept(self):
+		# A session's just-created worktree has a branch already on main.
+		self.MakeWorktree("challenge/just-started")
+		row = self.Row(self.Gc("--min-age-hours=24"), "challenge/just-started")
+		self.assertFalse(row["removable"])
+		self.assertIn("under 24h", row["reason"])
+
+	def test_worktree_idle_past_the_limit_is_removable(self):
+		worktree = self.MakeWorktree("challenge/idle")
+		self.Age(worktree, 48)
+		row = self.Row(self.Gc("--min-age-hours=24"), "challenge/idle")
+		self.assertTrue(row["removable"], row["reason"])
+
+	def test_new_commit_makes_an_old_worktree_recent(self):
+		worktree = self.MakeWorktree("challenge/resumed")
+		self.Age(worktree, 48)
+		self.Commit(worktree, "resumed")
+		row = self.Row(self.Gc("--min-age-hours=24"), "challenge/resumed")
+		self.assertIn("under 24h", row["reason"])
+
+	def test_status_does_not_make_a_worktree_recent(self):
+		# A dry run runs git status in every tree; that must not reset ages.
+		worktree = self.MakeWorktree("challenge/inspected")
+		self.Age(worktree, 48)
+		Git(worktree, "status", "--porcelain")
+		self.Gc()
+		row = self.Row(self.Gc("--min-age-hours=24"), "challenge/inspected")
+		self.assertTrue(row["removable"], row["reason"])
+
+	def test_apply_keeps_a_worktree_created_after_the_dry_run(self):
+		old = self.MakeWorktree("challenge/old")
+		self.Age(old, 48)
+		self.Gc("--min-age-hours=24")
+		new = self.MakeWorktree("challenge/new")
+		report = self.Gc("--min-age-hours=24", "--apply")
+		self.assertEqual(report["removed"], [str(old)])
+		self.assertTrue(new.is_dir())
 
 
 class ApplyTests(GcTestCase):
