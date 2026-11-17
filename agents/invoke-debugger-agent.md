@@ -65,6 +65,10 @@ ad-hoc tree.
 - Linux: `gdb --args <binary> <args>`, `thread apply all bt full` on a core
   (`coredumpctl gdb` when systemd collects them), hardware `watch -l` for a clobbered field, and
   `rr record`/`rr replay` with `reverse-continue` when the corruption precedes the crash.
+- Start gdb (and `rr replay`) from the build tree's `bin/` or `lib/`. A debug tree records its
+  build directory as `..`, which gdb reads against its working directory: started elsewhere it
+  shows types, locals and backtraces but no source lines. From another directory, pass
+  `-ex "set substitute-path .. <build tree>"`.
 - Windows: open the `.dmp` in WinDbg or `cdb -z <dump>` and run `!analyze -v` and `~*k`.
 - Phoenix has no exceptions, so `SIGABRT` usually means a failed assertion, a `Fatal` log or
   `std::terminate` from an unbounded allocation. Read the frame that called it.
