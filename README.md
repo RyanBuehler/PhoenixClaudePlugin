@@ -58,7 +58,7 @@ Specialized subagents for different aspects of engine development.
 | `invoke-perf-agent` | CPU profiling and optimization |
 | `invoke-concurrency-agent` | Thread safety, lock-free algorithms |
 
-## Skills (21)
+## Skills (22)
 
 Every workflow is a skill under `skills/<name>/SKILL.md`, invoked as `/phoe:<name>`.
 
@@ -96,6 +96,7 @@ These set `disable-model-invocation: true`, so they cost no context until you ty
 | `trace-debug` | Scribe-breadcrumb bisection of a reproducible bug |
 | `ui-design-review` | Mosaic UI architecture and convention review |
 | `icon` | Add, replace, or audit Phosphor icons in the Editor |
+| `add-binding` | The procedure for a new controllable feature, control, menu item or binding |
 
 ## Hooks
 
